@@ -108,6 +108,7 @@
   </div>
 </form>
 
+{% if perms.inventory.manage_cycle_counts %}
 {% if cycle_count.status != "cancelled" %}
 <div class="card cycle-count-actions">
   <h3 class="actions-heading">Manage this count</h3>
@@ -140,6 +141,7 @@
     <small class="muted">Reopens this cancelled count so it can be re-counted or re-completed.</small>
   </form>
 </div>
+{% endif %}
 {% endif %}
 
 {% if cycle_count.can_be_archived and perms.inventory.archive_cycle_counts %}

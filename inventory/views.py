@@ -4121,6 +4121,19 @@ def cycle_count_detail(request, pk):
     if request.method == "POST":
         action = request.POST.get("action", "")
 
+        # Lifecycle actions (complete / cancel / reopen) are manager-only.
+        # Users with only ``perform_cycle_count`` can record counts but must
+        # not be able to seal the audit trail or destroy the count. These
+        # guards reject the POST early; the template hides the buttons for
+        # the same audience.
+        if action in ("complete", "cancel", "reopen"):
+            if not request.user.has_perm("inventory.manage_cycle_counts"):
+                messages.error(
+                    request,
+                    "Only warehouse managers can complete, cancel, or reopen a cycle count.",
+                )
+                return redirect("cycle_count_detail", pk=cycle_count.pk)
+
         if action == "cancel":
             if cycle_count.status in (
                 CycleCount.Status.COMPLETED,
