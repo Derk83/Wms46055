@@ -1,0 +1,9 @@
+{% extends "inventory/base.html" %}
+{% block title %}Account Locked{% endblock %}
+{% block content %}
+<div class="lockout-container">
+    <h1>Account Temporarily Locked</h1>
+    <p>Too many failed login attempts. Please wait 15 minutes and try again.</p>
+    <p><a href="{% url 'login' %}">Back to login</a></p>
+</div>
+{% endblock %}
