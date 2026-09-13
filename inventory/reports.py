@@ -21,7 +21,6 @@ from .models import (
     InventoryItem,
     InventoryTransaction,
     MaterialRequest,
-    MaterialRequestEvent,
     MaterialRequestLine,
     PickTicket,
     ReceivingLine,
@@ -330,18 +329,9 @@ def top_items(rng: DateRange, limit: int = 10) -> list[tuple]:
     return list(qs[:limit])
 
 
-def audit_events(rng: DateRange, limit: int = 50) -> list[MaterialRequestEvent]:
-    return list(
-        MaterialRequestEvent.objects.filter(
-            created_at__gte=rng.start, created_at__lt=rng.end
-        )
-        .select_related("material_request", "actor")
-        .order_by("-created_at")[:limit]
-    )
-
-
 # ---------------------------------------------------------------------------
-# Trends (for the weekly report only)
+# Trend helpers (kept for compatibility but no longer rendered in the weekly
+# PDF; the Friday auto-report uses a slimmer layout that omits these).
 # ---------------------------------------------------------------------------
 
 
@@ -371,7 +361,7 @@ def oldest_open_age_days() -> int | None:
 
 
 def units_moved_summary(rng: DateRange) -> dict:
-    """Sum of receipt vs pick transactions in the range, for the trends card."""
+    """Sum of receipt vs pick transactions in the range."""
     receipts = InventoryTransaction.objects.filter(
         transaction_type=InventoryTransaction.TransactionType.RECEIPT,
         created_at__gte=rng.start, created_at__lt=rng.end,

@@ -244,28 +244,6 @@
   </div>
 </section>
 
-{% if audit_events %}
-<section class="card">
-  <h2>Recent audit events</h2>
-  <div class="table-responsive">
-    <table>
-      <thead><tr><th>When</th><th>Request</th><th>Type</th><th>Actor</th><th>Summary</th></tr></thead>
-      <tbody>
-        {% for ev in audit_events %}
-          <tr>
-            <td data-label="When">{{ ev.created_at|date:"M j H:i" }}</td>
-            <td data-label="Request">{% if ev.material_request %}<a href="{% url 'material_request_detail' ev.material_request.pk %}">{{ ev.material_request.request_number }}</a>{% else %}—{% endif %}</td>
-            <td data-label="Type">{{ ev.get_event_type_display }}</td>
-            <td data-label="Actor">{% if ev.actor %}{{ ev.actor.username }}{% else %}—{% endif %}</td>
-            <td data-label="Summary">{{ ev.change_summary|default:"—"|truncatechars:60 }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% endif %}
-
 {% if open_tickets %}
 <section class="card">
   <h2>Open tickets (still open at end of period)</h2>

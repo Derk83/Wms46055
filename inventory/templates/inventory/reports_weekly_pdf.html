@@ -41,28 +41,6 @@
   <div class="tile"><span class="tile-label">Urgent closed</span><span class="tile-value">{{ summary.urgent_closed }}</span></div>
 </div>
 
-<h2>Trends — requests per day</h2>
-{% if daily_counts %}
-<table>
-  <thead><tr><th>Day</th><th>Requests</th></tr></thead>
-  <tbody>
-  {% for day, count in daily_counts %}
-    <tr><td>{{ day|date:"D, M j" }}</td><td>{{ count }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-{% else %}<p class="empty">No data in this range.</p>{% endif %}
-
-<h2>Units moved</h2>
-<table>
-  <thead><tr><th>Direction</th><th>Units</th></tr></thead>
-  <tbody>
-    <tr><td>Received</td><td>{{ units_moved.receipts }}</td></tr>
-    <tr><td>Picked (absolute)</td><td>{{ units_moved.picks }}</td></tr>
-  </tbody>
-</table>
-<p class="meta">{% if oldest_open_age_days is not none %}Oldest open ticket age: <strong>{{ oldest_open_age_days }} days</strong>{% else %}No tickets currently open.{% endif %}</p>
-
 <h2>New material requests ({{ new_requests|length }})</h2>
 {% if new_requests %}
 <table>
@@ -199,6 +177,6 @@
 </table>
 {% else %}<p class="empty">No items requested in this range.</p>{% endif %}
 
-<footer>WMS Weekly Activity Report — {{ range.label }} — read-only snapshot.</footer>
+<footer>WMS Weekly Activity Report — {{ range.label }} — auto-generated Friday 07:00 America/Chicago.</footer>
 </body>
 </html>

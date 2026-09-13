@@ -116,6 +116,5 @@ urlpatterns = [
     # Manager reports
     path("reports/", views.reports_index, name="reports_index"),
     path("reports/daily/", views.reports_daily, name="reports_daily"),
-    path("reports/weekly/", views.reports_weekly, name="reports_weekly"),
     path("reports/<str:kind>/pdf/", views.reports_pdf, name="reports_pdf"),
 ]
