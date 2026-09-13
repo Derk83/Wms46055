@@ -10,6 +10,8 @@
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--canvas);color:var(--black);font-family:var(--sans)}
 .print-page{position:relative;display:block;width:11in;height:8.5in;margin:0 auto 22px;padding:.32in .38in .29in;background:var(--paper);box-shadow:0 10px 30px rgba(0,0,0,.14);page-break-after:always;overflow:hidden}
+/* Signature page is allowed to grow if its content overflows 8.5in. */
+.print-page.sig-page{height:auto;min-height:8.5in;overflow:visible;page-break-before:always}
 .print-page:last-child{page-break-after:auto}
 .header{display:grid;grid-template-columns:1.7in 1fr auto;align-items:center;gap:.18in;padding-bottom:.10in;border-bottom:4px solid var(--red)}
 .logo{display:block;width:1.55in;height:auto}
@@ -40,24 +42,27 @@ tr.variance-row td{background:#fff5e6 !important}
 .col-num{width:4%;text-align:center}
 .col-bin{width:13%}
 .col-part{width:16%}
-.col-description{width:auto}
+.col-description{width:auto;overflow:hidden;text-overflow:ellipsis}
 .col-sys{width:9%;text-align:center}
 .col-counted{width:9%;text-align:center}
 .col-var{width:9%;text-align:center}
-.col-counter{width:11%}
-.col-note{width:8%}
+.col-counter{width:11%;font-size:7.6px}
+.col-counter .ts{display:block;margin-top:1px;color:var(--gray);font:6.5px var(--mono);line-height:1}
+.col-note{width:8%;overflow:hidden;text-overflow:ellipsis}
 .var-pos{color:var(--green);font-weight:700}
 .var-neg{color:var(--red);font-weight:700}
 .var-zero{color:var(--gray)}
-.qty{display:inline-block;min-width:.6in;padding:2px 6px;border:1px solid var(--line);background:#fff;text-align:center;font:700 9.5px var(--mono)}
-.receipt{position:absolute;left:.38in;right:.38in;bottom:.30in;page-break-inside:avoid}
+.qty{display:inline-block;min-width:.55in;padding:2px 4px;border:1px solid var(--line);background:#fff;text-align:center;font:700 9px var(--mono)}
+/* Receipt / sign-off lives in normal flow on the last page, never absolute.
+   If the table doesn't fit, page-break-inside:avoid pushes the entire block
+   to a fresh page so it never overlaps the table above. */
+.receipt{margin-top:.14in;page-break-inside:avoid}
 .receipt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.07in}
 .receipt .info-box{min-height:.40in}
 .notes-box{min-height:.38in;margin-top:.04in;padding:.045in .075in;border:1px solid var(--line)}
 .notes-box .value{min-height:.22in}
 .sign-line{height:.12in;margin-top:.10in;border-bottom:1px solid #555}
 .footer{position:absolute;left:.38in;right:.38in;bottom:.12in;display:flex;justify-content:space-between;padding-top:.055in;border-top:1px solid #aaa;color:#555;font:7px var(--mono)}
-.footer-after-receipt{margin-top:0}
 .recon-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px;margin-top:.05in}
 .recon-table th{padding:.04in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
 .recon-table td{height:.20in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle}
@@ -73,8 +78,17 @@ tr.variance-row td{background:#fff5e6 !important}
 .pdf-mode .summary{margin-top:.07in}
 .pdf-mode .section-title{margin-top:.07in}
 .pdf-mode td{height:.20in}
-.pdf-mode .receipt{left:.29in;right:.29in;bottom:.25in}
+.pdf-mode .receipt{margin-top:.10in}
 .pdf-mode .recon-table td{height:.18in}
+@media(max-width:760px){.toolbar{flex-wrap:wrap}.status{width:100%;margin-left:0}.preview{padding:8px}}
+@media print{
+  @page{size:Letter landscape;margin:.24in}
+  html,body{width:100%!important;height:auto!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .preview{width:100%!important;margin:0!important;padding:0!important}
+  .print-page{width:100%!important;height:8.02in!important;margin:0!important;padding:.18in .24in!important;box-shadow:none!important;break-after:page;page-break-after:always}
+  .receipt{margin-top:.10in}
+  .print-page:last-child{break-after:auto;page-break-after:auto}
+}
 </style>
 </head>
 <body class="pdf-mode">
@@ -118,11 +132,11 @@ tr.variance-row td{background:#fff5e6 !important}
         <td class="col-num">{{ row.number }}</td>
         <td>{{ entry.item.storage_location|default:"" }}</td>
         <td>{{ entry.item.part_number }}</td>
-        <td>{{ entry.item.name }}</td>
+        <td class="col-description">{{ entry.item.name }}</td>
         <td class="col-sys"><span class="qty">{{ entry.system_quantity }}</span></td>
         <td class="col-counted">{% if entry.counted_quantity is not None %}<span class="qty">{{ entry.counted_quantity }}</span>{% else %}-{% endif %}</td>
         <td class="col-var">{% if entry.variance is None %}<span class="var-zero">-</span>{% elif entry.variance == 0 %}<span class="var-zero">0</span>{% elif entry.variance > 0 %}<span class="var-pos">+{{ entry.variance }}</span>{% else %}<span class="var-neg">{{ entry.variance }}</span>{% endif %}</td>
-        <td class="col-counter">{% if entry.counted_by %}{{ entry.counted_by.get_full_name|default:entry.counted_by.username }}{% if entry.counted_at %}<br><span style="font:6.8px var(--mono);color:var(--gray)">{{ entry.counted_at|date:"m/d/Y H:i" }}</span>{% endif %}{% else %}-{% endif %}</td>
+        <td class="col-counter">{% if entry.counted_by %}{{ entry.counted_by.get_full_name|default:entry.counted_by.username }}{% if entry.counted_at %}<span class="ts">{{ entry.counted_at|date:"m/d/Y H:i" }}</span>{% endif %}{% else %}-{% endif %}</td>
         <td class="col-note">{{ entry.note|default:"" }}</td>
       </tr>
       {% endwith %}
@@ -131,8 +145,22 @@ tr.variance-row td{background:#fff5e6 !important}
     {% endfor %}
     </tbody>
   </table>
+  <footer class="footer"><span>Black Box · Cycle Count Reconciliation · System vs counted comparison — final audit document</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+</section>
+{% endfor %}
 
-  {% if page.is_last %}
+{% if pages %}
+<section class="print-page sig-page">
+  <header class="header">
+    <img class="logo" src="{{ logo_uri }}" alt="Black Box">
+    <div class="document-name"><strong>Cycle Count Reconciliation</strong><span>WAREHOUSE INVENTORY AUDIT — FINAL RESULTS</span></div>
+    <div class="ticket-id">
+      <div class="label">Cycle Count #</div>
+      <div class="value">{{ cycle_count.display_name }}</div>
+      <div class="page-number">Sign-off page</div>
+    </div>
+  </header>
+
   <section class="receipt">
     <div class="section-title">FINAL VERIFICATION &amp; SIGN-OFF</div>
     <div class="receipt-grid">
@@ -166,10 +194,9 @@ tr.variance-row td{background:#fff5e6 !important}
     {% endif %}
     <div class="notes-box" style="min-height:.30in"><div class="label">POST-RECONCILIATION NOTES</div><div class="value">&nbsp;</div></div>
   </section>
-  {% endif %}
-  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Cycle Count Reconciliation · System vs counted comparison — final audit document</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+  <footer class="footer"><span>Black Box · Cycle Count Reconciliation · System vs counted comparison — final audit document</span><span>Sign-off page</span></footer>
 </section>
-{% endfor %}
+{% endif %}
 </main>
 </body>
 </html>

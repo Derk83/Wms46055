@@ -483,6 +483,110 @@ def test_cycle_count_results_pdf_summary_shows_variance_total(client, manager):
     assert "+1" in text
 
 
+def _pdf_page_count(pdf_bytes):
+    """Return the number of pages in a PDF via pdfinfo."""
+    import subprocess
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(pdf_bytes)
+        tmp_path = tmp.name
+    try:
+        result = subprocess.run(
+            ["pdfinfo", tmp_path],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        for line in result.stdout.splitlines():
+            if line.startswith("Pages:"):
+                return int(line.split(":", 1)[1].strip())
+    finally:
+        import os
+        os.unlink(tmp_path)
+    return None
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_uses_letter_landscape(client, manager):
+    """Regression: the results PDF must be Letter landscape (792x612 pts),
+    not A4 portrait, so it prints correctly on US warehouse printers without
+    page-fit shrinkage. This was broken when the @media print block was
+    missing from the template."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    import subprocess, tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resp.content)
+        tmp_path = tmp.name
+    try:
+        info = subprocess.run(
+            ["pdfinfo", tmp_path], capture_output=True, text=True, timeout=30
+        ).stdout
+        # Page size line: "Page size:       792 x 612 pts (letter)"
+        for line in info.splitlines():
+            if line.startswith("Page size:"):
+                assert "letter" in line.lower(), (
+                    f"Page size is not Letter: {line}. Without @media print "
+                    f"@page{{size:Letter landscape}} WeasyPrint defaults to A4."
+                )
+                # Letter landscape is 792 x 612 (width x height)
+                # Extract width and height
+                parts = line.replace("Page size:", "").strip().split()
+                w, h = int(parts[0]), int(parts[2])
+                assert w > h, f"Page is portrait ({w}x{h}), expected landscape"
+                break
+        else:
+            pytest.fail("pdfinfo output missing Page size line")
+    finally:
+        os.unlink(tmp_path)
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_has_dedicated_signoff_page(client, manager):
+    """Regression: the sign-off block must be on its own page (last page of
+    the PDF), not absolutely positioned over the table rows. Before the fix,
+    the receipt overlapped the table bottom and produced unreadable output."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    pages = _pdf_page_count(resp.content)
+    # 5 items / 20 per page = 1 data page + 1 sign-off page = 2
+    assert pages == 2, f"Expected 2 pages (1 data + 1 sign-off), got {pages}"
+
+    # Last page text must contain the signature labels and per-category header
+    import subprocess, tempfile, os
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(resp.content)
+        tmp_path = tmp.name
+    try:
+        text = subprocess.run(
+            ["pdftotext", "-layout", tmp_path, "-"],
+            capture_output=True, text=True, timeout=30,
+        ).stdout
+    finally:
+        os.unlink(tmp_path)
+
+    # The sign-off page must NOT contain item row data (which would mean the
+    # table and sign-off overlap on the same page)
+    parts = text.rsplit("\f", 1)
+    last_page_only = parts[-1] if parts[-1].strip() else parts[0].rsplit("\f", 1)[-1]
+    if not last_page_only.strip():
+        # No form feed boundary found; treat the whole text as one page
+        last_page_only = text
+    assert "FINAL VERIFICATION & SIGN-OFF" in last_page_only
+    assert "COUNTER SIGNATURE" in last_page_only
+    assert "MANAGER SIGNATURE" in last_page_only
+    assert "PER-CATEGORY BREAKDOWN" in last_page_only
+    # And the sign-off page should NOT contain table rows like the data pages do
+    assert "PART #" not in last_page_only or "ITEM DESCRIPTION" not in last_page_only, (
+        "Sign-off page should not contain item table headers — the receipt "
+        "block must be on a dedicated page, not overlapping the data table."
+    )
+
+
 @pytest.mark.django_db
 def test_cycle_count_detail_shows_download_button_when_completed(client, manager):
     cc = _make_completed_cycle_count(manager)
