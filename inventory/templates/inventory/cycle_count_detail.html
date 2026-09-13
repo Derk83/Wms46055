@@ -7,6 +7,9 @@
   <div class="actions">
     <a class="btn" href="{% url 'cycle_count_list' %}">Back to cycle counts</a>
     <a class="btn" href="{% url 'cycle_count_pdf' cycle_count.pk %}" target="_blank" rel="noopener">Print PDF</a>
+    {% if cycle_count.status == "completed" and perms.inventory.manage_cycle_counts %}
+    <a class="btn btn-primary" href="{% url 'cycle_count_results_pdf' cycle_count.pk %}" target="_blank" rel="noopener">Download Reconciliation PDF</a>
+    {% endif %}
   </div>
 </div>
 

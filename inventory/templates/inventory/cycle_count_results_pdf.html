@@ -1,0 +1,175 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Black Box — Cycle Count Reconciliation {{ cycle_count.display_name }}</title>
+<style>
+:root{--black:#111;--charcoal:#242424;--red:#e31e2b;--green:#1e7a3a;--amber:#c47f00;--gray:#5f6368;--line:#aeb2b7;--paper:#fff;--canvas:#ececec;--soft:#f2f3f4;--sans:Arial,"Helvetica Neue",sans-serif;--mono:"Courier New",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--black);font-family:var(--sans)}
+.print-page{position:relative;display:block;width:11in;height:8.5in;margin:0 auto 22px;padding:.32in .38in .29in;background:var(--paper);box-shadow:0 10px 30px rgba(0,0,0,.14);page-break-after:always;overflow:hidden}
+.print-page:last-child{page-break-after:auto}
+.header{display:grid;grid-template-columns:1.7in 1fr auto;align-items:center;gap:.18in;padding-bottom:.10in;border-bottom:4px solid var(--red)}
+.logo{display:block;width:1.55in;height:auto}
+.document-name{padding-left:.18in;border-left:1px solid #bbb}
+.document-name strong{display:block;font-size:20px;line-height:1;text-transform:uppercase;letter-spacing:.04em}
+.document-name span{display:block;margin-top:4px;color:var(--gray);font:8px var(--mono);letter-spacing:.08em}
+.ticket-id{text-align:right}
+.ticket-id .label{color:var(--gray);font:7px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.ticket-id .value{margin-top:3px;font:700 18px var(--mono)}
+.page-note{margin-top:3px;color:var(--gray);font:700 7px var(--mono)}
+.page-number{display:inline-block;margin-top:5px;padding:3px 7px;border:1px solid var(--red);border-radius:3px;color:var(--black);font:700 8px var(--mono);letter-spacing:.04em;background:#fff}
+.summary{display:grid;grid-template-columns:.8fr 1.2fr 1.25fr 1.25fr;gap:.07in;margin-top:.12in}
+.info-box{min-height:.44in;padding:.05in .075in;border:1px solid var(--line);border-top:3px solid var(--charcoal);background:#fff}
+.info-box.accent{border-top-color:var(--red)}
+.info-box.ok{border-top-color:var(--green)}
+.info-box.warn{border-top-color:var(--amber)}
+.label{color:var(--gray);font:700 6.8px var(--mono);letter-spacing:.075em;text-transform:uppercase}
+.value{margin-top:.035in;font-size:9.5px;font-weight:700;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-top:.11in;padding:.045in .075in;background:var(--charcoal);border-left:5px solid var(--red);color:#fff;font:700 7.4px var(--mono);letter-spacing:.11em;text-transform:uppercase}
+.section-title span{color:#ddd;font-weight:400;letter-spacing:.04em}
+table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px}
+thead{display:table-header-group}
+th{padding:.05in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
+td{height:.22in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle;line-height:1.08;overflow-wrap:anywhere}
+tbody tr:nth-child(even) td{background:var(--soft)}
+tr{page-break-inside:avoid}
+tr.variance-row td{background:#fff5e6 !important}
+.col-num{width:4%;text-align:center}
+.col-bin{width:13%}
+.col-part{width:16%}
+.col-description{width:auto}
+.col-sys{width:9%;text-align:center}
+.col-counted{width:9%;text-align:center}
+.col-var{width:9%;text-align:center}
+.col-counter{width:11%}
+.col-note{width:8%}
+.var-pos{color:var(--green);font-weight:700}
+.var-neg{color:var(--red);font-weight:700}
+.var-zero{color:var(--gray)}
+.qty{display:inline-block;min-width:.6in;padding:2px 6px;border:1px solid var(--line);background:#fff;text-align:center;font:700 9.5px var(--mono)}
+.receipt{position:absolute;left:.38in;right:.38in;bottom:.30in;page-break-inside:avoid}
+.receipt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.07in}
+.receipt .info-box{min-height:.40in}
+.notes-box{min-height:.38in;margin-top:.04in;padding:.045in .075in;border:1px solid var(--line)}
+.notes-box .value{min-height:.22in}
+.sign-line{height:.12in;margin-top:.10in;border-bottom:1px solid #555}
+.footer{position:absolute;left:.38in;right:.38in;bottom:.12in;display:flex;justify-content:space-between;padding-top:.055in;border-top:1px solid #aaa;color:#555;font:7px var(--mono)}
+.footer-after-receipt{margin-top:0}
+.recon-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px;margin-top:.05in}
+.recon-table th{padding:.04in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
+.recon-table td{height:.20in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle}
+.recon-table tbody tr:nth-child(even) td{background:var(--soft)}
+.recon-col-cat{width:38%}
+.recon-col-num{width:15%;text-align:center}
+.recon-col-var{width:15%;text-align:center}
+.recon-col-count{width:15%;text-align:center}
+.recon-col-sig{width:17%}
+.pdf-mode .footer{left:.29in;right:.29in;bottom:.08in}
+.pdf-mode .print-page{padding:.22in .29in .20in}
+.pdf-mode .header{padding-bottom:.06in}
+.pdf-mode .summary{margin-top:.07in}
+.pdf-mode .section-title{margin-top:.07in}
+.pdf-mode td{height:.20in}
+.pdf-mode .receipt{left:.29in;right:.29in;bottom:.25in}
+.pdf-mode .recon-table td{height:.18in}
+</style>
+</head>
+<body class="pdf-mode">
+<main class="preview">
+{% for page in pages %}
+<section class="print-page">
+  <header class="header">
+    <img class="logo" src="{{ logo_uri }}" alt="Black Box">
+    <div class="document-name"><strong>Cycle Count Reconciliation</strong><span>WAREHOUSE INVENTORY AUDIT — FINAL RESULTS</span></div>
+    <div class="ticket-id">
+      <div class="label">Cycle Count #</div>
+      <div class="value">{{ cycle_count.display_name }}</div>
+      <div class="page-number">Page {{ page.number }} of {{ total_pages }}</div>
+      {% if not page.is_first and not page.is_last %}<div class="page-note">CONTINUED</div>{% endif %}
+    </div>
+  </header>
+
+  {% if page.is_first %}
+  <div class="summary">
+    <div class="info-box accent"><div class="label">CREATED BY</div><div class="value">{{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }}</div></div>
+    <div class="info-box accent"><div class="label">DATE GENERATED</div><div class="value">{{ generated_at|date:"m/d/Y g:i A" }}</div></div>
+    <div class="info-box {% if variance_count == 0 %}ok{% else %}warn{% endif %}"><div class="label">VARIANCES</div><div class="value">{% if variance_count == 0 %}0 — NO VARIANCE{% else %}{{ variance_count }} item{{ variance_count|pluralize }} (signed sum {{ variance_total|floatformat:0 }}){% endif %}</div></div>
+    <div class="info-box"><div class="label">COUNTED / TOTAL</div><div class="value">{{ counted_count }} / {{ cycle_count.total_items }}</div></div>
+  </div>
+  {% else %}
+  <div class="summary">
+    <div class="info-box"><div class="label">CYCLE COUNT #</div><div class="value">{{ cycle_count.display_name }}</div></div>
+    <div class="info-box"><div class="label">DATE GENERATED</div><div class="value">{{ generated_at|date:"m/d/Y g:i A" }}</div></div>
+    <div class="info-box"><div class="label">CONTINUED FROM PAGE</div><div class="value">{{ page.number|add:-1 }} OF {{ total_pages }}</div></div>
+    <div class="info-box"><div class="label">REMAINING ITEMS</div><div class="value">SEE TABLE BELOW</div></div>
+  </div>
+  {% endif %}
+
+  <div class="section-title">RECONCILIATION RESULTS <span>{{ cycle_count.total_items }} item{{ cycle_count.total_items|pluralize }} · {{ category_summaries|length }} categor{% if category_summaries|length == 1 %}y{% else %}ies{% endif %}</span></div>
+  <table>
+    <thead><tr><th class="col-num">#</th><th class="col-bin">STORAGE</th><th class="col-part">PART #</th><th class="col-description">ITEM DESCRIPTION</th><th class="col-sys">SYSTEM QTY</th><th class="col-counted">COUNTED QTY</th><th class="col-var">VARIANCE</th><th class="col-counter">COUNTED BY</th><th class="col-note">NOTE</th></tr></thead>
+    <tbody>
+    {% for row in page.rows %}
+      {% with entry=row.entry %}
+      {% if entry.has_variance %}<tr class="variance-row">{% else %}<tr>{% endif %}
+        <td class="col-num">{{ row.number }}</td>
+        <td>{{ entry.item.storage_location|default:"" }}</td>
+        <td>{{ entry.item.part_number }}</td>
+        <td>{{ entry.item.name }}</td>
+        <td class="col-sys"><span class="qty">{{ entry.system_quantity }}</span></td>
+        <td class="col-counted">{% if entry.counted_quantity is not None %}<span class="qty">{{ entry.counted_quantity }}</span>{% else %}-{% endif %}</td>
+        <td class="col-var">{% if entry.variance is None %}<span class="var-zero">-</span>{% elif entry.variance == 0 %}<span class="var-zero">0</span>{% elif entry.variance > 0 %}<span class="var-pos">+{{ entry.variance }}</span>{% else %}<span class="var-neg">{{ entry.variance }}</span>{% endif %}</td>
+        <td class="col-counter">{% if entry.counted_by %}{{ entry.counted_by.get_full_name|default:entry.counted_by.username }}{% if entry.counted_at %}<br><span style="font:6.8px var(--mono);color:var(--gray)">{{ entry.counted_at|date:"m/d/Y H:i" }}</span>{% endif %}{% else %}-{% endif %}</td>
+        <td class="col-note">{{ entry.note|default:"" }}</td>
+      </tr>
+      {% endwith %}
+    {% empty %}
+      <tr><td class="col-num">1</td><td></td><td></td><td></td><td class="col-sys"></td><td class="col-counted"></td><td class="col-var"></td><td class="col-counter"></td><td class="col-note"></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% if page.is_last %}
+  <section class="receipt">
+    <div class="section-title">FINAL VERIFICATION &amp; SIGN-OFF</div>
+    <div class="receipt-grid">
+      <div class="info-box"><div class="label">CREATED BY</div><div class="value">{{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }}</div><div class="label" style="margin-top:.06in">CREATED AT</div><div class="value">{{ cycle_count.created_at|date:"m/d/Y g:i A" }}</div></div>
+      <div class="info-box"><div class="label">COMPLETED BY (MANAGER)</div><div class="value">{{ request.user.get_full_name|default:request.user.username }}</div><div class="label" style="margin-top:.06in">COMPLETED AT</div><div class="value">{% if cycle_count.completed_at %}{{ cycle_count.completed_at|date:"m/d/Y g:i A" }}{% else %}—{% endif %}</div></div>
+      <div class="info-box"><div class="label">TOTAL ITEMS</div><div class="value">{{ cycle_count.total_items }}</div><div class="label" style="margin-top:.06in">TOTAL VARIANCE</div><div class="value">{% if variance_total > 0 %}+{{ variance_total }}{% else %}{{ variance_total }}{% endif %} ({{ variance_count }} item{{ variance_count|pluralize }})</div></div>
+    </div>
+    <div class="receipt-grid" style="margin-top:.07in">
+      <div class="info-box"><div class="label">COUNTER PRINT NAME</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">COUNTER SIGNATURE</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">COUNT DATE / TIME</div><div class="sign-line"></div></div>
+    </div>
+    <div class="receipt-grid" style="margin-top:.07in">
+      <div class="info-box"><div class="label">MANAGER PRINT NAME</div><div class="value">{{ request.user.get_full_name|default:request.user.username }}</div></div>
+      <div class="info-box"><div class="label">MANAGER SIGNATURE</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">REVIEW DATE</div><div class="sign-line"></div></div>
+    </div>
+    <div class="notes-box"><div class="label">PER-CATEGORY BREAKDOWN</div>
+      <table class="recon-table">
+        <thead><tr><th class="recon-col-cat">CATEGORY</th><th class="recon-col-num">ITEMS</th><th class="recon-col-count">COUNTED</th><th class="recon-col-var">NET VARIANCE</th><th class="recon-col-var">VARIANCES</th></tr></thead>
+        <tbody>
+        {% for summary in category_summaries %}
+          <tr><td>{{ summary.name }}</td><td class="recon-col-num">{{ summary.total }}</td><td class="recon-col-count">{{ summary.counted }}</td><td class="recon-col-var">{% if summary.variance_total > 0 %}<span class="var-pos">+{{ summary.variance_total }}</span>{% elif summary.variance_total < 0 %}<span class="var-neg">{{ summary.variance_total }}</span>{% else %}<span class="var-zero">0</span>{% endif %}</td><td class="recon-col-var">{{ summary.variance_count }}</td></tr>
+        {% endfor %}
+        <tr><td><strong>TOTAL</strong></td><td class="recon-col-num"><strong>{{ cycle_count.total_items }}</strong></td><td class="recon-col-count"><strong>{{ counted_count }}</strong></td><td class="recon-col-var">{% if variance_total > 0 %}<strong class="var-pos">+{{ variance_total }}</strong>{% elif variance_total < 0 %}<strong class="var-neg">{{ variance_total }}</strong>{% else %}<strong class="var-zero">0</strong>{% endif %}</td><td class="recon-col-var"><strong>{{ variance_count }}</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+    {% if cycle_count.notes %}
+    <div class="notes-box"><div class="label">MANAGER NOTES</div><div class="value">{{ cycle_count.notes }}</div></div>
+    {% endif %}
+    <div class="notes-box" style="min-height:.30in"><div class="label">POST-RECONCILIATION NOTES</div><div class="value">&nbsp;</div></div>
+  </section>
+  {% endif %}
+  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Cycle Count Reconciliation · System vs counted comparison — final audit document</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+</section>
+{% endfor %}
+</main>
+</body>
+</html>

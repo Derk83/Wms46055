@@ -108,4 +108,5 @@ urlpatterns = [
     path("cycle-counts/new/", views.cycle_count_create, name="cycle_count_create"),
     path("cycle-counts/<int:pk>/", views.cycle_count_detail, name="cycle_count_detail"),
     path("cycle-counts/<int:pk>/pdf/", views.cycle_count_pdf, name="cycle_count_pdf"),
+    path("cycle-counts/<int:pk>/results-pdf/", views.cycle_count_results_pdf, name="cycle_count_results_pdf"),
 ]

@@ -4111,8 +4111,55 @@ def cycle_count_pdf(request, pk):
     return response
 
 
-def _cycle_count_print_context(cycle_count, *, pdf_mode=False):
+@login_required
+@any_perm_required("inventory.manage_cycle_counts")
+def cycle_count_results_pdf(request, pk):
+    """Render the final reconciliation PDF for a completed cycle count.
+
+    Gated to ``manage_cycle_counts`` because this document is the audit-trail
+    artifact — it must only be issued by someone authorized to close the
+    count. The view refuses to render unless the cycle count is in the
+    ``completed`` state, so partial counts cannot accidentally produce an
+    authoritative-looking audit document.
+
+    Includes system quantity, counted quantity, and variance for every row,
+    a per-category breakdown, totals, populated signature blocks, and the
+    notes the manager entered on the detail page.
+    """
+    from django.conf import settings as django_settings
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
+
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    if cycle_count.status != CycleCount.Status.COMPLETED:
+        messages.error(
+            request,
+            "Reconciliation PDF is only available after the cycle count is marked complete.",
+        )
+        return redirect("cycle_count_detail", pk=cycle_count.pk)
+    context = _cycle_count_print_context(cycle_count, pdf_mode=True, mode="results")
+    html = render_to_string(
+        "inventory/cycle_count_results_pdf.html",
+        context,
+        request=request,
+    )
+    pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
+    response = HttpResponse(pdf, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'inline; filename="cycle-count-{cycle_count.pk:05d}-reconciliation.pdf"'
+    )
+    return response
+
+def _cycle_count_print_context(cycle_count, *, pdf_mode=False, mode="blank"):
     """Build the template context for the cycle count print/PDF.
+
+    Two modes:
+    - ``"blank"``: count sheet for the picker. Count boxes are empty, system
+      quantity hidden on purpose to prevent bias.
+    - ``"results"``: reconciliation document for a *completed* count. Shows
+      system quantity, counted quantity, and variance for every row, plus a
+      populated signature block (who created it, who counted each item, who
+      closed it).
 
     Splits items into landscape Letter pages of ``rows_per_page`` rows each.
     Each page knows if it is first/last so the template can render summary
@@ -4120,14 +4167,18 @@ def _cycle_count_print_context(cycle_count, *, pdf_mode=False):
     Each row carries a global ``number`` so the counter can keep their place
     when the sheet spans multiple pages.
     """
+    if mode not in ("blank", "results"):
+        raise ValueError(f"Unknown cycle count print mode: {mode!r}")
+
     items = list(
-        cycle_count.items.select_related("item")
+        cycle_count.items.select_related("item", "counted_by")
         .order_by("category", "item__name")
     )
     # Twenty operational rows fit safely on a landscape Letter page while
     # preserving the page header, summary strip, and footer. Same number as
     # the pick ticket print so the look and feel matches exactly.
     rows_per_page = 20
+
     chunks = [
         items[index : index + rows_per_page]
         for index in range(0, len(items), rows_per_page)
@@ -4150,11 +4201,28 @@ def _cycle_count_print_context(cycle_count, *, pdf_mode=False):
         )
     # Per-category totals for the reconciliation block on the last page.
     category_summaries = []
+    counted_count = sum(1 for entry in items if entry.counted_quantity is not None)
+    variance_total = 0
+    variance_count = 0
     for category, group in _group_items_by_category(items):
+        cat_counted = sum(1 for entry in group if entry.counted_quantity is not None)
+        cat_variance_total = 0
+        cat_variance_count = 0
+        for entry in group:
+            if entry.counted_quantity is not None:
+                diff = entry.counted_quantity - entry.system_quantity
+                cat_variance_total += diff
+                if diff != 0:
+                    cat_variance_count += 1
+        variance_total += cat_variance_total
+        variance_count += cat_variance_count
         category_summaries.append(
             {
                 "name": category,
                 "total": len(group),
+                "counted": cat_counted,
+                "variance_total": cat_variance_total,
+                "variance_count": cat_variance_count,
             }
         )
     context = {
@@ -4164,6 +4232,10 @@ def _cycle_count_print_context(cycle_count, *, pdf_mode=False):
         "category_summaries": category_summaries,
         "generated_at": timezone.now(),
         "pdf_mode": pdf_mode,
+        "mode": mode,
+        "counted_count": counted_count,
+        "variance_total": variance_total,
+        "variance_count": variance_count,
     }
     if pdf_mode:
         logo_path = (

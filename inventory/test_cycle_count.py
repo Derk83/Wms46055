@@ -368,3 +368,139 @@ def test_hamburger_link_visible_for_permitted_users(client, counter, manager, ou
     client.force_login(outsider)
     resp = client.get(reverse("cycle_count_list"))
     assert resp.status_code in (302, 403)
+
+
+def _make_completed_cycle_count(manager):
+    """Helper: create a cycle count with 2 categories, count everything, mark complete."""
+    from django.utils import timezone as _tz
+    items_ofci = _seed_items("OFCI", 3)
+    items_eq = _seed_items("Equipment", 2)
+    cc = CycleCount.objects.create(
+        name="audit-recon-test",
+        created_by=manager,
+        status=CycleCount.Status.OPEN,
+        notes="Recon test notes",
+    )
+    # Manually create the items with system + counted quantities and a variance.
+    cc.items.create(item=items_ofci[0], category="OFCI", system_quantity=10, counted_quantity=10, counted_by=manager, counted_at=_tz.now())
+    cc.items.create(item=items_ofci[1], category="OFCI", system_quantity=5, counted_quantity=4, counted_by=manager, counted_at=_tz.now())  # variance -1
+    cc.items.create(item=items_ofci[2], category="OFCI", system_quantity=7, counted_quantity=9, counted_by=manager, counted_at=_tz.now())  # variance +2
+    cc.items.create(item=items_eq[0], category="Equipment", system_quantity=3, counted_quantity=3, counted_by=manager, counted_at=_tz.now())
+    cc.items.create(item=items_eq[1], category="Equipment", system_quantity=2, counted_quantity=2, counted_by=manager, counted_at=_tz.now())
+    cc.status = CycleCount.Status.COMPLETED
+    cc.completed_at = _tz.now()
+    cc.save()
+    return cc
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_returns_pdf_for_completed(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/pdf"
+    assert resp.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_redirects_when_not_completed(client, manager):
+    """Open or in-progress cycle counts must NOT issue a reconciliation PDF —
+    it would be misleading. The view should redirect to the detail page with
+    an error message instead."""
+    _seed_items("OFCI", 3)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc = CycleCount.objects.get()
+    client.force_login(manager)
+    # Status is OPEN right after creation
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302
+    assert resp["Location"].endswith(f"/cycle-counts/{cc.pk}/")
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_requires_manage_perm(client, manager, counter):
+    """Counter-only users must not be able to download reconciliation PDFs —
+    that document is the audit-trail artifact and must only be issued by
+    someone authorized to close the count."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(counter)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    # 302 redirect to login, or 403 — both are acceptable forms of denial
+    assert resp.status_code in (302, 403)
+
+
+def _pdf_text(pdf_bytes):
+    """Extract text from PDF bytes via the system pdftotext tool."""
+    import subprocess
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+        tmp.write(pdf_bytes)
+        tmp_path = tmp.name
+    try:
+        result = subprocess.run(
+            ["pdftotext", "-layout", tmp_path, "-"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return result.stdout
+    finally:
+        import os
+        os.unlink(tmp_path)
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_shows_counted_quantities_and_variance(client, manager):
+    """The whole point of the results PDF is showing actual counts + variance.
+    Extract text via pdftotext and confirm the system_quantity AND counted_quantity
+    BOTH appear (no system-quantity-stripping like the blank count sheet does)."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    text = _pdf_text(resp.content)
+    # The actual system quantities from the test fixture:
+    for sys_qty in (10, 5, 7, 3, 2):
+        assert str(sys_qty) in text, f"System quantity {sys_qty} missing from PDF"
+    # The counted quantities (some match system, some differ):
+    for counted_qty in (10, 4, 9, 3, 2):
+        assert str(counted_qty) in text, f"Counted quantity {counted_qty} missing from PDF"
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_summary_shows_variance_total(client, manager):
+    """Header should show net variance total + count for the auditor at a glance."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    text = _pdf_text(resp.content)
+    # Net variance: -1 (5→4) + 2 (7→9) = +1, 2 variance rows
+    assert "1 item" in text or "2 items" in text  # variance count rendering
+    # The "+1" net variance should appear in the summary
+    assert "+1" in text
+
+
+@pytest.mark.django_db
+def test_cycle_count_detail_shows_download_button_when_completed(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_detail", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    body = resp.content.decode("utf-8")
+    assert "Download Reconciliation PDF" in body
+    assert f"/cycle-counts/{cc.pk}/results-pdf/" in body
+
+
+@pytest.mark.django_db
+def test_cycle_count_detail_hides_download_button_when_open(client, manager):
+    _seed_items("OFCI", 3)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc = CycleCount.objects.get()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_detail", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    assert "Download Reconciliation PDF" not in resp.content.decode("utf-8")

@@ -80,6 +80,9 @@
             <td data-label="Actions">
               <a class="action-chip" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
               <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener">Print PDF</a>
+              {% if cc.status == "completed" and perms.inventory.manage_cycle_counts %}
+              <a class="action-chip" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener">Results</a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
