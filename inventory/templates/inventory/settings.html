@@ -108,6 +108,7 @@
                                 <td>
                                     <strong>{{ u.username }}</strong>
                                     {% if not u.is_active %}<span class="badge danger">Inactive</span>{% endif %}
+                                    {% if u.username in locked_usernames %}<span class="badge danger user-locked-badge" title="User is temporarily locked from failed logins">Locked</span>{% endif %}
                                 </td>
                                 <td>
                                     <div class="settings-user-name">
@@ -158,6 +159,13 @@
                                         <a href="{% url 'user_edit' u.pk %}" class="btn sm light" aria-label="Edit {{ u.username }}">Edit</a>
                                         {% if u != request.user %}
                                         <a href="{% url 'user_delete' u.pk %}" class="btn sm danger" aria-label="Delete {{ u.username }}">Delete</a>
+                                        {% endif %}
+                                        {% if u.username in locked_usernames and u != request.user and request.user.is_superuser %}
+                                        <form method="post" action="{% url 'user_unlock' u.pk %}" class="settings-unlock-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                                            <button type="submit" class="btn sm primary" title="Clear failed-login records and let {{ u.username }} sign in right now">Unlock</button>
+                                        </form>
                                         {% endif %}
                                     </div>
                                 </td>
@@ -410,16 +418,28 @@
 }
 
 .settings-actions-col {
-  width: 140px;
+  width: 220px;
   text-align: right;
 }
 .settings-row-actions {
   display: inline-flex;
   gap: 6px;
   justify-content: flex-end;
+  align-items: center;
 }
 .settings-row-actions .btn {
   margin: 0;
+}
+.settings-unlock-form {
+  display: inline-block;
+  margin: 0;
+}
+
+/* Lockout badge — invert to draw attention */
+.user-locked-badge {
+  background: #ef4444;
+  color: #ffffff;
+  border: 1px solid #ef4444;
 }
 
 /* Badges */

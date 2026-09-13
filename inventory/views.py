@@ -9,6 +9,15 @@ from functools import wraps
 
 from django.utils import timezone
 from django.conf import settings as django_settings
+
+# django-axes (failed-login lockout tracking) — wrapped so the module imports cleanly
+# even if axes is removed from INSTALLED_APPS in another config.
+try:
+    from axes.utils import reset as _axes_reset_user
+    from axes.models import AccessAttempt
+except Exception:  # pragma: no cover - axes always installed in this project
+    _axes_reset_user = None
+    AccessAttempt = None
 from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.contrib import messages
@@ -2577,20 +2586,23 @@ def settings(request):
     active_tab = request.GET.get("tab", "general")
     context = {"active_tab": active_tab}
     if active_tab == "users" and request.user.is_superuser:
-        context["users"] = User.objects.all().order_by("-is_superuser", "username")
+        context["users"] = User.objects.all().order_by("-is_superuser", "username").prefetch_related("groups")
+        context["locked_usernames"] = _locked_user_usernames()
     return render(request, "inventory/settings.html", context)
 
 
 @login_required
 @any_perm_required("inventory.manage_users")
 def user_management(request):
-    """User management list for superusers — shows groups per user."""
+    """User management list for superusers — shows groups + lockout status per user."""
     users = User.objects.all().order_by("-is_superuser", "username")
     # Prefetch groups for display
     users = users.prefetch_related("groups")
+    locked_usernames = _locked_user_usernames()
     return render(request, "inventory/settings.html", {
         "active_tab": "users",
         "users": users,
+        "locked_usernames": locked_usernames,
     })
 
 
@@ -2804,6 +2816,47 @@ def user_delete(request, pk):
     return render(request, "inventory/user_confirm_delete.html", {
         "user_obj": user,
     })
+
+
+def _locked_user_usernames():
+    """Return the set of usernames currently tracked by django-axes as having
+    at least one failed attempt on record. Empty set when axes isn't installed.
+    """
+    if AccessAttempt is None:
+        return set()
+    return set(
+        AccessAttempt.objects.values_list("username", flat=True).distinct()
+    )
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser, login_url="/settings/")
+@require_POST
+def user_unlock(request, pk):
+    """Clear failed-login attempts for a user so they can sign in again immediately.
+
+    Lockouts happen after AXES_FAILURE_LIMIT wrong passwords (5 by default) and
+    last AXES_COOLOFF_TIME (15 min by default). An administrator can skip the
+    wait by clearing the AccessAttempt rows for that username.
+    """
+    user = get_object_or_404(User, pk=pk)
+    username = user.username
+    if request.user.pk == user.pk:
+        messages.error(request, "You cannot unlock your own account from here.")
+        return redirect("user_management")
+    if _axes_reset_user is None:
+        messages.error(request, "Account lockout tracking is not configured.")
+        return redirect("user_management")
+    cleared = _axes_reset_user(username=username)
+    if cleared:
+        messages.success(
+            request,
+            f"Unlocked '{username}' — cleared {cleared} failed-login attempt record(s).",
+        )
+    else:
+        messages.info(request, f"'{username}' had no recorded failed-login attempts.")
+    # Honor the ?next= back to user edit if present (so admins can unlock + retry in one flow)
+    return redirect(_safe_settings_next(request))
 
 
 @login_required

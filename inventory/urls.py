@@ -66,6 +66,7 @@ urlpatterns = [
     path("settings/users/add/", views.user_create, name="user_create"),
     path("settings/users/<int:pk>/edit/", views.user_edit, name="user_edit"),
     path("settings/users/<int:pk>/delete/", views.user_delete, name="user_delete"),
+    path("settings/users/<int:pk>/unlock/", views.user_unlock, name="user_unlock"),
     path("settings/groups/", views.group_management, name="group_management"),
     path("settings/groups/add/", views.group_create, name="group_create"),
     path("settings/groups/<int:pk>/permissions/", views.group_permissions, name="group_permissions"),
