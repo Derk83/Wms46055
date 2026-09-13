@@ -1,5 +1,5 @@
 [Unit]
-Description=Deliver Black Box RPL Warehouse Web Push notifications
+Description=Deliver RPL Warehouse Web Push notifications
 After=network-online.target ppe-inventory.service
 Wants=network-online.target
 

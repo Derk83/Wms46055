@@ -20,8 +20,8 @@ class PWAInstallabilityTests(TestCase):
 
     def test_manifest_is_installable_and_host_specific_on_both_domains(self):
         for host, expected_name in (
-            ("bbx.rplwms.com", "Black Box RPL Warehouse"),
-            ("requests.rplwms.com", "Black Box RPL Warehouse — Material Requests"),
+            ("bbx.rplwms.com", "RPL Warehouse"),
+            ("requests.rplwms.com", "RPL Warehouse — Material Requests"),
         ):
             response = self.client.get("/manifest.webmanifest", HTTP_HOST=host, secure=True)
             self.assertEqual(response.status_code, 200)

@@ -1,5 +1,5 @@
 [Unit]
-Description=Retry Black Box RPL Warehouse Web Push notifications every minute
+Description=Retry RPL Warehouse Web Push notifications every minute
 
 [Timer]
 OnBootSec=45s

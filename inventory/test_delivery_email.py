@@ -15,7 +15,7 @@ from .services import create_material_request, update_pick_ticket_status
 
 @override_settings(
     EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
-    DEFAULT_FROM_EMAIL="Black Box RPL Warehouse <no-reply@rplwms.com>",
+    DEFAULT_FROM_EMAIL="RPL Warehouse <no-reply@rplwms.com>",
     WEBPUSH_VAPID_PUBLIC_KEY="public",
     WEBPUSH_VAPID_PRIVATE_KEY="private",
     WEBPUSH_VAPID_SUBJECT="mailto:warehouse@example.com",
