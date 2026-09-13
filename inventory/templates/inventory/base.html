@@ -22,8 +22,10 @@
 <header class="site-header">
   <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">
     <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse">
-    <span class="brand-primary">RPL Warehouse</span>
-    {% if request.is_request_portal %}<span class="brand-subtitle">Material Requests</span>{% endif %}
+    <span class="brand-text">
+      <span class="brand-primary">RPL Warehouse</span>
+      {% if request.is_request_portal %}<span class="brand-subtitle">Material Requests</span>{% endif %}
+    </span>
   </a>
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle>
@@ -41,29 +43,29 @@
       {% if perms.inventory.add_materialrequest %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
     {% else %}
       <div class="nav-section">
-        <a href="{% url 'inventory_list' %}">Inventory</a>
-        {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
-        {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
-        {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}">Receiving</a>{% endif %}
+        <a href="{% url 'inventory_list' %}"><span class="ico" aria-hidden="true">▦</span>Inventory</a>
+        {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}"><span class="ico" aria-hidden="true">▤</span>Tickets</a>{% endif %}
+        {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}"><span class="ico" aria-hidden="true">◫</span>Material Requests</a>{% endif %}
+        {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}"><span class="ico" aria-hidden="true">↓</span>Receiving</a>{% endif %}
       </div>
       {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}
       <div class="nav-section">
         <div class="nav-section-label">Insights</div>
-        {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
-        {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}
+        {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}"><span class="ico" aria-hidden="true">↻</span>Transactions</a>{% endif %}
+        {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}"><span class="ico" aria-hidden="true">⌘</span>Reports</a>{% endif %}
       </div>
       {% endif %}
       <div class="nav-section">
         <div class="nav-section-label">Tools</div>
-        <a href="{% url 'location_list' %}">Locations</a>
-        {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
-        {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
-        {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}
+        <a href="{% url 'location_list' %}"><span class="ico" aria-hidden="true">◉</span>Locations</a>
+        {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}"><span class="ico" aria-hidden="true">⌗</span>Scanner</a>{% endif %}
+        {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}"><span class="ico" aria-hidden="true">⊞</span>Cycle Count</a>{% endif %}
+        {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}"><span class="ico" aria-hidden="true">⤓</span>Cycle Count Archive</a>{% endif %}
       </div>
       {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}
       <div class="nav-section">
         <div class="nav-section-label">Admin</div>
-        <a href="{% url 'settings' %}">Settings</a>
+        <a href="{% url 'settings' %}"><span class="ico" aria-hidden="true">⚙</span>Settings</a>
       </div>
       {% endif %}
     {% endif %}
