@@ -88,3 +88,13 @@ class ReportsPdfViewerTests(TestCase):
         response = self.client.get(reverse("reports_pdf_viewer", args=["daily"]))
         self.assertIn(response.status_code, (302, 403))
 
+    def test_pdf_response_allows_same_origin_viewer_frame(self):
+        """The global anti-framing policy must not block our own PDF iframe."""
+        client = _make_client("viewer-mgr")
+        response = client.get(reverse("reports_pdf", args=["daily"]))
+        self.assertEqual(response.status_code, 200)
+        policy = response.headers.get("Content-Security-Policy", "")
+        self.assertIn("frame-ancestors 'self'", policy)
+        self.assertNotIn("frame-ancestors 'none'", policy)
+        self.assertEqual(response.headers.get("X-Frame-Options"), "SAMEORIGIN")
+

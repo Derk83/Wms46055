@@ -94,6 +94,23 @@ def test_command_dry_run_writes_nothing(tmp_path, settings):
 
 
 @pytest.mark.django_db
+def test_command_builds_weekly_range_in_america_chicago(tmp_path, settings):
+    """The Friday report's Mon-Sun boundaries must be Chicago-local, not UTC."""
+    settings.MEDIA_ROOT = tmp_path
+    with patch(
+        "inventory.management.commands.generate_weekly_report.activity_summary",
+        return_value={},
+    ) as summary:
+        call_command("generate_weekly_report", "--dry-run")
+
+    rng = summary.call_args.args[0]
+    assert getattr(rng.start.tzinfo, "key", None) == "America/Chicago"
+    assert getattr(rng.end.tzinfo, "key", None) == "America/Chicago"
+    assert rng.start.hour == 0
+    assert rng.end.hour == 0
+
+
+@pytest.mark.django_db
 def test_command_saves_pdf_to_expected_path(tmp_path, settings):
     settings.MEDIA_ROOT = tmp_path
 

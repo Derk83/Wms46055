@@ -1,0 +1,31 @@
+[Unit]
+Description=WMS Weekly Activity Report generator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+WorkingDirectory=/home/hermes/projects/ppe_inventory
+Environment="PATH=/home/hermes/projects/ppe-pick-ticket-venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="DJANGO_SETTINGS_MODULE=config.settings"
+EnvironmentFile=/etc/ppe-inventory.env
+ExecStart=/home/hermes/projects/ppe-pick-ticket-venv/bin/python manage.py generate_weekly_report --email
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/hermes/projects/ppe_inventory/media
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictSUIDSGID=true
+MemoryDenyWriteExecute=false
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ppe-weekly-report

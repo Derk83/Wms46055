@@ -36,15 +36,15 @@
       <button type="button" class="mobile-nav-close" aria-label="Close navigation menu" data-mobile-nav-close>&times;</button>
     </div>
     {% if request.is_request_portal %}
-      <a href="{% url 'material_request_board' %}">Request Board</a>
+      {% if perms.inventory.view_materialrequest and perms.inventory.access_material_request_portal %}<a href="{% url 'material_request_board' %}">Request Board</a>{% endif %}
       {% if perms.inventory.view_inventoryitem %}<a href="{% url 'inventory_list' %}">Inventory</a>{% endif %}
-      {% if perms.inventory.add_materialrequest %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
+      {% if perms.inventory.add_materialrequest and perms.inventory.add_materialrequestline and perms.inventory.view_inventoryitem %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
     {% else %}
       <div class="nav-section">
         <a href="{% url 'inventory_list' %}">Inventory</a>
         {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
         {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
-        {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}">Receiving</a>{% endif %}
+        {% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}">Receiving</a>{% elif perms.inventory.view_receiving_log %}<a href="{% url 'receiving_log' %}">Receiving</a>{% endif %}
       </div>
       {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}
       <div class="nav-section">

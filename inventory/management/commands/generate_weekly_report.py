@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -44,6 +45,7 @@ from inventory.reports import (
 
 
 User = get_user_model()
+REPORT_TIMEZONE = ZoneInfo("America/Chicago")
 
 
 def previous_week_range(today: date) -> tuple[date, date]:
@@ -95,11 +97,15 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         send_email = options["email"]
 
-        today_local = timezone.localtime().date()
+        today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
         week_start, week_end = previous_week_range(today_local)
 
-        rng_start = timezone.make_aware(datetime.combine(week_start, time.min))
-        rng_end = timezone.make_aware(datetime.combine(week_end + timedelta(days=1), time.min))
+        rng_start = timezone.make_aware(
+            datetime.combine(week_start, time.min), REPORT_TIMEZONE
+        )
+        rng_end = timezone.make_aware(
+            datetime.combine(week_end + timedelta(days=1), time.min), REPORT_TIMEZONE
+        )
         rng = DateRange(
             start=rng_start,
             end=rng_end,
@@ -184,9 +190,10 @@ class Command(BaseCommand):
                 ))
                 return
             subject = f"RPL Warehouse Weekly Report — {rng.label}"
+            generated_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE)
             body = (
                 f"Attached: WMS Weekly Activity Report for {rng.label}.\n\n"
-                f"Generated {timezone.now():%Y-%m-%d %H:%M} America/Chicago.\n"
+                f"Generated {generated_local:%Y-%m-%d %H:%M} America/Chicago.\n"
                 f"Saved at: {out_path}\n"
             )
             msg = EmailMessage(

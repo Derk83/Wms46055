@@ -1,7 +1,7 @@
 # Operations: scheduled tasks, backup policy, rotate-on-deploy
 
 This project is deployed on a Proxmox LXC at `192.168.0.177` (PVE host
-`pve01`). Two systemd timer units fire background jobs that are not
+`pve01`). Systemd timer units fire background jobs that are not
 visible from the Django process — they must be installed and configured
 on the host, separately from the repo.
 
@@ -10,7 +10,8 @@ on the host, separately from the repo.
 | Unit | Schedule | What it runs |
 |------|----------|--------------|
 | `ppe-inventory.service` | n/a (always-on) | Gunicorn binding `127.0.0.1:8089`, 3 workers, source `config.wsgi:application` |
-| `ppe-inventory-backup.timer` | **04:00 America/Chicago daily** (jitter ±5min) | `scripts/backup_to_nas.sh daily` — pushes GPG-encrypted tar.gz + plaintext db.sqlite3.bak + SHA256SUMS to `/mnt/nas-bonkvault/wms-backups/daily-YYYY-MM-DD/` |
+| `ppe-inventory-backup.timer` | **04:00 America/Chicago daily** (jitter ±5min) | `scripts/backup_to_nas.sh daily` — snapshots SQLite with its backup API, includes uploaded media, and sends only a GPG-encrypted archive + SHA256SUMS to the NAS |
+| `ppe-inventory-weekly-report.timer` | Friday **07:00 America/Chicago** | Generates the previous Mon–Sun report and emails eligible managers |
 | `ppe-push-notifications.timer` | every few minutes | Drains the `PushDelivery` outbox to subscribed browsers via VAPID |
 | `ppe-material-request-archive.timer` | daily | Rolls up old material-request board state to the archive |
 
@@ -22,7 +23,7 @@ and `systemctl enable --now <name>.timer`).
 
 ```ini
 [Unit]
-Description=WMS daily backup to NAS (encrypted GPG + plaintext DB + SHA256SUMS)
+Description=WMS daily backup to NAS (encrypted GPG archive + SHA256SUMS)
 
 [Service]
 Type=oneshot
@@ -63,13 +64,13 @@ WantedBy=timers.target
 
 | Layer | Path | Encryption | Retention |
 |-------|------|-----------|-----------|
-| NAS daily | `/mnt/nas-bonkvault/wms-backups/daily-YYYY-MM-DD/` (per day, e.g. `daily-2026-09-13/`) | GPG to fingerprint `1DA62B58...` + plaintext DB + SHA256SUMS | None (caller prune, currently unbounded) |
-| NAS one-off | `/mnt/nas-bonkvault/wms-backups/<label>-YYYYMMDD-HHMMSS/` (manual runs of `backup_to_nas.sh <label>`) | Same as above | None |
+| NAS daily | `/mnt/nas-bonkvault/wms-backups/daily-YYYYMMDD-HHMMSS/` | GPG to fingerprint `1DA62B58...`; no plaintext database artifact | None (caller prune, currently unbounded) |
+| NAS one-off | `/mnt/nas-bonkvault/wms-backups/<label>-YYYYMMDD-HHMMSS/` | Same as above | None |
 | Local backups | `/home/hermes/projects/ppe_inventory/backups/wms-backup-*.tar.gz` | None | 30 days, pruned by `scripts/backup_wms.py RETENTION_DAYS` |
 
-`backup_to_nas.sh` requires the `sqlite3` CLI helper **or** falls back to
-Python's `sqlite3` module (the daily timer assumes the latter). Tested
-on Django 6.1 / Python 3.13.
+`backup_to_nas.sh` uses Python's SQLite online backup API to create a coherent
+point-in-time database snapshot. The encrypted archive contains that snapshot,
+the application files, and uploaded media. Tested on Django 6.1 / Python 3.13.
 
 The GPG key is **unprotected** (no passphrase) and is owned by `hermes`
 under `~/.gnupg/`. The service sets `Environment=HOME=/home/hermes`
@@ -96,19 +97,15 @@ ls -la /mnt/nas-bonkvault/wms-backups/ | tail -10
 
 ```bash
 # Pick a daily run
-cd /mnt/nas-bonkvault/wms-backups/daily-2026-09-13/
+RUN=daily-20260913-040000
+cd "/mnt/nas-bonkvault/wms-backups/$RUN"
 
-# Confirm hashes match
+# Confirm the encrypted artifact hash matches
 sha256sum -c SHA256SUMS
 
-# Decrypt in-memory and inspect contents
-gpg --output /tmp/restore-test.tar.gz --decrypt \
-    daily-2026-09-13-*.tar.gz.gpg
-
-tar tzf /tmp/restore-test.tar.gz | head
-tar xzf /tmp/restore-test.tar.gz wms-db/database.sqlite3
-sqlite3 wms-db/database.sqlite3 \
-    "SELECT COUNT(*) FROM auth_user;"
+# Stage and integrity-check the database + media without touching production
+cd /home/hermes/projects/ppe_inventory
+./scripts/restore_from_nas.sh "$RUN"
 ```
 
 ## Deploy procedure
@@ -137,22 +134,9 @@ ssh pve01 'systemctl list-timers ppe-inventory-backup.timer'
 ## Restore from a backup
 
 ```bash
-# Pull the encrypted tar.gz + sha256 + db.sqlite3.bak
-# (or just the db.sqlite3.bak if you only need the DB)
+# Validate, decrypt, and stage the database + media without overwriting live data:
+./scripts/restore_from_nas.sh <run-directory-name>
 
-# To restore the DB fast (no decrypt needed):
-sudo systemctl stop ppe-inventory
-cp /mnt/nas-bonkvault/wms-backups/<run>/db.sqlite3.bak \
-   /home/hermes/projects/ppe_inventory/db.sqlite3
-chown hermes:hermes /home/hermes/projects/ppe_inventory/db.sqlite3
-sudo systemctl start ppe-inventory
-
-# To restore the full project tree including DB:
-cd /
-gpg --output /tmp/restore.tar.gz --decrypt \
-    /mnt/nas-bonkvault/wms-backups/<run>/<label>-*.tar.gz.gpg
-# Paths inside the archive are absolute, so cd to / first
-sudo tar xzf /tmp/restore.tar.gz -C /
-# Then point Django at the restored DB and start
-sudo systemctl restart ppe-inventory
+# Inspect db.sqlite3.restored and media.restored first. Stop the service and
+# promote them manually only after the integrity check and file review pass.
 ```

@@ -1,0 +1,12 @@
+[Unit]
+Description=WMS Weekly Activity Report — Friday 07:00 America/Chicago
+
+[Timer]
+OnCalendar=Fri 07:00:00 America/Chicago
+Persistent=true
+RandomizedDelaySec=2min
+AccuracySec=1min
+Unit=ppe-inventory-weekly-report.service
+
+[Install]
+WantedBy=timers.target

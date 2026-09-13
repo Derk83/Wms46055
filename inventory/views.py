@@ -34,8 +34,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.cache import never_cache
+from django.views.decorators.clickjacking import xframe_options_sameorigin
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST, require_safe
+from csp.decorators import csp_replace
 
 
 def _authorized_or_redirect(test_func, login_url=None):
@@ -1791,50 +1793,59 @@ def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
             key = (row["po_number"], row["vendor"], row["notes"])
             groups.setdefault(key, []).append(row)
 
-        # Process each group as one ticket; each line in its own atomic block.
+        # Keep each logical receipt in one outer transaction. Inner savepoints
+        # isolate bad rows without releasing the outer transaction, so a ticket
+        # PK rolled back on the first row cannot be reused by another request.
         for (po_number, vendor, notes), group_rows in groups.items():
-            ticket = None
-            for row in group_rows:
-                try:
-                    with transaction.atomic():
-                        item = InventoryItem.objects.select_for_update().filter(
-                            part_number=row["part_number"]
-                        ).first()
-                        if not item:
-                            errors.append(
-                                f"Row {row['row_idx']}: Item not found for part number "
-                                f"'{row['part_number']}'"
-                            )
-                            error_count += 1
-                            continue
+            with transaction.atomic():
+                ticket = None
+                for row in group_rows:
+                    try:
+                        with transaction.atomic():
+                            # A failed row can roll back ticket creation while
+                            # leaving its Python object populated with a stale PK.
+                            if ticket is not None and not ReceivingTicket.objects.filter(
+                                pk=ticket.pk
+                            ).exists():
+                                ticket = None
+                            item = InventoryItem.objects.select_for_update().filter(
+                                part_number=row["part_number"]
+                            ).first()
+                            if not item:
+                                errors.append(
+                                    f"Row {row['row_idx']}: Item not found for part number "
+                                    f"'{row['part_number']}'"
+                                )
+                                error_count += 1
+                                continue
 
-                        shipper = row["shipper"]
-                        if shipper and item.shipper != shipper:
-                            item.shipper = shipper
-                            item.save(update_fields=["shipper", "updated_at"])
+                            shipper = row["shipper"]
+                            if shipper and item.shipper != shipper:
+                                item.shipper = shipper
+                                item.save(update_fields=["shipper", "updated_at"])
 
-                        if ticket is None:
-                            ticket = ReceivingTicket.objects.create(
-                                created_by=user,
+                            if ticket is None:
+                                ticket = ReceivingTicket.objects.create(
+                                    created_by=user,
+                                    notes=notes,
+                                    po_number=po_number,
+                                    vendor=vendor,
+                                )
+                            # Creating the line applies stock and writes its
+                            # uniquely linked ledger entry. ReceivingLine.save()
+                            # is the single source of truth — no separate
+                            # record_receipt() call.
+                            ReceivingLine.objects.create(
+                                ticket=ticket,
+                                item=item,
+                                quantity=row["quantity"],
+                                shipper=shipper,
                                 notes=notes,
-                                po_number=po_number,
-                                vendor=vendor,
                             )
-                        # Creating the line applies stock and writes its
-                        # uniquely linked ledger entry. ReceivingLine.save()
-                        # is the single source of truth — no separate
-                        # record_receipt() call.
-                        ReceivingLine.objects.create(
-                            ticket=ticket,
-                            item=item,
-                            quantity=row["quantity"],
-                            shipper=shipper,
-                            notes=notes,
-                        )
-                    success_count += 1
-                except Exception as exc:
-                    errors.append(f"Row {row['row_idx']}: {exc}")
-                    error_count += 1
+                        success_count += 1
+                    except Exception as exc:
+                        errors.append(f"Row {row['row_idx']}: {exc}")
+                        error_count += 1
 
     except Exception as e:
         errors.append(f"Failed to process spreadsheet: {str(e)}")
@@ -4035,6 +4046,7 @@ def cycle_count_archive(request):
 
 @login_required
 @any_perm_required("inventory.archive_cycle_counts")
+@require_POST
 def cycle_count_archive_action(request, pk):
     """POST-only handler that archives a completed cycle count.
 
@@ -4059,6 +4071,7 @@ def cycle_count_archive_action(request, pk):
 
 @login_required
 @any_perm_required("inventory.archive_cycle_counts")
+@require_POST
 def cycle_count_unarchive_action(request, pk):
     """POST-only handler that restores an archived cycle count to the active list."""
     cycle_count = get_object_or_404(CycleCount, pk=pk)
@@ -4239,6 +4252,20 @@ def cycle_count_detail(request, pk):
             now = timezone.now()
             updated = 0
             with transaction.atomic():
+                # Lock and re-read the parent in the same transaction as its
+                # entries so completion/cancellation cannot race a stale form.
+                cycle_count = get_object_or_404(
+                    CycleCount.objects.select_for_update(), pk=cycle_count.pk
+                )
+                if cycle_count.is_archived or cycle_count.status not in (
+                    CycleCount.Status.OPEN,
+                    CycleCount.Status.IN_PROGRESS,
+                ):
+                    messages.error(
+                        request,
+                        "This cycle count is finished and its audit record is locked.",
+                    )
+                    return redirect("cycle_count_detail", pk=cycle_count.pk)
                 for entry in cycle_count.items.select_for_update():
                     raw = request.POST.get(f"count_{entry.pk}", "").strip()
                     if raw == "":
@@ -4607,6 +4634,8 @@ def reports_daily(request):
 
 @login_required
 @manager_required
+@csp_replace({"frame-ancestors": ("'self'",)})
+@xframe_options_sameorigin
 def reports_pdf(request, kind):
     """Render the daily report as a PDF.
 
@@ -4620,10 +4649,14 @@ def reports_pdf(request, kind):
     preset = request.GET.get("preset")
     if preset and preset != "custom":
         start_d, end_d = preset_dates(preset)
-        rng = parse_date_range(
-            kind="daily",
-            raw_date=start_d.isoformat(),
-        )
+        if start_d == end_d:
+            rng = parse_date_range(kind="daily", raw_date=start_d.isoformat())
+        else:
+            rng = parse_date_range(
+                kind="weekly",
+                raw_start=start_d.isoformat(),
+                raw_end=end_d.isoformat(),
+            )
     else:
         rng = parse_date_range(
             kind="daily",

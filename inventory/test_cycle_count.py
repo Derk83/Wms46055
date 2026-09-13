@@ -784,6 +784,74 @@ def test_cycle_count_unarchive_action_restores_to_active_list(client, manager):
 
 
 @pytest.mark.django_db
+def test_cycle_count_archive_and_unarchive_reject_get(client, manager):
+    """Archive state changes must be POST-only so links/prefetch cannot mutate data."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+
+    archive_url = reverse("cycle_count_archive_action", kwargs={"pk": cc.pk})
+    assert client.get(archive_url).status_code == 405
+    cc.refresh_from_db()
+    assert not cc.is_archived
+
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save(update_fields=["archived_at", "archived_by"])
+    unarchive_url = reverse("cycle_count_unarchive_action", kwargs={"pk": cc.pk})
+    assert client.get(unarchive_url).status_code == 405
+    cc.refresh_from_db()
+    assert cc.is_archived
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("status", "archived"),
+    [
+        (CycleCount.Status.COMPLETED, False),
+        (CycleCount.Status.CANCELLED, False),
+        (CycleCount.Status.COMPLETED, True),
+    ],
+)
+def test_finished_or_archived_cycle_count_rejects_record_changes(
+    client, manager, status, archived
+):
+    """Completion/cancellation/archive seals recorded quantities and notes."""
+    cc = _make_completed_cycle_count(manager)
+    cc.status = status
+    if archived:
+        cc.archived_at = timezone.now()
+        cc.archived_by = manager
+    cc.save()
+    entry = cc.items.order_by("pk").first()
+    before = (
+        entry.counted_quantity,
+        entry.note,
+        entry.counted_by_id,
+        entry.counted_at,
+    )
+    client.force_login(manager)
+
+    response = client.post(
+        reverse("cycle_count_detail", kwargs={"pk": cc.pk}),
+        data={
+            "action": "record",
+            f"count_{entry.pk}": "999",
+            f"note_{entry.pk}": "must not overwrite sealed audit evidence",
+        },
+    )
+
+    assert response.status_code == 302
+    entry.refresh_from_db()
+    after = (
+        entry.counted_quantity,
+        entry.note,
+        entry.counted_by_id,
+        entry.counted_at,
+    )
+    assert after == before
+
+
+@pytest.mark.django_db
 def test_cycle_count_unarchive_action_requires_archive_perm(client, manager, counter):
     cc = _make_completed_cycle_count(manager)
     cc.archived_at = timezone.now()

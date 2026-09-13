@@ -11,6 +11,7 @@ Covers:
 """
 from datetime import timedelta
 from io import BytesIO
+from unittest.mock import patch
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -263,6 +264,30 @@ def test_daily_report_pdf_returns_pdf(client, manager_groups):
     body = response.content
     assert body.startswith(b"%PDF-")
     assert len(body) > 100
+
+
+@pytest.mark.django_db
+def test_daily_report_pdf_preserves_multi_day_preset_range(client, manager_groups):
+    """PDF and HTML must use the same full range for week/month presets."""
+    user = User.objects.create_user(username="mgr-pdf-range", password="pw")
+    from django.contrib.auth.models import Group
+    user.groups.add(Group.objects.get(name="Logistics Manager"))
+    client.force_login(user)
+
+    from inventory import views
+
+    with patch(
+        "inventory.views._build_report_context",
+        wraps=views._build_report_context,
+    ) as build_context:
+        response = client.get(
+            reverse("reports_pdf", args=["daily"]),
+            {"preset": "this_week"},
+        )
+
+    assert response.status_code == 200
+    rng = build_context.call_args.args[0]
+    assert (rng.end - rng.start).days == 7
 
 
 @pytest.mark.django_db

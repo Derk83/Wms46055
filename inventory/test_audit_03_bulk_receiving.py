@@ -159,6 +159,45 @@ def test_bulk_receiving_groups_rows_by_po_into_one_ticket():
 
 
 @pytest.mark.django_db
+def test_bulk_receiving_recovers_after_first_line_transaction_rolls_back(monkeypatch):
+    """A failed first line must not poison the group's ticket for later valid rows."""
+    user = User.objects.create_user(username="bulk-first-fails", password="testpass123")
+    item_a = InventoryItem.objects.create(part_number="FAIL-1", name="F1", quantity_on_hand=0)
+    item_b = InventoryItem.objects.create(part_number="FAIL-2", name="F2", quantity_on_hand=0)
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Part #", "Quantity", "PO", "Notes"])
+    sheet.append([item_a.part_number, 4, "PO-FAIL", "Truck"])
+    sheet.append([item_b.part_number, 6, "PO-FAIL", "Truck"])
+    spreadsheet = io.BytesIO()
+    workbook.save(spreadsheet)
+    spreadsheet.seek(0)
+
+    original_create = ReceivingLine.objects.create
+    attempts = 0
+
+    def fail_first_create(**kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise RuntimeError("injected first-line failure")
+        return original_create(**kwargs)
+
+    monkeypatch.setattr(ReceivingLine.objects, "create", fail_first_create)
+    success_count, error_count, errors = process_bulk_receiving(spreadsheet, user)
+
+    assert (success_count, error_count) == (1, 1)
+    assert len(errors) == 1
+    assert ReceivingTicket.objects.count() == 1
+    ticket = ReceivingTicket.objects.get()
+    assert list(ticket.lines.values_list("item__part_number", flat=True)) == [item_b.part_number]
+    item_a.refresh_from_db()
+    item_b.refresh_from_db()
+    assert item_a.quantity_on_hand == 0
+    assert item_b.quantity_on_hand == 6
+
+
+@pytest.mark.django_db
 def test_bulk_receiving_separate_po_gets_separate_tickets():
     """Different PO numbers must still produce separate tickets."""
     user = User.objects.create_user(username="bulk-separate", password="testpass123")
