@@ -129,7 +129,9 @@
                                         {% if groups %}
                                             <div class="user-groups">
                                                 {% for g in groups|slice:":3" %}
-                                                <span class="group-tag" title="{{ g.name }}">{{ g.name }}</span>
+                                                {% with slug=g.name|slugify %}
+                                                <span class="group-tag group-tag-{{ slug }}" title="{{ g.name }}">{{ g.name }}</span>
+                                                {% endwith %}
                                                 {% endfor %}
                                                 {% if groups|length > 3 %}
                                                 <span class="group-tag group-tag-more">+{{ groups|length|add:"-3" }}</span>
@@ -327,15 +329,54 @@
   display: inline-block;
   padding: 2px 8px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 700;
   border-radius: 999px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
   border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
   white-space: nowrap;
-  max-width: 140px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: .02em;
+}
+
+/*
+  Per-group color tokens. Each role gets a distinct hue with a
+  subtle tint (12% on the surface) and a brighter text color so the
+  tag reads cleanly on both light and dark WMS themes. Borders use
+  a slightly stronger mix (28%) so the chip has presence without
+  feeling heavy.
+*/
+.group-tag-logistics-manager {
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  color: #f59e0b;
+  border-color: color-mix(in srgb, #f59e0b 35%, transparent);
+}
+.group-tag-logistics-specialist {
+  background: color-mix(in srgb, #3b82f6 14%, transparent);
+  color: #60a5fa;
+  border-color: color-mix(in srgb, #3b82f6 35%, transparent);
+}
+.group-tag-procurement-specialist {
+  background: color-mix(in srgb, #a855f7 14%, transparent);
+  color: #c084fc;
+  border-color: color-mix(in srgb, #a855f7 35%, transparent);
+}
+.group-tag-material-requester {
+  background: color-mix(in srgb, #22c55e 14%, transparent);
+  color: #4ade80;
+  border-color: color-mix(in srgb, #22c55e 35%, transparent);
+}
+.group-tag-material-requests {
+  background: color-mix(in srgb, #6b7280 14%, transparent);
+  color: #9ca3af;
+  border-color: color-mix(in srgb, #6b7280 35%, transparent);
+}
+.group-tag-viewer {
+  background: color-mix(in srgb, #06b6d4 14%, transparent);
+  color: #22d3ee;
+  border-color: color-mix(in srgb, #06b6d4 35%, transparent);
 }
 .group-tag-more {
   background: var(--surface-2);
