@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+{% load inventory_extras %}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Daily Activity Report — {{ range.label }}</title>
+<style>
+  @page { size: Letter; margin: 0.6in 0.5in; }
+  body { font-family: 'Helvetica', 'Arial', sans-serif; font-size: 9.5pt; color: #222; }
+  h1 { font-size: 18pt; margin: 0 0 4pt 0; }
+  h2 { font-size: 12pt; margin: 14pt 0 4pt 0; padding: 4pt 0; border-bottom: 1pt solid #555; }
+  .subtitle { color: #666; font-size: 9pt; margin: 0 0 10pt 0; }
+  .tile-row { display: flex; flex-wrap: wrap; gap: 6pt; margin-bottom: 8pt; }
+  .tile { border: 0.6pt solid #999; padding: 4pt 6pt; border-radius: 2pt; min-width: 80pt; }
+  .tile-label { font-size: 7pt; color: #666; text-transform: uppercase; display: block; }
+  .tile-value { font-size: 12pt; font-weight: bold; display: block; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 6pt; }
+  th, td { border-bottom: 0.5pt solid #ddd; padding: 3pt 4pt; text-align: left; vertical-align: top; }
+  th { background: #f4f4f4; font-weight: bold; font-size: 8pt; text-transform: uppercase; }
+  .empty { color: #888; font-style: italic; }
+  .badge { display: inline-block; padding: 1pt 4pt; border-radius: 2pt; background: #fee; color: #b00; font-size: 7.5pt; font-weight: bold; }
+  .status { display: inline-block; padding: 1pt 4pt; border-radius: 2pt; background: #eef; color: #224; font-size: 7.5pt; }
+  footer { margin-top: 12pt; font-size: 7.5pt; color: #777; border-top: 0.5pt solid #ccc; padding-top: 4pt; }
+</style>
+</head>
+<body>
+
+<h1>Daily Activity Report</h1>
+<p class="subtitle">{{ range.label }} — generated {{ now|date:"Y-m-d H:i" }} America/Chicago</p>
+
+<div class="tile-row">
+  <div class="tile"><span class="tile-label">New requests</span><span class="tile-value">{{ summary.new_requests }}</span></div>
+  <div class="tile"><span class="tile-label">Confirmed</span><span class="tile-value">{{ summary.confirmed_deliveries }}</span></div>
+  <div class="tile"><span class="tile-label">Denied</span><span class="tile-value">{{ summary.denied_or_rescheduled }}</span></div>
+  <div class="tile"><span class="tile-label">Tickets opened</span><span class="tile-value">{{ summary.tickets_opened }}</span></div>
+  <div class="tile"><span class="tile-label">Tickets picked</span><span class="tile-value">{{ summary.tickets_picked }}</span></div>
+  <div class="tile"><span class="tile-label">Units received</span><span class="tile-value">{{ summary.units_received }}</span></div>
+  <div class="tile"><span class="tile-label">Urgent new</span><span class="tile-value">{{ summary.urgent_new }}</span></div>
+  <div class="tile"><span class="tile-label">Urgent closed</span><span class="tile-value">{{ summary.urgent_closed }}</span></div>
+</div>
+
+<h2>New material requests ({{ new_requests|length }})</h2>
+{% if new_requests %}
+<table>
+  <thead><tr><th>Request</th><th>Requester</th><th>Lines</th><th>Urgent</th><th>Status</th><th>Created</th></tr></thead>
+  <tbody>
+  {% for mr in new_requests %}
+    <tr>
+      <td>{{ mr.request_number }}</td>
+      <td>{{ mr.creator.username }} ({{ mr.requestor_name }})</td>
+      <td>{{ mr.lines.count }}</td>
+      <td>{% if mr.urgent %}<span class="badge">URGENT</span>{% else %}—{% endif %}</td>
+      <td><span class="status">{{ mr|call_status:status_of }}</span></td>
+      <td>{{ mr.created_at|date:"M j, H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No new material requests on {{ range.label }}.</p>{% endif %}
+
+<h2>Delivery confirmations ({{ confirmed|length }})</h2>
+{% if confirmed %}
+<table>
+  <thead><tr><th>Request</th><th>Confirmed by</th><th>When</th></tr></thead>
+  <tbody>
+  {% for mr in confirmed %}
+    <tr>
+      <td>{{ mr.request_number }}</td>
+      <td>{% if mr.delivery_acceptance_confirmed_by %}{{ mr.delivery_acceptance_confirmed_by.username }}{% else %}—{% endif %}</td>
+      <td>{{ mr.delivery_acceptance_confirmed_at|date:"M j, H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No delivery confirmations on this date.</p>{% endif %}
+
+<h2>Delivery denials / reschedule requests ({{ denied|length }})</h2>
+{% if denied %}
+<table>
+  <thead><tr><th>Request</th><th>Marked not-ready by</th><th>When</th></tr></thead>
+  <tbody>
+  {% for mr in denied %}
+    <tr>
+      <td>{{ mr.request_number }}</td>
+      <td>{% if mr.delivery_not_ready_by %}{{ mr.delivery_not_ready_by.username }}{% else %}—{% endif %}</td>
+      <td>{{ mr.delivery_not_ready_at|date:"M j, H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No denials on this date.</p>{% endif %}
+
+<h2>Pick tickets — opened ({{ tickets_opened|length }}) / picked ({{ tickets_picked|length }})</h2>
+{% if tickets_opened or tickets_picked %}
+<table>
+  <thead><tr><th>Ticket</th><th>Status</th><th>Created by</th><th>When</th></tr></thead>
+  <tbody>
+  {% for t in tickets_opened %}
+    <tr>
+      <td>PT-{{ t.pk|stringformat:'05d' }}</td>
+      <td>{{ t.get_status_display }}</td>
+      <td>{% if t.created_by %}{{ t.created_by.username }}{% else %}—{% endif %}</td>
+      <td>{{ t.created_at|date:"M j, H:i" }}</td>
+    </tr>
+  {% endfor %}
+  {% for t in tickets_picked %}
+    <tr>
+      <td>PT-{{ t.pk|stringformat:'05d' }}</td>
+      <td>Picked</td>
+      <td>{{ t.picked_by_name|default:"—" }}</td>
+      <td>{{ t.updated_at|date:"M j, H:i" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No pick ticket activity on this date.</p>{% endif %}
+
+<h2>Receiving — top items (top 20)</h2>
+{% if receiving_by_item %}
+<table>
+  <thead><tr><th>Part #</th><th>Item</th><th>Lines</th><th>Units</th></tr></thead>
+  <tbody>
+  {% for row in receiving_by_item %}
+    <tr><td>{{ row.item__part_number }}</td><td>{{ row.item__name }}</td><td>{{ row.lines }}</td><td>{{ row.units }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No receiving activity on this date.</p>{% endif %}
+
+<h2>Stock alerts</h2>
+{% if out_of_stock %}
+  <h3 style="font-size:10pt; margin-top:8pt;">Out of stock ({{ out_of_stock|length }})</h3>
+  <table>
+    <thead><tr><th>Part #</th><th>Item</th><th>On hand</th></tr></thead>
+    <tbody>
+    {% for it in out_of_stock %}
+      <tr><td>{{ it.part_number }}</td><td>{{ it.name }}</td><td>{{ it.quantity_on_hand }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}<p class="empty">No items at zero on-hand.</p>{% endif %}
+{% if low_stock %}
+  <h3 style="font-size:10pt; margin-top:8pt;">Below threshold ({{ low_stock|length }})</h3>
+  <table>
+    <thead><tr><th>Part #</th><th>Item</th><th>On hand</th><th>Threshold</th></tr></thead>
+    <tbody>
+    {% for it in low_stock %}
+      <tr><td>{{ it.part_number }}</td><td>{{ it.name }}</td><td>{{ it.quantity_on_hand }}</td><td>{{ it.low_stock_threshold }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+
+<h2>Top requesters</h2>
+{% if top_requesters %}
+<table>
+  <thead><tr><th>Username</th><th>Requests</th></tr></thead>
+  <tbody>
+  {% for row in top_requesters %}
+    <tr><td>{{ row.creator__username }}</td><td>{{ row.count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No requests in this range.</p>{% endif %}
+
+<h2>Top items (most-requested)</h2>
+{% if top_items %}
+<table>
+  <thead><tr><th>Part #</th><th>Item</th><th>Lines</th><th>Units</th></tr></thead>
+  <tbody>
+  {% for row in top_items %}
+    <tr><td>{{ row.item__part_number }}</td><td>{{ row.item__name }}</td><td>{{ row.lines }}</td><td>{{ row.units }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No items requested in this range.</p>{% endif %}
+
+{% if open_tickets %}
+<h2>Open tickets still open at end of period</h2>
+<table>
+  <thead><tr><th>Ticket</th><th>Created</th><th>Age (days)</th></tr></thead>
+  <tbody>
+  {% for t, age in open_tickets %}
+    <tr><td>PT-{{ t.pk|stringformat:'05d' }}</td><td>{{ t.created_at|date:"M j" }}</td><td>{% if age > 0 %}{{ age }}d{% else %}today{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<footer>WMS Daily Activity Report — {{ range.label }} — read-only snapshot.</footer>
+</body>
+</html>

@@ -113,4 +113,9 @@ urlpatterns = [
     path("cycle-counts/<int:pk>/results-pdf/", views.cycle_count_results_pdf, name="cycle_count_results_pdf"),
     path("cycle-counts/<int:pk>/archive/", views.cycle_count_archive_action, name="cycle_count_archive_action"),
     path("cycle-counts/<int:pk>/unarchive/", views.cycle_count_unarchive_action, name="cycle_count_unarchive_action"),
+    # Manager reports
+    path("reports/", views.reports_index, name="reports_index"),
+    path("reports/daily/", views.reports_daily, name="reports_daily"),
+    path("reports/weekly/", views.reports_weekly, name="reports_weekly"),
+    path("reports/<str:kind>/pdf/", views.reports_pdf, name="reports_pdf"),
 ]

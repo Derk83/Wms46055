@@ -4,7 +4,7 @@ import json
 import openpyxl
 import re
 import weasyprint
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 
 from django.utils import timezone
@@ -4474,3 +4474,216 @@ def _group_items_by_category(items):
     for item in items:
         seen.setdefault(item.category, []).append(item)
     return list(seen.items())
+
+
+# ---------------------------------------------------------------------------
+# Manager reports
+# ---------------------------------------------------------------------------
+
+
+MANAGER_REPORT_GROUP_NAMES = frozenset({
+    "Logistics Manager",
+    "Sr. Logistics Manager",
+    "Procurement Manager",
+})
+
+
+def user_can_view_reports(user) -> bool:
+    """Superusers and members of manager groups can view reports.
+
+    We deliberately do NOT check ``is_staff`` because in this app ``is_staff``
+    is set on Logistics Specialists and other non-manager users. The manager
+    groups are the authoritative gate.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    return user.groups.filter(name__in=MANAGER_REPORT_GROUP_NAMES).exists()
+
+
+def manager_required(view_func):
+    """Gate a view on ``user_can_view_reports``. Returns 403 otherwise."""
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        if not user_can_view_reports(request.user):
+            raise PermissionDenied
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
+def _build_report_context(rng, *, kind, request):
+    """Aggregate everything the daily / weekly / PDF templates need."""
+    from inventory.reports import (
+        activity_summary,
+        new_material_requests,
+        delivery_confirmations,
+        delivery_denials,
+        pick_tickets_opened,
+        pick_tickets_completed,
+        pick_tickets_still_open,
+        receiving_lines_in_range,
+        receiving_by_item,
+        out_of_stock_items,
+        low_stock_items_py,
+        top_requesters,
+        top_items,
+        audit_events,
+        daily_request_counts,
+        oldest_open_age_days,
+        units_moved_summary,
+        material_request_status,
+    )
+
+    return {
+        "kind": kind,
+        "range": rng,
+        "summary": activity_summary(rng),
+        "new_requests": new_material_requests(rng),
+        "confirmed": delivery_confirmations(rng),
+        "denied": delivery_denials(rng),
+        "tickets_opened": pick_tickets_opened(rng),
+        "tickets_picked": pick_tickets_completed(rng),
+        "open_tickets": pick_tickets_still_open(),
+        "receiving_lines": receiving_lines_in_range(rng),
+        "receiving_by_item": receiving_by_item(rng),
+        "out_of_stock": out_of_stock_items(),
+        "low_stock": low_stock_items_py(),
+        "top_requesters": top_requesters(rng),
+        "top_items": top_items(rng),
+        "audit_events": audit_events(rng),
+        "daily_counts": daily_request_counts(rng),
+        "oldest_open_age_days": oldest_open_age_days(),
+        "units_moved": units_moved_summary(rng),
+        "status_of": material_request_status,
+        "now": timezone.now(),
+    }
+
+
+@login_required
+@manager_required
+def reports_index(request):
+    """Landing page with two cards: Daily Activity / Weekly Activity."""
+    return render(request, "inventory/reports_index.html", {})
+
+
+@login_required
+@manager_required
+def reports_daily(request):
+    from inventory.reports import parse_date_range, preset_dates
+
+    preset = request.GET.get("preset")
+    if preset and preset != "custom":
+        start_d, end_d = preset_dates(preset)
+        rng = parse_date_range(
+            kind="daily",
+            raw_date=start_d.isoformat(),
+        )
+        # If preset is multi-day (e.g. "this_week"), fall back to weekly-style
+        # range rendering on the daily page. Most presets are single-day, so
+        # this branch is only hit for "this_month" / "last_month" by accident.
+        if start_d != end_d:
+            rng = parse_date_range(
+                kind="weekly",
+                raw_start=start_d.isoformat(),
+                raw_end=end_d.isoformat(),
+            )
+    else:
+        rng = parse_date_range(kind="daily", raw_date=request.GET.get("date"))
+
+    ctx = _build_report_context(rng, kind="daily", request=request)
+    ctx["date_value"] = rng.start.date().isoformat()
+    ctx["preset"] = preset or "custom"
+    ctx["presets"] = [
+        ("today", "Today"),
+        ("yesterday", "Yesterday"),
+        ("this_week", "This week"),
+        ("last_week", "Last week"),
+        ("this_month", "This month"),
+        ("last_month", "Last month"),
+    ]
+    return render(request, "inventory/reports_daily.html", ctx)
+
+
+@login_required
+@manager_required
+def reports_weekly(request):
+    from inventory.reports import parse_date_range, preset_dates
+
+    preset = request.GET.get("preset")
+    if preset and preset != "custom":
+        start_d, end_d = preset_dates(preset)
+        rng = parse_date_range(
+            kind="weekly",
+            raw_start=start_d.isoformat(),
+            raw_end=end_d.isoformat(),
+        )
+    else:
+        rng = parse_date_range(
+            kind="weekly",
+            raw_start=request.GET.get("start"),
+            raw_end=request.GET.get("end"),
+        )
+
+    ctx = _build_report_context(rng, kind="weekly", request=request)
+    ctx["start_value"] = rng.start.date().isoformat()
+    ctx["end_value"] = (rng.end - timedelta(days=1)).date().isoformat()
+    ctx["preset"] = preset or "custom"
+    ctx["presets"] = [
+        ("today", "Today"),
+        ("yesterday", "Yesterday"),
+        ("this_week", "This week"),
+        ("last_week", "Last week"),
+        ("this_month", "This month"),
+        ("last_month", "Last month"),
+    ]
+    return render(request, "inventory/reports_weekly.html", ctx)
+
+
+@login_required
+@manager_required
+def reports_pdf(request, kind):
+    from inventory.reports import parse_date_range, preset_dates
+
+    if kind not in {"daily", "weekly"}:
+        return HttpResponse("Unknown report kind", status=404)
+    preset = request.GET.get("preset")
+    if preset and preset != "custom":
+        start_d, end_d = preset_dates(preset)
+        rng = parse_date_range(
+            kind=kind,
+            raw_start=start_d.isoformat(),
+            raw_end=end_d.isoformat(),
+        )
+    else:
+        rng = parse_date_range(
+            kind=kind,
+            raw_date=request.GET.get("date"),
+            raw_start=request.GET.get("start"),
+            raw_end=request.GET.get("end"),
+        )
+
+    ctx = _build_report_context(rng, kind=kind, request=request)
+    template_name = (
+        "inventory/reports_pdf.html" if kind == "daily"
+        else "inventory/reports_weekly_pdf.html"
+    )
+    from django.conf import settings as django_settings
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
+
+    html = render_to_string(template_name, ctx, request=request)
+    pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
+    response = HttpResponse(pdf, content_type="application/pdf")
+    filename_kind = "daily" if kind == "daily" else "weekly"
+    filename_date = (
+        rng.start.date().isoformat()
+        if kind == "daily"
+        else f"{rng.start.date().isoformat()}_to_{(rng.end - timedelta(days=1)).date().isoformat()}"
+    )
+    response["Content-Disposition"] = (
+        f'inline; filename="wms-{filename_kind}-activity-{filename_date}.pdf"'
+    )
+    return response

@@ -1,4 +1,5 @@
 {% load static %}
+{% load inventory_extras %}
 <!doctype html>
 <html lang="en" data-theme="dark">
 <head>
@@ -47,6 +48,7 @@
       {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
       {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
       {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}
+      {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}
       {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<a href="{% url 'settings' %}">Settings</a>{% endif %}
     {% endif %}
     <div class="mobile-nav-account">

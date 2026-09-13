@@ -1,0 +1,39 @@
+{% extends "inventory/base.html" %}
+{% block title %}Reports{% endblock %}
+
+{% block content %}
+<section class="page-header"><div><h1>Reports</h1><div class="meta">Daily and weekly activity, stock alerts, and requester breakdowns. Manager-only.</div></div></section>
+
+<section class="card">
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr><th>Report</th><th>Shows</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Daily Activity</strong></td>
+          <td>One day's material requests, pick tickets, receiving, stock alerts, top requesters/items.</td>
+          <td><a class="btn" href="{% url 'reports_daily' %}">Open</a></td>
+        </tr>
+        <tr>
+          <td><strong>Weekly / Range Activity</strong></td>
+          <td>Multi-day trends: requests per day, top requesters, top items, oldest open ticket, units moved.</td>
+          <td><a class="btn" href="{% url 'reports_weekly' %}">Open</a></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>About these reports</h2>
+  <p>Reports are generated live from the production database. Each page supports:</p>
+  <ul>
+    <li>Quick presets: Today, Yesterday, This week, Last week, This month, Last month</li>
+    <li>Custom date or date range pickers for ad-hoc reviews</li>
+    <li>PDF download for printing or sharing</li>
+  </ul>
+  <p>Only superusers and members of the Logistics Manager, Sr. Logistics Manager, and Procurement Manager groups can view these reports. Logistics Specialists, Procurement Specialists, Requesters, and Viewers cannot.</p>
+</section>
+{% endblock %}
