@@ -1,0 +1,111 @@
+{% extends "inventory/base.html" %}
+
+{% block title %}Approval Queue - Warehouse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Approval Queue</h1>
+    <p class="subtitle">Review pending lead changes before they are finalized.</p>
+  </div>
+  <a href="{% url 'settings' %}" class="btn light">← Settings</a>
+</div>
+
+{% if messages %}
+  {% for message in messages %}
+    <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+{% endif %}
+
+<div class="approval-stats">
+  <a class="stat-card {% if active_status == 'PENDING' %}active{% endif %}" href="{% url 'approval_queue' %}?status=PENDING">
+    <span>Pending</span>
+    <strong>{{ counts.pending }}</strong>
+  </a>
+  <a class="stat-card {% if active_status == 'APPROVED' %}active{% endif %}" href="{% url 'approval_queue' %}?status=APPROVED">
+    <span>Approved</span>
+    <strong>{{ counts.approved }}</strong>
+  </a>
+  <a class="stat-card {% if active_status == 'REJECTED' %}active{% endif %}" href="{% url 'approval_queue' %}?status=REJECTED">
+    <span>Rejected</span>
+    <strong>{{ counts.rejected }}</strong>
+  </a>
+</div>
+
+<div class="card approval-card">
+  <div class="card-header">
+    <strong>{{ active_status|title }} Requests</strong>
+  </div>
+  <div class="card-body">
+    {% if approval_requests %}
+      <div class="approval-list">
+        {% for approval in approval_requests %}
+        <article class="approval-item">
+          <div class="approval-main">
+            <div class="approval-meta">
+              <span class="badge status-{{ approval.status|lower }}">{{ approval.get_status_display }}</span>
+              <span>{{ approval.get_action_type_display }}</span>
+              <span>{{ approval.target_label }}</span>
+            </div>
+            <h3>{{ approval.summary }}</h3>
+            {% if approval.details %}<p>{{ approval.details }}</p>{% endif %}
+            <div class="approval-footnote">
+              Requested by <strong>{{ approval.requested_by.get_full_name|default:approval.requested_by.username }}</strong>
+              on {{ approval.requested_at|date:"M d, Y H:i" }}
+              {% if approval.reviewed_by %}
+                · {{ approval.get_status_display }} by <strong>{{ approval.reviewed_by.get_full_name|default:approval.reviewed_by.username }}</strong>
+                on {{ approval.reviewed_at|date:"M d, Y H:i" }}
+              {% endif %}
+            </div>
+            {% if approval.review_notes %}<p class="review-notes"><strong>Review notes:</strong> {{ approval.review_notes }}</p>{% endif %}
+          </div>
+          {% if approval.status == 'PENDING' %}
+          <div class="approval-actions">
+            <form method="post" action="{% url 'approval_request_review' approval.pk 'approve' %}">
+              {% csrf_token %}
+              <textarea name="review_notes" rows="2" placeholder="Optional approval notes"></textarea>
+              <button type="submit" class="btn primary">Approve</button>
+            </form>
+            <form method="post" action="{% url 'approval_request_review' approval.pk 'reject' %}">
+              {% csrf_token %}
+              <textarea name="review_notes" rows="2" placeholder="Reason for rejection"></textarea>
+              <button type="submit" class="btn danger">Reject</button>
+            </form>
+          </div>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <h3>No {{ active_status|lower }} approvals</h3>
+        <p>When leads submit actions that need review, they will appear here.</p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.approval-stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:18px; }
+.stat-card { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; border:1px solid var(--border); border-radius:12px; text-decoration:none; color:var(--ink); background:var(--card); }
+.stat-card.active { border-color:var(--primary); box-shadow:0 0 0 2px rgba(32,33,36,.12); }
+.stat-card span { color:var(--muted); font-weight:600; }
+.stat-card strong { font-size:1.5rem; }
+.approval-list { display:flex; flex-direction:column; gap:14px; }
+.approval-item { display:grid; grid-template-columns:minmax(0,1fr) 310px; gap:18px; padding:16px; border:1px solid var(--border); border-radius:12px; background:var(--surface, #fff); }
+.approval-meta { display:flex; flex-wrap:wrap; gap:8px; align-items:center; color:var(--muted); font-size:.85rem; }
+.approval-main h3 { margin:.5rem 0; }
+.approval-main p { margin:.35rem 0; }
+.approval-footnote { color:var(--muted); font-size:.85rem; margin-top:10px; }
+.review-notes { padding:10px; border-radius:8px; background:rgba(32,33,36,.06); }
+.approval-actions { display:flex; flex-direction:column; gap:10px; }
+.approval-actions form { display:flex; flex-direction:column; gap:8px; }
+.approval-actions textarea { width:100%; border:1px solid var(--border); border-radius:8px; padding:8px; font:inherit; }
+.badge { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:11px; font-weight:700; text-transform:uppercase; }
+.status-pending { background:#f59e0b; color:#1f1300; }
+.status-approved { background:#22c55e; color:white; }
+.status-rejected { background:#ef4444; color:white; }
+.empty-state { text-align:center; padding:38px; color:var(--muted); }
+@media (max-width: 860px) { .approval-item { grid-template-columns:1fr; } }
+</style>
+{% endblock %}

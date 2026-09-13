@@ -1,0 +1,203 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}App QR Code - Print{% endblock %}
+{% block content %}
+<style>
+:root {
+  --primary: #D71920;
+  --primary-light: #EC1F27;
+  --gold: #EC1F27;
+  --ink: #202124;
+  --muted: #6b7280;
+  --bg: #f5f6f8;
+  --card-bg: #ffffff;
+  --border: #e5e7eb;
+  --radius: 12px;
+}
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+/* Print button */
+.print-trigger-area {
+  text-align: center;
+  margin-top: 24px;
+}
+.btn-print-lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-print-lg:hover {
+  background: var(--primary-light);
+}
+
+/* On-screen card is also the print card. Do not print hidden duplicate content —
+   tablet browsers often skip rendering images that were display:none before print. */
+.preview-card {
+  max-width: 480px;
+  margin: 0 auto;
+  text-align: center;
+  padding: 40px 24px;
+}
+.preview-card .app-qr-label {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--muted);
+  margin-bottom: 24px;
+  text-transform: uppercase;
+}
+.preview-card .app-qr-border {
+  display: inline-block;
+  border: 3px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  background: white;
+}
+.preview-card .app-qr-img {
+  display: block;
+  width: 280px;
+  height: 280px;
+  image-rendering: pixelated;
+}
+.preview-card .app-qr-brand {
+  margin-top: 20px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  line-height: 1.4;
+}
+
+@media print {
+  @page {
+    margin: 0.25in;
+    size: portrait;
+  }
+  html,
+  body {
+    width: 100% !important;
+    min-height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #111111 !important;
+  }
+  header,
+  .page-header,
+  .print-trigger-area,
+  .messages {
+    display: none !important;
+  }
+  main {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+  .preview-card {
+    /* Keep normal document flow for iPad/iOS print preview.
+       position:fixed and hidden cloned print nodes can render as blank pages. */
+    position: static !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+    min-height: 9.5in;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .preview-card .app-qr-label {
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #D71920 !important;
+    margin: 0 0 22px !important;
+  }
+  .preview-card .app-qr-border {
+    display: inline-block !important;
+    border: 5px solid #D71920 !important;
+    border-radius: 20px;
+    padding: 22px;
+    background: #ffffff !important;
+    box-shadow: 0 0 0 3px #EC1F27 inset;
+  }
+  .preview-card .app-qr-img {
+    display: block !important;
+    width: 430px !important;
+    height: 430px !important;
+    image-rendering: pixelated;
+  }
+  .preview-card .app-qr-brand {
+    margin-top: 26px !important;
+    font-size: 28px;
+    font-weight: 850;
+    color: #D71920 !important;
+    letter-spacing: 1px;
+    line-height: 1.3;
+  }
+}
+</style>
+
+<div class="page-header">
+  <h1>📱 App QR Code</h1>
+  <div class="actions">
+    <a href="{% url 'qr_codes' %}" class="btn light">Back to QR Codes</a>
+  </div>
+</div>
+
+<div class="print-trigger-area">
+  <p class="mb-3" style="color:var(--muted);">Print a full-page QR code to place at warehouse entry points for staff to scan and access the app.</p>
+  <button type="button" class="btn-print-lg" onclick="printAppQr()">🖨️ Print Full Page</button>
+</div>
+
+<div class="preview-card">
+  <div class="app-qr-label">SCAN TO OPEN</div>
+  <div class="app-qr-border">
+    <img src="data:image/png;base64,{{ qr_b64 }}" alt="App QR" class="app-qr-img">
+  </div>
+  <div class="app-qr-brand">Warehouse<br>Login</div>
+</div>
+
+<script>
+function printAppQr() {
+  try {
+    window.print();
+  } catch (err) {
+    console.error('Print error:', err);
+    alert('Print failed: ' + err.message);
+  }
+}
+</script>
+{% endblock %}

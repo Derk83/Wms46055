@@ -1,0 +1,66 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+
+{% block title %}Documents — {{ item.part_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-file-pdf"></i> Documents for {{ item.part_number }}</h1>
+    <p class="subtitle">{{ item.name }}</p>
+</div>
+
+<div class="card">
+    <h2>Upload Document</h2>
+    <form method="post" enctype="multipart/form-data" action="{% url 'item_document_add' item.pk %}" class="form">
+        {% csrf_token %}
+        <div class="form-row">
+            <label for="id_document">Document file (PDF; max 25 MB)</label>
+            <input type="file" id="id_document" name="document" accept="application/pdf" required>
+        </div>
+        <div class="form-row">
+            <label for="id_description">Description (optional)</label>
+            <input type="text" id="id_description" name="description" maxlength="255">
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Upload</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Document List</h2>
+    {% if documents %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Description</th>
+                <th>Uploaded</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td><i class="fa-solid fa-file-pdf"></i> {{ doc.original_filename }}</td>
+                <td>{{ doc.description|default:"—" }}</td>
+                <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
+                <td>
+                    <a href="{% url 'serve_item_document' item.pk doc.pk %}" class="btn btn-sm btn-secondary" target="_blank" rel="noopener">
+                        <i class="fa-solid fa-download"></i> Download
+                    </a>
+                    <form method="post" action="{% url 'item_document_delete' item.pk doc.pk %}" class="inline-form"
+                          onsubmit="return confirm('Delete this document?');">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i> Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No documents uploaded yet.</p>
+    {% endif %}
+</div>
+
+<p><a href="{% url 'item_detail' item.pk %}" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to item</a></p>
+{% endblock %}

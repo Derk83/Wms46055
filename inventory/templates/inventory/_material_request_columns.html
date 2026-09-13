@@ -1,0 +1,17 @@
+<div class="kanban{% if not material_requests %} kanban-empty{% endif %}" aria-label="Material request status board">
+  {% for status_value, status_label in statuses %}
+  <section class="kanban-column" data-status="{{ status_value }}">
+    <h2>{{ status_label }}</h2>
+    {% for material_request in material_requests %}{% if material_request.pick_ticket.status == status_value %}
+    <article class="request-card">
+      <h3><a href="{% url 'material_request_detail' material_request.pk %}">{{ material_request.request_number }}</a></h3>
+      {% if material_request.urgent %}<span class="badge urgent-badge">🚨 Urgent</span>{% endif %}
+      <span class="badge status-{{ status_value|lower }}">{{ status_label }}</span>
+      <dl><dt>Ticket</dt><dd>{{ material_request.pick_ticket.ticket_number }}</dd><dt>Requestor</dt><dd>{{ material_request.requestor_name|default:"—" }}</dd><dt>Location</dt><dd>{{ material_request.building_room|default:"—" }} · {{ material_request.location|default:"—" }}</dd><dt>Delivery</dt><dd>{{ material_request.delivery_at|date:"M j, Y g:i a" }}</dd><dt>Submitted</dt><dd>{{ material_request.created_at|date:"M j, Y g:i a" }} ({{ material_request.created_at|timesince }} ago)</dd><dt>Material</dt><dd>{{ material_request.line_count }} line{{ material_request.line_count|pluralize }} · {{ material_request.total_quantity|default:0 }} total</dd></dl>
+      <div class="actions no-print"><a class="btn secondary sm" href="{% url 'material_request_detail' material_request.pk %}">View</a>{% if perms.inventory.change_materialrequest %}<a class="btn secondary sm" href="{% url 'material_request_edit' material_request.pk %}">Edit</a>{% endif %}</div>
+    </article>
+    {% endif %}{% endfor %}
+  </section>
+  {% endfor %}
+</div>
+{% if not material_requests %}<div class="card empty-state"><h2>No requests found</h2><p>Submit a new request or clear the current filters.</p></div>{% endif %}

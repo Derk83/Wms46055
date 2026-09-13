@@ -1,0 +1,74 @@
+{% extends "inventory/base.html" %}
+{% block title %}Storage Locations{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Storage Locations</h1>
+    <p class="text-muted">Select rack sections to print all six position labels together. Each selected section prints on its own page.</p>
+  </div>
+</div>
+<div class="card">
+  {% if sections %}
+  <form id="location-print-form" method="get" action="{% url 'location_qr_print' %}" target="_blank">
+    <div class="location-print-controls no-print">
+      <label class="location-select-all"><input type="checkbox" id="select-all-sections"> Select all sections</label>
+      <span id="section-selection-count" class="text-muted" aria-live="polite">0 sections selected</span>
+      <button type="submit" class="btn" id="print-selected-sections" disabled>Print selected sections</button>
+    </div>
+    <div class="section-grid">
+      {% for section in sections %}
+      <article class="section-card">
+        <label class="section-select">
+          <input class="section-checkbox" type="checkbox" name="section" value="{{ section.key }}" aria-label="Select section {{ section.key }} for printing">
+          <span>
+            <strong>Section {{ section.key }}</strong>
+            <small>{{ section.range_label }}</small>
+          </span>
+        </label>
+        <div class="section-summary">
+          <span>{{ section.item_count }} item{{ section.item_count|pluralize }}</span>
+          <span>{{ section.occupied_bin_count }} of 6 occupied</span>
+        </div>
+        <div class="section-bins" aria-label="Occupied locations in {{ section.key }}">
+          {% for bin in section.bins %}
+          <a href="{{ bin.location_url }}" class="bin-link" title="View {{ bin.key }} inventory">
+            <strong>{{ bin.key }}</strong><small>{{ bin.item_count }} item{{ bin.item_count|pluralize }}</small>
+          </a>
+          {% endfor %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </form>
+  {% else %}
+  <div class="empty-state"><p>No locations found. Assign rack, section, and bin positions to inventory items first.</p><a href="{% url 'inventory_list' %}" class="btn">Go to Inventory</a></div>
+  {% endif %}
+</div>
+<style>
+.location-print-controls{position:sticky;top:78px;z-index:4;display:flex;align-items:center;gap:14px;margin:-4px 0 16px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2)}
+.location-select-all,.section-select{display:flex;align-items:center;gap:10px;margin:0}.location-select-all{white-space:nowrap}.location-select-all input,.section-select input{width:21px;height:21px;flex:0 0 auto}
+.section-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}.section-card{padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2)}.section-select{cursor:pointer}.section-select span{display:grid;gap:2px}.section-select strong{font-size:1.05rem}.section-select small,.section-summary,.bin-link small{color:var(--muted)}
+.section-summary{display:flex;justify-content:space-between;gap:10px;margin:12px 0 10px;padding-top:10px;border-top:1px solid var(--border);font-size:.9rem}.section-bins{display:flex;flex-wrap:wrap;gap:7px}.bin-link{display:grid;gap:1px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);text-decoration:none}.bin-link:hover{border-color:var(--accent)}.bin-link strong{font-size:.83rem}.bin-link small{font-size:.72rem}.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted)}
+@media(max-width:720px){.location-print-controls{top:67px;flex-wrap:wrap}.location-print-controls .btn{flex:1 1 100%}.section-grid{grid-template-columns:1fr}.section-card{padding:14px}}
+</style>
+<script>
+(() => {
+  const form = document.getElementById('location-print-form');
+  if (!form) return;
+  const boxes = [...form.querySelectorAll('.section-checkbox')];
+  const all = document.getElementById('select-all-sections');
+  const count = document.getElementById('section-selection-count');
+  const submit = document.getElementById('print-selected-sections');
+  const update = () => {
+    const selected = boxes.filter(box => box.checked).length;
+    count.textContent = `${selected} section${selected === 1 ? '' : 's'} selected · ${selected} print page${selected === 1 ? '' : 's'}`;
+    submit.disabled = selected === 0;
+    all.checked = boxes.length > 0 && selected === boxes.length;
+    all.indeterminate = selected > 0 && selected < boxes.length;
+  };
+  boxes.forEach(box => box.addEventListener('change', update));
+  all.addEventListener('change', () => { boxes.forEach(box => { box.checked = all.checked; }); update(); });
+  update();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,395 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<div class="page-header">
+  <h1>Inventory</h1>
+  <div class="actions">
+    {% if not request.is_request_portal and perms.inventory.add_inventoryitem %}<a href="{% url 'inventory_new' %}" class="btn">Add Item</a>{% endif %}
+    {% if not request.is_request_portal and perms.inventory.import_inventory %}<form method="post" action="{% url 'inventory_import_xlsx' %}" enctype="multipart/form-data" class="inventory-import-form">
+      {% csrf_token %}
+      <label class="btn accent" for="inventorySpreadsheet">Import Spreadsheet</label>
+      <input id="inventorySpreadsheet" type="file" name="spreadsheet" accept=".xlsx" onchange="this.form.submit()">
+    </form>{% endif %}
+    {% if not request.is_request_portal and perms.inventory.export_inventory %}<a href="{% url 'export_center' %}" class="btn light">Export...</a>{% endif %}
+    {% if not request.is_request_portal and perms.inventory.scan_codes %}<button type="button" class="btn light" id="startCameraScan" aria-label="Start Camera Scan">📷<span class="sr-only">Start Camera Scan</span></button>{% endif %}
+  </div>
+</div>
+<div id="inventory-camera-section" class="card" style="display:none; margin-top:8px;">
+  <h2>Camera Scan</h2>
+  <div id="inventory-camera-reader" style="width:100%; max-width:520px; min-height:320px; border:1px solid var(--border); border-radius:10px; overflow:hidden;"></div>
+  <pre id="inventoryScanResult" style="white-space:pre-wrap;background:#f2f4f7;padding:12px;border-radius:10px">Waiting for scan… Click 📷.</pre>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var startBtn = document.getElementById('startCameraScan');
+  var section = document.getElementById('inventory-camera-section');
+  var result = document.getElementById('inventoryScanResult');
+  var scanner = null;
+  var started = false;
+  function playScanBeep() {
+    try {
+      var AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      var ctx = new AudioContext();
+      var oscillator = ctx.createOscillator();
+      var gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.16);
+      setTimeout(function() { ctx.close(); }, 260);
+    } catch (error) {}
+  }
+  function resetCameraUi(message) {
+    started = false;
+    startBtn.textContent = '📷';
+    startBtn.setAttribute('aria-label', 'Start Camera Scan');
+    section.style.display = 'none';
+    if (message) result.textContent = message;
+  }
+  function stopCamera() {
+    if (scanner && started) {
+      result.textContent = 'Camera stopping…';
+      scanner.stop().then(function() {
+        return scanner.clear();
+      }).catch(function() {}).finally(function() {
+        resetCameraUi('Camera off. Click 📷 to scan again.');
+      });
+    } else {
+      resetCameraUi('Camera off. Click 📷 to scan again.');
+    }
+  }
+  if (!startBtn || !section) return;
+  startBtn.addEventListener('click', function() {
+    if (started) {
+      stopCamera();
+      return;
+    }
+    started = true;
+    startBtn.textContent = '📷 Stop';
+    startBtn.setAttribute('aria-label', 'Stop Camera Scan');
+    section.style.display = '';
+    result.textContent = 'Camera starting…';
+    if (window.Html5Qrcode) {
+      scanner = new Html5Qrcode('inventory-camera-reader');
+      scanner.start(
+        { facingMode: { exact: 'environment' } },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        function(text) {
+          playScanBeep();
+          result.textContent = 'Scanned. Opening matching item…\nCode: ' + text;
+          window.location.href = '/scan-lookup/?code=' + encodeURIComponent(text);
+        },
+        function() {}
+      ).then(function() {
+        result.textContent = 'Camera active. Point the rear camera at a barcode or QR code. Click 📷 Stop to turn camera off.';
+      }).catch(function(error) {
+        var message = String(error || '');
+        if (message.toLowerCase().includes('permission') || message.toLowerCase().includes('notallowed')) {
+          result.textContent = 'Camera permission denied. Allow camera access in your browser settings, then try again.';
+        } else {
+          result.textContent = 'Camera error: ' + (message || 'Could not open the rear camera.');
+        }
+        resetCameraUi(result.textContent);
+      });
+    } else {
+      resetCameraUi('Scanner library could not load. Use a USB scanner or type the code manually.');
+    }
+  });
+});
+</script>
+<form method="get" class="card inventory-filter-panel">
+  <div class="filter-heading">
+    <div>
+      <h2>Find Inventory</h2>
+      <p class="helptext">Filter by part, PO, category, stock status, scanner text, or location.</p>
+    </div>
+    {% if filters_active %}<a href="{% url 'inventory_list' %}" class="btn light sm">Clear Filters</a>{% endif %}
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="q">Search / Scan</label>
+      <input id="q" name="q" value="{{ query }}" placeholder="Barcode, QR, name, location, bin" autofocus>
+    </div>
+    <div class="form-group">
+      <label for="part_number">Part #</label>
+      <input id="part_number" name="part_number" value="{{ part_number }}" placeholder="Exact or partial part #">
+    </div>
+    <div class="form-group">
+      <label for="po_number">PO #</label>
+      <input id="po_number" name="po_number" value="{{ po_number }}" placeholder="Received on PO #">
+    </div>
+    <div class="form-group">
+      <label for="category">Category</label>
+      <select id="category" name="category">
+        <option value="">All Categories</option>
+        {% for c in category_choices %}
+          <option value="{{ c.0 }}" {% if category == c.0 %}selected{% endif %}>{{ c.1 }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="stock">Stock Status</label>
+      <select id="stock" name="stock">
+        <option value="" {% if not stock %}selected{% endif %}>All Stock</option>
+        <option value="low" {% if stock == "low" %}selected{% endif %}>Low Stock</option>
+        <option value="zero" {% if stock == "zero" %}selected{% endif %}>Zero Stock</option>
+        <option value="negative" {% if stock == "negative" %}selected{% endif %}>Negative Stock</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="sort">Sort By</label>
+      <select id="sort" name="sort">
+        <option value="part" {% if sort == "part" %}selected{% endif %}>Part # A-Z</option>
+        <option value="part_desc" {% if sort == "part_desc" %}selected{% endif %}>Part # Z-A</option>
+        <option value="name" {% if sort == "name" %}selected{% endif %}>Name</option>
+        <option value="category" {% if sort == "category" %}selected{% endif %}>Category</option>
+        <option value="qty" {% if sort == "qty" %}selected{% endif %}>Qty Low-High</option>
+        <option value="qty_desc" {% if sort == "qty_desc" %}selected{% endif %}>Qty High-Low</option>
+        <option value="location" {% if sort == "location" %}selected{% endif %}>Location</option>
+        <option value="bin" {% if sort == "bin" %}selected{% endif %}>Bin</option>
+        <option value="updated" {% if sort == "updated" %}selected{% endif %}>Recently Updated</option>
+      </select>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit" class="btn accent">Apply Filters</button>
+    <a href="{% url 'inventory_list' %}" class="btn light">Reset</a>
+  </div>
+</form>
+<!-- Bulk Actions Form -->
+<form id="bulkForm" method="post"{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} action="{% url 'bulk_adjust' %}"{% endif %}>
+  {% csrf_token %}
+  <input type="hidden" name="selected_items" id="selectedItems" value="">
+  {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}
+  <div class="bulk-actions-bar" style="display: none; margin-bottom: 16px; padding: 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-md); align-items: center; gap: 12px; flex-wrap: wrap;">
+    <span id="selectedCount" style="font-weight: 600;">0 items selected</span>
+    <button type="submit" class="btn primary" form="bulkForm">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Bulk Edit Selected
+    </button>
+    <button type="button" id="clearSelection" class="btn light sm" style="margin-left: auto;">Clear Selection</button>
+  </div>
+  {% endif %}
+<div class="card inventory-results-card">
+  <div class="inventory-table-wrap table-responsive">
+    <table class="inventory-table condensed compact-inventory">
+      <thead>
+        <tr>
+          {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<th class="select-col">
+            <input type="checkbox" id="selectAll" aria-label="Select all">
+          </th>{% endif %}
+          <th class="part-col">Part #</th>
+          <th class="fb-col">FB Part #</th>
+          <th>Name</th>
+          <th class="qty-col">Qty</th>
+          <th class="bin-col">Bin</th>
+          <th class="actions-col">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr data-item-id="{{ item.id }}">
+          {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<td data-label="Select">
+            <input type="checkbox" value="{{ item.id }}" class="item-checkbox" form="bulkForm">
+          </td>{% endif %}
+          <td data-label="Part #"><a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a></td>
+          <td data-label="FB Part #" class="fb-part-cell">{{ item.fb_part_number|default:"—" }}</td>
+          <td data-label="Name"><a class="item-detail-link name-link" href="{% url 'item_detail' item.pk %}">{{ item.description|default:item.name }}</a></td>
+          <td data-label="Qty" class="qty-cell {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">{{ item.quantity_on_hand }}</td>
+          <td data-label="Bin" class="bin-cell">{% if item.storage_location %}<strong>{{ item.storage_location }}</strong>{% else %}—{% endif %}</td>
+          <td data-label="Actions" class="actions-cell">
+            <div class="inventory-actions inventory-action-group" role="group" aria-label="Actions for {{ item.part_number }}">
+              {% if not request.is_request_portal and perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary" title="Receive stock">+ Stock</a>{% endif %}
+              {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip" title="Edit item">Edit</a>{% endif %}
+              {% if not request.is_request_portal and perms.inventory.view_inventorytransaction %}<a href="{% url 'item_transaction_history' item.pk %}" class="action-chip" title="View history">History</a>{% endif %}
+              {% if not request.is_request_portal and perms.inventory.manage_item_barcodes %}
+                <a href="{% url 'item_barcode_print' item.pk %}" class="action-chip" title="Generate and print barcode">Barcode</a>
+                <a href="{% url 'item_upc_assign' item.pk %}" class="action-chip" title="Scan and assign an existing UPC">Scan UPC</a>
+              {% endif %}
+              {% if not request.is_request_portal and perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" onclick="deleteItem({{ item.pk }}, '{{ item.part_number|escapejs }}')" title="Delete item">Delete</button>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}7{% else %}6{% endif %}" class="empty-row">No inventory found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="mobile-inventory-list">
+    {% for item in items %}
+      <article class="mobile-inventory-card" data-item-id="{{ item.id }}">
+        <div class="mobile-card-top{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} has-selection{% endif %}">
+          {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">{% endif %}
+          <div class="mobile-item-main">
+            <a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a>
+            <a class="item-detail-link name-link" href="{% url 'item_detail' item.pk %}">{{ item.description|default:item.name }}</a>
+          </div>
+          <div class="mobile-qty {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">
+            <span>Qty</span>
+            <strong>{{ item.quantity_on_hand }}</strong>
+          </div>
+        </div>
+        <div class="mobile-meta-grid">
+          <div data-label="FB Part #"><span>FB Part #</span><strong>{{ item.fb_part_number|default:"—" }}</strong></div>
+          <div data-label="Bin"><span>Bin</span><strong>{{ item.storage_location|default:"—" }}</strong></div>
+          <div data-label="Category"><span>Category</span><strong>{{ item.category|default:"—" }}</strong></div>
+        </div>
+        <div class="mobile-actions inventory-actions inventory-action-group">
+          {% if not request.is_request_portal and perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary">+ Stock</a>{% endif %}
+          {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip">Edit</a>{% endif %}
+          {% if not request.is_request_portal and perms.inventory.view_inventorytransaction %}<a href="{% url 'item_transaction_history' item.pk %}" class="action-chip">History</a>{% endif %}
+          {% if not request.is_request_portal and perms.inventory.manage_item_barcodes %}<a href="{% url 'item_barcode_print' item.pk %}" class="action-chip">Barcode</a><a href="{% url 'item_upc_assign' item.pk %}" class="action-chip">Scan UPC</a>{% endif %}
+          {% if not request.is_request_portal and perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" onclick="deleteItem({{ item.pk }}, '{{ item.part_number|escapejs }}')">Delete</button>{% endif %}
+        </div>
+      </article>
+    {% empty %}
+      <div class="empty-row">No inventory found.</div>
+    {% endfor %}
+  </div>
+</div>
+</form>
+<form id="deleteForm" method="post" style="display:none;"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"></form>
+<style>
+.inventory-import-form { display:inline-flex; margin:0; }
+.inventory-import-form input[type="file"] { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; opacity:0; pointer-events:none; }
+.inventory-results-card { padding: 12px; }
+.inventory-table-wrap { overflow-x: visible; }
+.inventory-table { table-layout: fixed; width: 100%; font-size: 14px; }
+.inventory-table th, .inventory-table td { padding: 8px 10px; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
+.inventory-table th { font-size: 11px; padding: 8px 10px; }
+.select-col { width: 36px; }
+.part-col { width: 12%; }
+.fb-part-col { width: 12%; }
+.qty-col { width: 58px; text-align: center; }
+.bin-col { width: 80px; }
+.actions-col { width: 290px; }
+.part-link { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.name-link { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 14px; line-height: 1.35; }
+.qty-cell { text-align: center; font-size: 16px; font-weight: 900; }
+.bin-cell { font-size: 13px; }
+.codes-cell { white-space: nowrap; }
+.code-badge { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 20px; font-size: 10px; font-weight: 900; border-radius: 999px; margin-right: 4px; color: white; }
+.code-badge.barcode { background: var(--primary); }
+.code-badge.qr { background: var(--accent); color: #1a2a2a; }
+.item-detail-link { color:#ff7277; font-weight: 900; text-decoration: none; }
+.item-detail-link:hover { color:#fff0bd; text-decoration: underline; }
+.actions-cell { white-space: normal; }
+.inventory-actions { display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+.action-chip { display:inline-flex; align-items:center; justify-content:center; min-height:30px; padding:6px 10px; border:1px solid var(--border); border-radius:8px; background:rgba(255,255,255,.06); color:var(--ink); font:inherit; font-size:12px; font-weight:800; text-decoration:none; cursor:pointer; }
+.action-chip:hover { border-color:var(--primary); background:rgba(236,31,39,.12); color:#fff; }
+.action-chip.primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+.action-chip.danger { color:#ff8b8f; }
+.empty-row { text-align: center; color: var(--muted); padding: 32px !important; }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+tbody tr:hover { background: rgba(236,31,39,0.08); }
+tbody tr.selected td { background: rgba(236,31,39,0.16); }
+.item-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+#selectAll { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
+.mobile-inventory-list { display: none; }
+@media (max-width: 1180px) {
+  .actions-col { width: 240px; }
+}
+@media (max-width: 900px) {
+  .inventory-results-card { padding: 8px; }
+  .inventory-table { font-size: 13px; }
+  .inventory-table th, .inventory-table td { padding: 7px 8px; }
+  .part-col { width: 15%; }
+  .actions-col { width: 140px; }
+  .actions-cell .btn { padding: 6px 8px; font-size: 11px; }
+}
+@media (max-width: 760px) {
+  .inventory-filter-panel > .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
+  .inventory-filter-panel > .actions > .btn { width: 100%; min-height: 44px; }
+  .inventory-table-wrap { display: none; }
+  .mobile-inventory-list { display: grid; gap: 10px; }
+  .mobile-inventory-card { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: rgba(16,29,25,0.72); box-shadow: var(--shadow-sm); }
+  .mobile-card-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+  .mobile-card-top.has-selection { grid-template-columns: 24px minmax(0, 1fr) auto; }
+  .mobile-item-main { min-width: 0; display: grid; gap: 2px; }
+  .mobile-item-main .part-link { color: #ff7277; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+  .mobile-item-main .name-link { color: var(--ink); font-size: 16px; line-height: 1.4; }
+  .mobile-qty { min-width: 58px; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,0.08); text-align: center; }
+  .mobile-qty span { display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 900; }
+  .mobile-qty strong { display: block; font-size: 22px; line-height: 1; }
+  .mobile-meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .mobile-meta-grid div { padding: 8px 9px; border-radius: 10px; background: rgba(255,255,255,0.07); min-width: 0; }
+  .mobile-meta-grid span { display: block; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+  .mobile-meta-grid strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
+  .mobile-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 10px; }
+  .mobile-actions .action-chip { width: 100%; min-height: 44px; padding: 9px 7px; font-size: 13px; }
+  .mobile-inventory-card.selected { border-color: var(--accent); background: rgba(236,31,39,0.12); }
+}
+@media (max-width: 420px) {
+  .mobile-meta-grid { grid-template-columns: 1fr; }
+  .mobile-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.item-checkbox');
+    const bulkBar = document.querySelector('.bulk-actions-bar');
+    const selectedCount = document.getElementById('selectedCount');
+    const selectedItemsInput = document.getElementById('selectedItems');
+    const clearBtn = document.getElementById('clearSelection');
+    const itemContainers = document.querySelectorAll('[data-item-id]');
+    if (!selectAll || !bulkBar || !selectedCount || !selectedItemsInput || !clearBtn) return;
+    const uniqueItemIds = Array.from(new Set(Array.from(checkboxes).map(cb => cb.value).filter(Boolean)));
+    function updateSelection() {
+        const checked = document.querySelectorAll('.item-checkbox:checked');
+        const selectedIds = new Set(Array.from(checked).map(cb => cb.value).filter(Boolean));
+        const count = selectedIds.size;
+        selectedItemsInput.value = Array.from(selectedIds).join(',');
+        selectedCount.textContent = count + ' item' + (count !== 1 ? 's' : '') + ' selected';
+        bulkBar.style.display = count > 0 ? 'flex' : 'none';
+        itemContainers.forEach(container => {
+            const id = container.getAttribute('data-item-id');
+            const matchingChecked = document.querySelector('.item-checkbox[value="' + id + '"]:checked');
+            if (matchingChecked) {
+                container.classList.add('selected');
+            } else {
+                container.classList.remove('selected');
+            }
+        });
+        selectAll.checked = selectedIds.size > 0 && selectedIds.size === uniqueItemIds.length;
+        selectAll.indeterminate = selectedIds.size > 0 && selectedIds.size < uniqueItemIds.length;
+    }
+    selectAll.addEventListener('change', function() {
+        checkboxes.forEach(cb => {
+            cb.checked = this.checked;
+        });
+        updateSelection();
+    });
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelection);
+    });
+    clearBtn.addEventListener('click', function() {
+        checkboxes.forEach(cb => {
+            cb.checked = false;
+        });
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+        updateSelection();
+    });
+    document.getElementById('bulkForm').addEventListener('submit', function(event) {
+        updateSelection();
+        if (!selectedItemsInput.value) {
+            event.preventDefault();
+        }
+    });
+    window.deleteItem = function(pk, partNumber) {
+        if (!confirm('Delete "' + partNumber + '"? This cannot be undone.')) return;
+        var form = document.getElementById('deleteForm');
+        form.action = '/inventory/' + pk + '/delete/';
+        form.submit();
+    };
+});
+</script>
+{% endblock %}

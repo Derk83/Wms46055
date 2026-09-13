@@ -1,0 +1,57 @@
+{% if material_requests %}
+<div class="work-queue" role="list" aria-label="Warehouse material request work queue">
+  {% for material_request in material_requests %}
+  <article class="work-queue-card priority-{{ material_request.queue_priority }}" role="listitem">
+    <div class="work-queue-card__top">
+      <div class="work-queue-card__identity">
+        <div class="work-queue-card__badges">
+          <span class="badge queue-priority-badge">{{ material_request.queue_priority_label }}</span>
+          <span class="badge status-{{ material_request.pick_ticket.status|lower }}">{{ material_request.pick_ticket.get_status_display }}</span>
+        </div>
+        <h2><a href="{% url 'material_request_detail' material_request.pk %}">{{ material_request.request_number }}</a></h2>
+        <div class="meta">Ticket <a href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">{{ material_request.pick_ticket.ticket_number }}</a></div>
+      </div>
+      <div class="work-queue-card__due">
+        <span>Needed</span>
+        <strong>{{ material_request.delivery_at|date:"M j, Y" }}</strong>
+        <small>{{ material_request.delivery_at|date:"g:i A" }}</small>
+      </div>
+    </div>
+
+    <dl class="work-queue-details">
+      <div><dt>Requestor</dt><dd>{{ material_request.requestor_name }}</dd></div>
+      <div><dt>Deliver to</dt><dd>{{ material_request.building_room }}{% if material_request.location %} · {{ material_request.location }}{% endif %}</dd></div>
+      <div><dt>Workload</dt><dd>{{ material_request.line_count }} line{{ material_request.line_count|pluralize }} · {{ material_request.total_quantity|default:0 }} unit{{ material_request.total_quantity|default:0|pluralize }}</dd></div>
+    </dl>
+
+    <div class="work-queue-lines" aria-label="Requested parts">
+      {% for line in material_request.lines.all|slice:":4" %}
+      <span><strong>{{ line.item.part_number }}</strong> × {{ line.quantity }} <small>{{ line.item.name }}</small></span>
+      {% endfor %}
+      {% if material_request.line_count > 4 %}<span class="meta">+ {{ material_request.line_count|add:"-4" }} more line{{ material_request.line_count|add:"-4"|pluralize }}</span>{% endif %}
+    </div>
+
+    <div class="work-queue-card__actions no-print">
+      <form method="post" action="{% url 'material_request_assign' material_request.pk %}" class="assignment-form">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <label for="assigned-to-{{ material_request.pk }}">Assigned to</label>
+        <div class="assignment-control">
+          <select id="assigned-to-{{ material_request.pk }}" name="assigned_to">
+            <option value="">Unassigned</option>
+            {% for assignee in warehouse_assignees %}
+            <option value="{{ assignee.pk }}"{% if material_request.assigned_to_id == assignee.pk %} selected{% endif %}>{{ assignee.get_full_name|default:assignee.username }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-secondary btn-sm" type="submit">Save</button>
+        </div>
+      </form>
+      <a class="btn btn-primary btn-sm" href="{% url 'material_request_detail' material_request.pk %}">Open request</a>
+      <a class="btn btn-secondary btn-sm" href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">Open ticket</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty-state"><strong>No requests match this queue.</strong><br><span>Try changing the focus, status, assignment, or search filters.</span></div>
+{% endif %}

@@ -1,0 +1,329 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Barcode / QR Generator - Warehouse{% endblock %}
+{% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<div class="page-header">
+  <h1>Barcode / QR Generator</h1>
+  <div class="actions">
+    <button type="button" class="btn" id="barcode-scan-btn">📷 Scan Label</button>
+    <a href="{% url 'inventory_new' %}" class="btn light">Add New Item</a>
+    <a href="{% url 'inventory_list' %}" class="btn light">Back to Inventory</a>
+  </div>
+</div>
+<form method="get" class="card search-form">
+  <label for="q">Search items by part #, name, bin, category</label>
+  <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+    <input id="q" name="q" value="{{ query }}" autofocus style="flex: 1; min-width: 220px;">
+    {% if query %}
+    <a href="{% url 'barcode_generator' %}" class="btn light sm">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if location_qrs %}
+<div class="card mb-3">
+  <div class="card-header">
+    <strong>📍 Location QR Codes ({{ location_qrs|length }} locations)</strong>
+  </div>
+  <div class="card-body">
+    <div class="row g-2">
+      {% for lq in location_qrs %}
+      <div class="col-6 col-md-4 col-lg-2 text-center mb-3">
+        <a href="{% url 'location_detail' location_key=lq.key %}" class="text-decoration-none">
+          <img src="data:image/png;base64,{{ lq.qr_b64 }}" alt="{{ lq.key }}"
+               style="width:100px;height:100px;image-rendering:pixelated"
+               class="border rounded p-1 bg-white">
+        </a>
+        <div class="small mt-1"><strong>{{ lq.key }}</strong></div>
+        <div class="text-muted" style="font-size:11px">{{ lq.item_count }} item{{ lq.item_count|pluralize }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-center mt-2">
+      <a href="{% url 'location_list' %}" class="btn btn-sm btn-outline-primary">View All Locations</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card barcode-scanner-panel" id="barcode-scanner-panel" hidden>
+  <div class="scanner-head">
+    <div>
+      <h2>Scan Product Label</h2>
+      <p class="helptext">Point the camera at any barcode or QR label. Matching product cards will open/highlight.</p>
+    </div>
+    <button type="button" class="btn light sm" id="barcode-scan-close">Close</button>
+  </div>
+  <div id="barcode-camera-reader" class="camera-reader"></div>
+  <p id="barcode-scan-result" class="helptext">Camera starting…</p>
+</div>
+{% if items %}
+<div class="barcode-grid">
+  {% for item in items %}
+  <div class="barcode-card" data-pk="{{ item.pk }}" data-part="{{ item.part_number|escape }}" data-barcode="{{ item.barcode_value|default:item.auto_barcode_value|escape }}" data-qr="{{ item.current_qr_code_value|escape }}">
+    <div class="barcode-header">
+      <h3>{{ item.description|default:item.name }}</h3>
+      <span class="part-badge">{{ item.part_number }}</span>
+    </div>
+    <div class="barcode-meta">
+      <span>{% if item.storage_location %}<strong>Bin:</strong> {{ item.storage_location }}{% else %}No bin assigned{% endif %}</span>
+      <span><strong>Qty:</strong> {{ item.quantity_on_hand }}</span>
+      <span><strong>Auto Barcode:</strong> {{ item.auto_barcode_value }}</span>
+    </div>
+    <div class="barcode-images">
+      <div class="barcode-item">
+        <label>Code 128 (Scannable)</label>
+        <img src="data:image/png;base64,{{ item.barcode_image_b64 }}" alt="Code 128 barcode for {{ item.name }}" class="barcode-img">
+        <div class="barcode-value">{{ item.barcode_value|default:item.auto_barcode_value }}</div>
+      </div>
+    </div>
+    <div class="barcode-actions">
+      <button type="button" class="btn sm light" onclick="printBarcodeCard('{{ item.pk }}')">Print Card</button>
+      <a href="{% url 'inventory_labels' item.pk %}" class="btn sm light">Full Label Page</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card empty-state">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <rect x="3" y="3" width="18" height="18" rx="2"/>
+    <path d="M7 9h10M7 13h7M7 17h5"/>
+  </svg>
+  <p>No items found. Add items to generate barcodes.</p>
+</div>
+{% endif %}
+<script>
+let barcodeScanner = null;
+let lastBarcodeScan = '';
+function playBarcodeBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.16);
+  } catch (err) {}
+}
+function findBarcodeCard(code) {
+  const normalized = (code || '').trim().toUpperCase();
+  if (!normalized) return null;
+  return Array.from(document.querySelectorAll('.barcode-card')).find(card => {
+    const values = [card.dataset.part, card.dataset.barcode, card.dataset.qr].map(v => (v || '').trim().toUpperCase());
+    return values.includes(normalized) || normalized.includes(`ITEM:${values[0]}`);
+  });
+}
+async function handleBarcodeScan(decodedText) {
+  const code = (decodedText || '').trim();
+  if (!code || code === lastBarcodeScan) return;
+  lastBarcodeScan = code;
+  playBarcodeBeep();
+  const result = document.getElementById('barcode-scan-result');
+  result.textContent = `Scanned: ${code}`;
+  let card = findBarcodeCard(code);
+  if (!card) {
+    try {
+      const response = await fetch(`{% url 'scan_lookup_api' %}?code=${encodeURIComponent(code)}`);
+      if (response.ok) {
+        const data = await response.json();
+        card = document.querySelector(`.barcode-card[data-pk="${data.id}"]`);
+      }
+    } catch (err) {}
+  }
+  if (card) {
+    document.querySelectorAll('.barcode-card.scan-hit').forEach(el => el.classList.remove('scan-hit'));
+    card.classList.add('scan-hit');
+    card.scrollIntoView({behavior: 'smooth', block: 'center'});
+    result.textContent = 'Product located and highlighted.';
+  } else {
+    result.textContent = `No product found for ${code}.`;
+  }
+  setTimeout(() => { lastBarcodeScan = ''; }, 1500);
+}
+async function startBarcodeScanner() {
+  const panel = document.getElementById('barcode-scanner-panel');
+  const result = document.getElementById('barcode-scan-result');
+  panel.hidden = false;
+  result.textContent = 'Camera starting… Point the rear camera at a label.';
+  if (!window.Html5Qrcode) {
+    result.textContent = 'Scanner library did not load. Refresh and try again.';
+    return;
+  }
+  if (!barcodeScanner) barcodeScanner = new Html5Qrcode('barcode-camera-reader');
+  try {
+    await barcodeScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 260, height: 180 } },
+      handleBarcodeScan,
+      () => {}
+    );
+    result.textContent = 'Camera active. Scan a barcode or QR label.';
+  } catch (err) {
+    result.textContent = `Camera error: ${err}`;
+  }
+}
+async function stopBarcodeScanner() {
+  const panel = document.getElementById('barcode-scanner-panel');
+  if (barcodeScanner && barcodeScanner.isScanning) {
+    try { await barcodeScanner.stop(); } catch (err) {}
+  }
+  panel.hidden = true;
+}
+function printBarcodeCard(itemPk) {
+  const card = document.querySelector(`.barcode-card[data-pk="${itemPk}"]`);
+  if (!card) return;
+  const title = card.querySelector('h3')?.textContent || 'Barcode Card';
+  const part = card.querySelector('.part-badge')?.textContent || '';
+  const meta = card.querySelector('.barcode-meta')?.innerHTML || '';
+  const barcodeSrc = card.querySelector('.barcode-img')?.src || '';
+  const barcodeValue = card.querySelector('.barcode-item .barcode-value')?.textContent || '';
+  let printArea = document.getElementById('singleBarcodePrintArea');
+  if (!printArea) {
+    printArea = document.createElement('div');
+    printArea.id = 'singleBarcodePrintArea';
+    document.body.appendChild(printArea);
+  }
+  printArea.innerHTML = `
+    <div class="single-print-card">
+      <div class="print-title">Warehouse</div>
+      <h1>${title}</h1>
+      <div class="part">${part}</div>
+      <div class="meta">${meta}</div>
+      <div class="code-block"><label>Code 128 Barcode</label><img src="${barcodeSrc}" alt="Barcode"><div class="code-value">${barcodeValue}</div></div>
+    </div>`;
+  setTimeout(function() { window.print(); }, 100);
+}
+document.getElementById('barcode-scan-btn')?.addEventListener('click', startBarcodeScanner);
+document.getElementById('barcode-scan-close')?.addEventListener('click', stopBarcodeScanner);
+</script>
+<style>
+.barcode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 20px;
+}
+.barcode-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  position: relative;
+  transition: border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+.barcode-card.scan-hit {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(215, 154, 42, .28), 0 16px 34px rgba(0,0,0,.25);
+  transform: translateY(-2px);
+}
+.barcode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.barcode-header h3 {
+  margin: 0;
+  font-size: 18px;
+  flex: 1;
+  min-width: 200px;
+}
+.part-badge {
+  background: var(--bg);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.barcode-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.barcode-images {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.barcode-item { text-align: center; }
+.barcode-item label {
+  display: block;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: var(--text);
+}
+.barcode-img, .qr-img {
+  background: white;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.barcode-img { max-width: 100%; height: auto; }
+.qr-img { max-width: 180px; width: 180px; height: 180px; margin: 0 auto; }
+.barcode-value {
+  margin-top: 8px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.barcode-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.barcode-scanner-panel[hidden] { display: none; }
+.scanner-head { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+.camera-reader {
+  min-height: 280px;
+  background: #07130f;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+#singleBarcodePrintArea { display: none; }
+@media print {
+  body * { visibility: hidden !important; }
+  #singleBarcodePrintArea, #singleBarcodePrintArea * { visibility: visible !important; }
+  #singleBarcodePrintArea { display: block !important; position: absolute; inset: 0; background: white; color: #111; padding: 18px; }
+  .single-print-card { max-width: 430px; margin: 0 auto; border: 1px solid #222; padding: 18px; border-radius: 10px; font-family: Arial, sans-serif; }
+  .single-print-card .print-title { text-align:center; font-size:24px; font-weight:900; text-transform:uppercase; margin:0 auto 14px; }
+  .single-print-card h1 { margin: 0; font-size: 24px; text-align: center; }
+  .single-print-card .part { text-align: center; font-size: 16px; font-weight: 700; margin: 6px 0 14px; }
+  .single-print-card .meta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 16px; font-size: 13px; }
+  .single-print-card .code-block { text-align: center; margin: 16px 0; page-break-inside: avoid; }
+  .single-print-card .code-block label { display: block; font-weight: 700; margin-bottom: 6px; }
+  .single-print-card .code-block img { max-width: 100%; background: #fff; }
+  .single-print-card .qr { width: 180px; height: 180px; }
+  .single-print-card .code-value { font-family: monospace; font-size: 12px; margin-top: 6px; word-break: break-word; }
+}
+@media (max-width: 640px) {
+  .barcode-grid { grid-template-columns: 1fr; }
+  .barcode-images { grid-template-columns: 1fr; }
+  .barcode-meta { flex-direction: column; gap: 4px; }
+}
+@media print {
+  .barcode-actions, .search-form, .page-header, .barcode-scanner-panel { display: none; }
+  .barcode-grid { display: block; }
+  .barcode-card { break-inside: avoid; page-break-inside: avoid; box-shadow: none; border: 1px solid #ccc; margin-bottom: 16px; }
+}
+</style>
+{% endblock %}

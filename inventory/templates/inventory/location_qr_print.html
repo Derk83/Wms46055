@@ -1,0 +1,55 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Location QR Labels</title>
+  <style>
+    :root{color-scheme:light;font-family:Arial,Helvetica,sans-serif;color:#111;background:#e8e8e8}
+    *{box-sizing:border-box}
+    body{margin:0}
+    .print-toolbar{position:sticky;top:0;z-index:2;display:flex;justify-content:center;gap:12px;padding:12px;background:#15171a;border-bottom:3px solid #e21d2b}
+    .print-toolbar button,.print-toolbar a{display:inline-flex;align-items:center;justify-content:center;padding:10px 18px;border:0;border-radius:8px;background:#e21d2b;color:#fff;font-weight:800;text-decoration:none;cursor:pointer}
+    .print-toolbar a{background:#35383d}
+    .qr-print-page{position:relative;width:8.5in;height:11in;margin:18px auto;padding:.38in;display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(3,1fr);gap:.18in;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.18);break-after:page;page-break-after:always}
+    .qr-print-page:last-child{break-after:auto;page-break-after:auto}
+    .location-label{min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:.16in;border:2px solid #111;border-radius:.12in;text-align:center;overflow:hidden}
+    .location-label img{display:block;width:1.85in;height:1.85in;image-rendering:pixelated}
+    .location-label h2{margin:.04in 0 0;font-size:25pt;line-height:1;letter-spacing:.04em}
+    .scan-me{margin:0 0 .04in;font-size:13pt;font-weight:900;letter-spacing:.12em}
+    .bin-label{display:block;margin-top:.07in;font-size:8pt;font-weight:900;letter-spacing:.15em;color:#444}
+    .page-count{position:absolute;right:.38in;bottom:.12in;font-size:8pt;color:#555}
+    @page{size:letter portrait;margin:0}
+    @media print{
+      :root,body{background:#fff}
+      .print-toolbar{display:none!important}
+      .qr-print-page{margin:0;box-shadow:none}
+    }
+    @media(max-width:760px){
+      .qr-print-page{width:100%;height:auto;min-height:calc(100vh - 68px);margin:0;padding:12px;grid-template-columns:1fr;grid-template-rows:none}
+      .location-label{min-height:330px}
+      .page-count{display:none}
+    }
+  </style>
+</head>
+<body>
+  <div class="print-toolbar no-print">
+    <a href="{% url 'location_list' %}">Back to Locations</a>
+    <button type="button" onclick="window.print()">Print QR Labels</button>
+  </div>
+  {% for page in pages %}
+  <section class="qr-print-page" aria-label="Location QR label page {{ page.number }} of {{ page.total }}">
+    {% for label in page.labels %}
+    <article class="location-label">
+      <p class="scan-me">SCAN ME</p>
+      <img src="data:image/png;base64,{{ label.qr_b64 }}" alt="QR code for {{ label.key }}">
+      <small class="bin-label">BIN LOCATION</small>
+      <h2>{{ label.key }}</h2>
+    </article>
+    {% endfor %}
+    <span class="page-count">Page {{ page.number }} of {{ page.total }}</span>
+  </section>
+  {% endfor %}
+</body>
+</html>

@@ -1,0 +1,153 @@
+{% extends "inventory/base.html" %}
+{% block title %}Receiving Log - Warehouse{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Receiving Log</h1>
+  <div class="actions">
+    <a href="{% url 'receiving' %}" class="btn secondary">New Receiving</a>
+    <a href="{% url 'export_inventory_xlsx' %}" class="btn secondary">Export Inventory (.xlsx)</a>
+  </div>
+</div>
+<!-- Filters -->
+<div class="card">
+  <h2>Filters</h2>
+  <form method="get" class="form-row filter-form">
+    <div class="form-group">
+      <label for="id_date_from">Date From</label>
+      <input type="date" id="id_date_from" name="date_from" value="{{ date_from }}">
+    </div>
+    <div class="form-group">
+      <label for="id_date_to">Date To</label>
+      <input type="date" id="id_date_to" name="date_to" value="{{ date_to }}">
+    </div>
+    <div class="form-group">
+      <label for="id_po_number">PO #</label>
+      <input type="text" id="id_po_number" name="po_number" value="{{ po_search }}" placeholder="Search PO #">
+    </div>
+    <div class="form-group">
+      <label for="id_vendor">Vendor</label>
+      <input type="text" id="id_vendor" name="vendor" value="{{ vendor_search }}" placeholder="Search vendor">
+    </div>
+    <div class="form-group">
+      <label for="id_part_number">Part #</label>
+      <input type="text" id="id_part_number" name="part_number" value="{{ part_search }}" placeholder="Search received part #">
+    </div>
+    <div class="form-group">
+      <label for="id_user">Created By</label>
+      <select id="id_user" name="user">
+        <option value="">All Users</option>
+        {% for user in users %}
+        <option value="{{ user.pk }}" {% if user_filter == user.pk|stringformat:"s" %}selected{% endif %}>{{ user.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="actions" style="align-self: end;">
+      <button type="submit" class="btn">Filter</button>
+      <a href="{% url 'receiving_log' %}" class="btn light">Clear</a>
+    </div>
+  </form>
+</div>
+{% if part_search %}
+<div class="card">
+  <h2>Vendors for {{ part_search }}</h2>
+  <p class="helptext">Shows every vendor/PO combination that received matching part numbers.</p>
+  {% if vendor_history %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Part #</th>
+          <th>Vendor</th>
+          <th>PO #</th>
+          <th>Total Qty Received</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in vendor_history %}
+        <tr>
+          <td>{{ row.item__part_number }}</td>
+          <td>{{ row.ticket__vendor|default:"—" }}</td>
+          <td>{{ row.ticket__po_number|default:"—" }}</td>
+          <td>Qty {{ row.total_quantity }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="empty-state">No vendor history found for this part #.</p>
+  {% endif %}
+</div>
+{% endif %}
+<!-- Results -->
+<div class="card">
+  {% if page_obj %}
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Ticket #</th>
+          <th>Date</th>
+          <th>PO #</th>
+          <th>Vendor</th>
+          <th>Items</th>
+          <th>Total Qty</th>
+          <th>Created By</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ticket in page_obj %}
+        <tr>
+          <td>
+            <strong>{{ ticket.ticket_number }}</strong>
+            {% if ticket.notes %}
+            <div class="helptext" style="margin-top: 2px;">{{ ticket.notes }}</div>
+            {% endif %}
+          </td>
+          <td>{{ ticket.date|date:"M d, Y H:i" }}</td>
+          <td>{{ ticket.po_number|default:"—" }}</td>
+          <td>{{ ticket.vendor|default:"—" }}</td>
+          <td>{{ ticket.lines.count }}</td>
+          <td>{{ ticket.total_quantity|default:0 }}</td>
+          <td>{{ ticket.created_by.username }}</td>
+          <td>
+            <a href="{% url 'receiving_ticket_print' ticket.pk %}" class="btn sm light" target="_blank">Print</a>
+            {% if request.user.is_staff or request.user.is_superuser %}
+            <a href="{% url 'receiving_ticket_edit' ticket.pk %}" class="btn sm">Edit</a>
+            <a href="{% url 'receiving_ticket_delete' ticket.pk %}" class="btn sm danger">Remove</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    {% if page_obj.has_previous %}
+    <a href="?page={{ page_obj.previous_page_number }}&date_from={{ date_from }}&date_to={{ date_to }}&po_number={{ po_search }}&vendor={{ vendor_search }}&part_number={{ part_search }}&user={{ user_filter }}" class="btn light sm">Previous</a>
+    {% endif %}
+    <span class="pagination-info">
+      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+    </span>
+    {% if page_obj.has_next %}
+    <a href="?page={{ page_obj.next_page_number }}&date_from={{ date_from }}&date_to={{ date_to }}&po_number={{ po_search }}&vendor={{ vendor_search }}&part_number={{ part_search }}&user={{ user_filter }}" class="btn light sm">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <line x1="10" y1="9" x2="8" y2="9"/>
+    </svg>
+    <p>No receiving tickets found.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

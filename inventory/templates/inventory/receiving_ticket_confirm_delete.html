@@ -1,0 +1,30 @@
+{% extends "inventory/base.html" %}
+{% block title %}Delete Receiving Ticket - Warehouse{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Delete Receiving Ticket</h1>
+  <div class="actions">
+    <a href="{% url 'receiving_log' %}" class="btn light">Back to Receiving Log</a>
+  </div>
+</div>
+<div class="card danger-card">
+  <h2>Remove {{ ticket.ticket_number }}?</h2>
+  <p>
+    This will delete the receiving ticket and reverse the inventory quantities from its receiving lines.
+  </p>
+  <ul>
+    <li><strong>PO #:</strong> {{ ticket.po_number|default:"—" }}</li>
+    <li><strong>Vendor:</strong> {{ ticket.vendor|default:"—" }}</li>
+    <li><strong>Lines:</strong> {{ ticket.lines.count }}</li>
+  </ul>
+  <form method="post" class="actions">
+    {% csrf_token %}
+    <button type="submit" class="btn danger">Yes, Delete Receiving Ticket</button>
+    <a href="{% url 'receiving_log' %}" class="btn light">Cancel</a>
+  </form>
+</div>
+<style>
+.danger-card { border-color: rgba(248,113,113,.55); }
+.btn.danger { background: #dc2626; color: #fff; border-color: #ef4444; }
+</style>
+{% endblock %}

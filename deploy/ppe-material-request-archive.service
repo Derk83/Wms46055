@@ -1,0 +1,11 @@
+[Unit]
+Description=Archive closed/delivered material requests
+After=ppe-inventory.service
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+WorkingDirectory=/home/hermes/projects/ppe_inventory
+EnvironmentFile=/etc/ppe-inventory.env
+ExecStart=/home/hermes/projects/ppe-pick-ticket-venv/bin/python manage.py archive_closed_material_requests

@@ -1,0 +1,86 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+
+{% block title %}Export Center - Warehouse{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Export Center</h1>
+  <div class="actions">
+    <a href="{% url 'inventory_list' %}" class="btn light">Back to Inventory</a>
+  </div>
+</div>
+
+<form method="get" class="card" id="export-form">
+  <h2>Filters</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="part_number">Part #</label>
+      <input id="part_number" name="part_number" value="{{ selected_part_number }}" placeholder="Exact or partial part #">
+    </div>
+    <div class="form-group">
+      <label for="po_number">PO #</label>
+      <input id="po_number" name="po_number" value="{{ selected_po_number }}" placeholder="Received on PO #">
+    </div>
+    <div class="form-group">
+      <label for="shipper">Shipper</label>
+      <select id="shipper" name="shipper">
+        <option value="">All Shippers</option>
+        {% for s in shippers %}
+        <option value="{{ s }}" {% if selected_shipper == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="category">Category</label>
+      <select id="category" name="category">
+        <option value="">All Categories</option>
+        {% for c in categories %}
+        <option value="{{ c.0 }}" {% if selected_category == c.0 %}selected{% endif %}>{{ c.1 }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="stock">Stock Status</label>
+      <select id="stock" name="stock">
+        <option value="">All Stock</option>
+        <option value="low" {% if selected_stock == "low" %}selected{% endif %}>Low Stock</option>
+        <option value="zero" {% if selected_stock == "zero" %}selected{% endif %}>Zero Stock</option>
+        <option value="negative" {% if selected_stock == "negative" %}selected{% endif %}>Negative Stock</option>
+        <option value="positive" {% if selected_stock == "positive" %}selected{% endif %}>Positive Stock</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="active">Active</label>
+      <select id="active" name="active">
+        <option value="">All</option>
+        <option value="yes" {% if selected_active == "yes" %}selected{% endif %}>Active</option>
+        <option value="no" {% if selected_active == "no" %}selected{% endif %}>Inactive</option>
+      </select>
+    </div>
+  </div>
+
+  <h2>Categories</h2>
+  <div class="form-row" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px;">
+    {% for f in available_fields %}
+    <label style="display: flex; align-items: center; gap: 6px; background: var(--surface); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border);">
+      <input type="checkbox" name="fields" value="{{ f.0 }}" {% if f.0 in selected_fields %}checked{% endif %}>
+      <span>{{ f.1 }}</span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <div class="form-row" style="margin-top: 12px;">
+    <button type="submit" name="format" value="xlsx" class="btn">Download .xlsx</button>
+    <button type="submit" name="format" value="csv" class="btn light">Download .csv</button>
+    <a href="?fields=&category=&stock=&active=&part_number=&po_number=&shipper=" class="btn light" style="margin-left: auto;">Reset</a>
+  </div>
+</form>
+
+{% if export_info %}
+<div class="card" style="margin-top: 16px;">
+  <h2>Export Ready</h2>
+  <p>{{ export_info }}</p>
+</div>
+{% endif %}
+{% endblock %}

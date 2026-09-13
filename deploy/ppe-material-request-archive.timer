@@ -1,0 +1,10 @@
+[Unit]
+Description=Archive closed/delivered material requests daily at 5 AM Central
+
+[Timer]
+OnCalendar=*-*-* 05:00:00 America/Chicago
+Persistent=true
+Unit=ppe-material-request-archive.service
+
+[Install]
+WantedBy=timers.target

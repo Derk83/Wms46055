@@ -1,0 +1,188 @@
+{% extends "inventory/base.html" %}
+{% block title %}Settings - Warehouse{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+        <h1>Settings</h1>
+        <a href="{% url 'dashboard' %}" class="btn light">← Dashboard</a>
+    </div>
+    {% if messages %}
+    <div class="messages mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="card">
+        <div class="settings-tabs" style="display: flex; border-bottom: 1px solid var(--border); margin-bottom: 24px;">
+            <a href="{% url 'settings' %}?tab=general" class="tab-link {% if active_tab == 'general' %}active{% endif %}" style="padding: 12px 20px; text-decoration: none; color: var(--ink); font-weight: 500; border-bottom: 3px solid transparent;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2" style="width:18px;height:18px;vertical-align:middle;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                General
+            </a>
+            <a href="{% url 'settings' %}?tab=security" class="tab-link {% if active_tab == 'security' %}active{% endif %}" style="padding: 12px 20px; text-decoration: none; color: var(--ink); font-weight: 500; border-bottom: 3px solid transparent;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2" style="width:18px;height:18px;vertical-align:middle;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Security
+            </a>
+            {% if user.is_superuser %}
+            <a href="{% url 'settings' %}?tab=users" class="tab-link {% if active_tab == 'users' %}active{% endif %}" style="padding: 12px 20px; text-decoration: none; color: var(--ink); font-weight: 500; border-bottom: 3px solid transparent;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2" style="width:18px;height:18px;vertical-align:middle;"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                Users
+            </a>
+            {% endif %}
+        </div>
+        <div class="tab-content">
+            {% if active_tab == 'general' %}
+            <div class="settings-section">
+                <h3>General Settings</h3>
+                <p class="text-muted mb-4">Manage your account preferences and application settings.</p>
+                <div class="settings-item">
+                    <div class="settings-label">
+                        <strong>Your Account</strong>
+                        <span class="text-muted small">Logged in as {{ user.username }}{% if user.is_superuser %} (Administrator){% endif %}</span>
+                    </div>
+                    <div class="settings-value">
+                        <a href="{% url 'change_password' %}" class="btn light sm">Change Password</a>
+                    </div>
+                </div>
+                <div class="settings-item" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+                    <div class="settings-label">
+                        <strong>Application Info</strong>
+                        <span class="text-muted small">Warehouse Inventory Management System</span>
+                    </div>
+                    <div class="settings-value">
+                        <small class="text-muted">Version 1.0.0</small>
+                    </div>
+                </div>
+            </div>
+            {% elif active_tab == 'security' %}
+            <div class="settings-section">
+                <h3>Security</h3>
+                <p class="text-muted mb-4">Manage password and security settings.</p>
+                <div class="settings-item">
+                    <div class="settings-label">
+                        <strong>Password</strong>
+                        <span class="text-muted small">Change your account password</span>
+                    </div>
+                    <div class="settings-value">
+                        <a href="{% url 'change_password' %}" class="btn primary">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            Change Password
+                        </a>
+                    </div>
+                </div>
+                <div class="settings-item" style="border-top: 1px solid var(--border); padding-top: 16px; margin-top: 16px;">
+                    <div class="settings-label">
+                        <strong>Session</strong>
+                        <span class="text-muted small">Your session will expire after 2 hours of inactivity</span>
+                    </div>
+                    <div class="settings-value">
+                        <small class="text-muted">Auto-managed</small>
+                    </div>
+                </div>
+            </div>
+            {% elif active_tab == 'users' and user.is_superuser %}
+            <div class="settings-section">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div>
+                        <h3 class="mb-1">User Management</h3>
+                        <small class="text-muted">Manage users, groups, and permissions from a single page</small>
+                    </div>
+                    <a href="{% url 'user_create' %}" class="btn primary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Add User
+                    </a>
+                </div>
+                {% if users %}
+                <div class="table-responsive">
+                    <table class="table table-sm" style="min-width: 800px;">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Name / Email</th>
+                                <th>Role</th>
+                                <th>Groups</th>
+                                <th>Last Login</th>
+                                <th style="width:120px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for u in users %}
+                            <tr>
+                                <td>
+                                    <strong>{{ u.username }}</strong>
+                                    {% if not u.is_active %}<span class="badge danger ms-1">Inactive</span>{% endif %}
+                                </td>
+                                <td>
+                                    {{ u.first_name }} {{ u.last_name }}{% if u.first_name or u.last_name %}<br>{% endif %}
+                                    <small class="text-muted">{{ u.email }}</small>
+                                </td>
+                                <td>
+                                    {% if u.is_superuser %}
+                                    <span class="badge primary">Administrator</span>
+                                    {% else %}
+                                    <span class="badge secondary">User</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% with groups=u.groups.all %}
+                                    {% if groups %}
+                                    <div class="user-groups">
+                                        {% for g in groups %}
+                                        <span class="group-tag">{{ g.name }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">No groups</span>
+                                    {% endif %}
+                                    {% endwith %}
+                                </td>
+                                <td>{{ u.last_login|date:"M d, Y H:i"|default:"Never" }}</td>
+                                <td>
+                                    <div style="display:flex; gap:6px;">
+                                        <a href="{% url 'user_edit' u.pk %}" class="btn sm light">Edit</a>
+                                        {% if u != request.user %}
+                                        <a href="{% url 'user_delete' u.pk %}" class="btn sm danger" title="Delete">Delete</a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state" style="text-align: center; padding: 40px; color: var(--muted);">
+                    <p>No users found.</p>
+                    <a href="{% url 'user_create' %}" class="btn primary">Create First User</a>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<style>
+.settings-tabs { overflow-x: auto; }
+.tab-link { white-space: nowrap; transition: all 0.2s; }
+.tab-link:hover { background: var(--hover); }
+.tab-link.active { border-bottom-color: var(--primary); color: var(--primary); }
+.settings-section { padding: 8px 0; }
+.settings-item { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; flex-wrap: wrap; gap: 12px; }
+.settings-label strong { display: block; margin-bottom: 4px; }
+.settings-value { display: flex; align-items: center; gap: 8px; }
+.badge { display: inline-flex; align-items: center; padding: 4px 10px; font-size: 11px; font-weight: 600; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.03em; }
+.badge.primary { background: var(--primary); color: white; }
+.badge.secondary { background: var(--secondary); color: var(--secondary-ink); }
+.badge.accent { background: var(--accent); color: #1a2a2a; }
+.badge.success { background: #22c55e; color: white; }
+.badge.danger { background: #ef4444; color: white; }
+.user-groups { display: flex; flex-wrap: wrap; gap: 4px; }
+.group-tag { display: inline-block; padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: 999px; background: rgba(32,33,36,0.08); color: var(--primary); border: 1px solid rgba(32,33,36,0.15); white-space: nowrap; }
+@media (max-width: 768px) {
+    .d-flex.justify-content-between { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .settings-item { flex-direction: column; align-items: flex-start; }
+    .settings-value { width: 100%; }
+    .settings-value .btn { flex: 1; justify-content: center; }
+}
+</style>
+{% endblock %}

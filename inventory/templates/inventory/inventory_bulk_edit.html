@@ -1,0 +1,97 @@
+{% extends "inventory/base.html" %}
+{% block title %}Bulk Edit Items - Warehouse{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+        <h1>Bulk Edit Items</h1>
+        <a href="{% url 'inventory_list' %}" class="btn light">← Back to Inventory</a>
+    </div>
+    {% if messages %}
+    <div class="messages mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {{ form.items }}
+        {% for item in items %}
+        <input type="hidden" name="item_ids" value="{{ item.id }}">
+        {% endfor %}
+        <div class="card">
+            <div class="table-responsive">
+                <table class="table table-sm" style="min-width: 900px;">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 40px;">#</th>
+                            <th style="width: 200px;">Name</th>
+                            <th style="width: 120px;">Shipper</th>
+                            <th style="width: 120px;">Category</th>
+                            <th style="width: 80px;">Part #</th>
+                            <th style="width: 90px;">Qty on Hand</th>
+                            <th style="width: 120px;">Building/Room</th>
+                            <th style="width: 80px;">Rack</th>
+                            <th style="width: 90px;">Section</th>
+                            <th style="width: 120px;">Bin</th>
+                            <th style="width: 100px;">Low Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in bulk_rows %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                {{ row.name }}
+                                {{ row.id }}
+                            </td>
+                            <td>{{ row.shipper }}</td>
+                            <td>{{ row.category }}</td>
+                            <td class="text-muted small">{{ row.item.part_number }}{{ row.part_number }}</td>
+                            <td>{{ row.quantity_on_hand }}</td>
+                            <td>{{ row.building_room }}</td>
+                            <td>{{ row.rack }}</td>
+                            <td>{{ row.section }}</td>
+                            <td>{{ row.bin_location }}</td>
+                            <td>{{ row.low_stock_threshold }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+            <button type="submit" class="btn primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                Save Changes
+            </button>
+            <a href="{% url 'inventory_list' %}" class="btn secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+<style>
+.table-sm { font-size: 13px; }
+.table-sm th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); font-weight: 600; }
+.table-sm td { padding: 8px 12px; vertical-align: middle; }
+.table-sm input[type="text"], .table-sm input[type="number"] {
+    width: 100%;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    background: var(--bg);
+    color: var(--ink);
+}
+.table-sm input[type="text"]:focus, .table-sm input[type="number"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
+}
+.table-sm .text-muted { font-size: 11px; }
+@media (max-width: 768px) {
+    .d-flex.justify-content-between { flex-direction: column; align-items: flex-start; }
+    .d-flex.justify-content-end { justify-content: stretch !important; }
+    .d-flex.justify-content-end .btn { flex: 1; justify-content: center; }
+}
+</style>
+{% endblock %}

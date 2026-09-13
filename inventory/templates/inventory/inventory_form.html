@@ -1,0 +1,103 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<div class="card">
+  <h1>{% if item %}Edit {{ item.name }}{% else %}Add Inventory Item{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-row">
+      <div class="form-group">
+        {{ form.part_number.label_tag }}
+        {{ form.part_number }}
+        {{ form.part_number.errors }}
+      </div>
+      <div class="form-group">
+        {{ form.fb_part_number.label_tag }}
+        {{ form.fb_part_number }}
+        {{ form.fb_part_number.errors }}
+      </div>
+      <div class="form-group">
+        {{ form.model_number.label_tag }}
+        {{ form.model_number }}
+        {{ form.model_number.errors }}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+        {{ form.name }}
+        {% if form.name.errors %}<div class="helptext">{{ form.name.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+        {{ form.category }}
+        {% if form.category.errors %}<div class="helptext">{{ form.category.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group" style="grid-column: 1 / -1;">
+        <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+        {{ form.description }}
+        {% if form.description.errors %}<div class="helptext">{{ form.description.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.shipper.id_for_label }}">{{ form.shipper.label }}</label>
+        {{ form.shipper }}
+        {% if form.shipper.errors %}<div class="helptext">{{ form.shipper.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.quantity_on_hand.id_for_label }}">{{ form.quantity_on_hand.label }}</label>
+        {{ form.quantity_on_hand }}
+        {% if form.quantity_on_hand.errors %}<div class="helptext">{{ form.quantity_on_hand.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.unit.id_for_label }}">{{ form.unit.label }}</label>
+        {{ form.unit }}
+        {% if form.unit.errors %}<div class="helptext">{{ form.unit.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.low_stock_threshold.id_for_label }}">{{ form.low_stock_threshold.label }}</label>
+        {{ form.low_stock_threshold }}
+        {% if form.low_stock_threshold.errors %}<div class="helptext">{{ form.low_stock_threshold.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.building_room.id_for_label }}">{{ form.building_room.label }}</label>
+        {{ form.building_room }}
+        {% if form.building_room.errors %}<div class="helptext">{{ form.building_room.errors }}</div>{% endif %}
+      </div>
+
+      <div class="grid-3">
+        <div class="form-group">
+          <label for="{{ form.rack.id_for_label }}">{{ form.rack.label }}</label>
+          {{ form.rack }}
+          {% if form.rack.errors %}<div class="helptext">{{ form.rack.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label for="{{ form.section.id_for_label }}">{{ form.section.label }}</label>
+          {{ form.section }}
+          {% if form.section.errors %}<div class="helptext">{{ form.section.errors }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label for="{{ form.bin_location.id_for_label }}">{{ form.bin_location.label }}</label>
+          {{ form.bin_location }}
+          {% if form.bin_location.errors %}<div class="helptext">{{ form.bin_location.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="{{ form.barcode_value.id_for_label }}">{{ form.barcode_value.label }}</label>
+        {{ form.barcode_value }}
+        {% if form.barcode_value.errors %}<div class="helptext">{{ form.barcode_value.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.qr_code_value.id_for_label }}">{{ form.qr_code_value.label }}</label>
+        {{ form.qr_code_value }}
+        {% if form.qr_code_value.errors %}<div class="helptext">{{ form.qr_code_value.errors }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.active.id_for_label }}">{{ form.active.label }}</label>
+        {{ form.active }}
+        {% if form.active.errors %}<div class="helptext">{{ form.active.errors }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" type="submit">Save</button>
+      <a class="btn light" href="{% url 'inventory_list' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

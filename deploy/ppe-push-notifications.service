@@ -1,0 +1,12 @@
+[Unit]
+Description=Deliver Black Box Warehouse Web Push notifications
+After=network-online.target ppe-inventory.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hermes
+Group=hermes
+WorkingDirectory=/home/hermes/projects/ppe_inventory
+EnvironmentFile=/etc/ppe-inventory.env
+ExecStart=/home/hermes/projects/ppe-pick-ticket-venv/bin/python manage.py process_push_notifications --limit 200

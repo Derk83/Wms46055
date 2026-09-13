@@ -1,0 +1,62 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+
+{% block title %}Images — {{ item.part_number }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fa-solid fa-images"></i> Images for {{ item.part_number }}</h1>
+    <p class="subtitle">{{ item.name }}</p>
+</div>
+
+<div class="card">
+    <h2>Add Image</h2>
+    <form method="post" enctype="multipart/form-data" action="{% url 'item_image_add' item.pk %}" class="form">
+        {% csrf_token %}
+        <div class="form-row">
+            <label for="id_image">Image file (JPEG, PNG, WebP, GIF; max 10 MB)</label>
+            <input type="file" id="id_image" name="image" accept="image/jpeg,image/png,image/webp,image/gif" required>
+        </div>
+        <div class="form-row">
+            <label for="id_caption">Caption (optional)</label>
+            <input type="text" id="id_caption" name="caption" maxlength="255">
+        </div>
+        <div class="form-row">
+            <label>
+                <input type="checkbox" name="is_primary">
+                Set as primary image
+            </label>
+        </div>
+        <button type="submit" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Upload</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2>Gallery</h2>
+    {% if images %}
+    <div class="image-gallery">
+        {% for img in images %}
+        <div class="image-card">
+            <a href="{% url 'serve_item_image' item.pk img.pk %}" target="_blank" rel="noopener">
+                <img src="{% url 'serve_item_image' item.pk img.pk %}" alt="{{ img.caption|default:item.part_number }}" loading="lazy">
+            </a>
+            <div class="image-meta">
+                {% if img.is_primary %}<span class="badge badge-primary">Primary</span>{% endif %}
+                {% if img.caption %}<p>{{ img.caption }}</p>{% endif %}
+                <p class="muted">Uploaded {{ img.uploaded_at|date:"Y-m-d H:i" }}</p>
+                <form method="post" action="{% url 'item_image_delete' item.pk img.pk %}" class="inline-form"
+                      onsubmit="return confirm('Delete this image?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i> Delete</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="muted">No images uploaded yet.</p>
+    {% endif %}
+</div>
+
+<p><a href="{% url 'item_detail' item.pk %}" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Back to item</a></p>
+{% endblock %}

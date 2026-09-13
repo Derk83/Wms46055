@@ -1,0 +1,20 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<div class="page-header no-print">
+  <div><h1>Item Barcode</h1><p class="subtitle">{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</p></div>
+  <div class="actions"><a class="btn light" href="{% url 'item_detail' item.pk %}">Back</a><button class="btn accent" onclick="window.print()">Print Barcode</button></div>
+</div>
+<section class="barcode-sheet">
+  <article class="barcode-label">
+    <div class="brand">BLACK BOX</div>
+    <h2>{{ item.part_number }}</h2>
+    {% if item.fb_part_number %}<p><strong>FB Part #:</strong> {{ item.fb_part_number }}</p>{% endif %}
+    <p class="item-name">{{ item.name }}</p>
+    <img src="data:image/png;base64,{{ barcode_image_b64 }}" alt="Barcode {{ barcode_value }}">
+    <div class="barcode-value">{{ barcode_value }}</div>
+  </article>
+</section>
+<style>
+.barcode-sheet{display:grid;place-items:center;min-height:60vh}.barcode-label{width:4in;min-height:2.25in;padding:.22in;border:2px solid #111;border-radius:10px;background:#fff;color:#111;text-align:center}.brand{font-weight:900;letter-spacing:.16em;color:#d81f26}.barcode-label h2{margin:8px 0 2px;font-size:24px}.barcode-label p{margin:3px 0}.item-name{font-size:15px}.barcode-label img{display:block;width:100%;max-height:.75in;object-fit:contain;margin:10px auto 3px}.barcode-value{font:700 14px ui-monospace,monospace;letter-spacing:.12em}@media print{@page{size:4in 2.25in;margin:0}.no-print,nav,header,footer{display:none!important}.barcode-sheet{min-height:0}.barcode-label{box-sizing:border-box;width:4in;height:2.25in;border:0;border-radius:0}.container,main{margin:0!important;padding:0!important;max-width:none!important}}
+</style>
+{% endblock %}

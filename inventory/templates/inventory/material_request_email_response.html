@@ -1,0 +1,32 @@
+{% extends "inventory/base.html" %}
+{% block title %}Delivery response · Black Box{% endblock %}
+{% block content %}
+<section class="page-header"><div><h1>Delivery response</h1></div></section>
+<section class="card" style="max-width:760px;margin-inline:auto">
+{% if invalid_link %}
+  <h2>This link is invalid or expired</h2>
+  <p>Open the Requests portal or contact the warehouse for a new ready-for-delivery notice.</p>
+{% elif responded %}
+  <h2>Response received</h2>
+  <p>Thank you. The warehouse has been notified about {{ material_request.request_number }}.</p>
+{% else %}
+  <h2>{{ material_request.request_number }} is ready for delivery</h2>
+  <p>Scheduled delivery: <strong>{% if material_request.delivery_at %}{{ material_request.delivery_at|date:"M j, Y g:i a" }}{% else %}Not scheduled{% endif %}</strong></p>
+  <form method="post" class="delivery-response-form">
+    {% csrf_token %}<input type="hidden" name="token" value="{{ token }}">
+    {{ delivery_response_form.non_field_errors }}
+    <div class="delivery-response-actions">
+      <button class="btn success" type="submit" name="response" value="ready">Confirm ready for delivery</button>
+    </div>
+    <hr>
+    <h3>Need a different delivery time?</h3>
+    <p class="meta">Optionally choose a new date/time and add a note.</p>
+    <div class="form-row">
+      <div class="form-group"><label>Requested date/time</label>{{ delivery_response_form.delivery_at }}{{ delivery_response_form.delivery_at.errors }}</div>
+      <div class="form-group"><label for="{{ delivery_response_form.note.id_for_label }}">Note</label>{{ delivery_response_form.note }}{{ delivery_response_form.note.errors }}</div>
+    </div>
+    <button class="btn secondary" type="submit" name="response" value="not_ready">Not ready — notify warehouse</button>
+  </form>
+{% endif %}
+</section>
+{% endblock %}

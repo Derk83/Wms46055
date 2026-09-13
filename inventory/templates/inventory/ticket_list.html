@@ -1,0 +1,37 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<h1>Pick Tickets</h1>
+<div class="actions"><a class="btn" href="{% url 'ticket_create' %}">New Pick Ticket</a><a class="btn light" href="{% url 'export_tickets_csv' %}">Export CSV</a></div>
+<div class="card">
+<form method="get" class="actions">
+  <input type="search" name="q" value="{{ query }}" placeholder="Search tickets by ticket #, name, building, location, part #, or item" aria-label="Search tickets">
+  <select name="status" id="status">
+    <option value="">All Statuses</option>
+    {% for value, label in status_choices %}
+      <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">Filter</button>
+  {% if query or status %}<a class="btn light" href="{% url 'ticket_list' %}">Clear</a>{% endif %}
+</form>
+{% if query %}<p class="helptext">Showing results for “{{ query }}”.{% if status %} Status: {{ status }}{% endif %}</p>{% endif %}
+<div class="table-responsive">
+<table>
+<tr><th>Ticket #</th><th>Date</th><th>Picked By</th><th>Received By</th><th>Requested By</th><th>Status</th><th>Location</th><th>Lines</th><th>Actions</th></tr>
+{% for ticket in tickets %}
+<tr>
+  <td><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.ticket_number }}</a></td>
+  <td>{{ ticket.date }}</td><td>{{ ticket.picked_by_name }}</td><td>{{ ticket.received_by_name }}</td><td>{{ ticket.requested_by_name }}</td>
+  <td><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></td>
+  <td>{{ ticket.building_room }} {{ ticket.location }}</td>
+  <td>{{ ticket.lines.count }}</td>
+  <td class="actions-cell">
+    <a href="{% url 'ticket_edit' ticket.pk %}" class="btn sm light">Edit</a>
+    <a href="{% url 'ticket_print' ticket.pk %}" class="btn sm light" target="_blank">Print</a>
+  </td>
+</tr>
+{% empty %}<tr><td colspan="9">No pick tickets yet.</td></tr>{% endfor %}
+</table>
+</div>
+</div>
+{% endblock %}

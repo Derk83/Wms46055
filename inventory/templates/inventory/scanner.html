@@ -1,0 +1,124 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<div class="scanner-shell">
+  <div class="page-header scanner-hero">
+    <div>
+      <div class="eyebrow">Fast item lookup</div>
+      <h1>Phone Barcode / QR Scanner</h1>
+      <div class="meta">Scan a barcode or QR code. Warehouse will beep, locate the product, then open the item page automatically.</div>
+    </div>
+    <div class="actions">
+      <a class="btn light" href="{% url 'inventory_list' %}">Inventory</a>
+      <a class="btn" href="{% url 'ticket_create' %}">Open Pick Ticket</a>
+    </div>
+  </div>
+  <div class="card scanner-card">
+    <div class="scanner-grid">
+      <div>
+        <div id="inventory-camera-reader" class="scanner-reader"></div>
+      </div>
+      <div class="scanner-panel">
+        <h2>Scan Status</h2>
+        <p class="helptext">Camera access requires HTTPS or localhost. USB scanners still work in search and pick-ticket fields.</p>
+        <pre id="result" class="scanner-result">Camera starting…</pre>
+        <div class="scanner-tips">
+          <span>✓ Audible beep on scan</span>
+          <span>✓ Auto-opens matching item</span>
+          <span>✓ Rear-camera first</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>
+.scanner-shell { display:grid; gap:var(--space); }
+.eyebrow { color:var(--accent); font-weight:900; text-transform:uppercase; letter-spacing:.12em; font-size:12px; margin-bottom:6px; }
+.scanner-hero { background:linear-gradient(135deg, rgba(236,31,39,.18), rgba(32,33,36,.72) 42%, rgba(5,13,11,.96)); }
+.scanner-card { position:relative; overflow:hidden; }
+.scanner-card::before { content:""; position:absolute; inset:-30% -10% auto auto; width:320px; height:320px; background:radial-gradient(circle, rgba(236,31,39,.16), transparent 68%); pointer-events:none; }
+.scanner-grid { display:grid; grid-template-columns:minmax(280px, 560px) 1fr; gap:clamp(18px,3vw,34px); align-items:start; }
+.scanner-reader { width:100%; min-height:360px; border:1px solid var(--border-strong); border-radius:22px; overflow:hidden; background:linear-gradient(145deg,#071310,#12211d); box-shadow:inset 0 0 0 1px rgba(255,255,255,.03), var(--shadow-md); }
+.scanner-panel { padding:8px 0; }
+.scanner-result { white-space:pre-wrap; min-height:140px; padding:16px; border-radius:16px; background:#0b1714 !important; border:1px solid var(--border); color:#eaf5ef; font-weight:700; }
+.scanner-tips { display:flex; flex-direction:column; gap:10px; margin-top:14px; color:#bee5d3; font-weight:750; }
+.scanner-tips span { padding:10px 12px; border-radius:999px; background:rgba(87,211,145,.1); border:1px solid rgba(87,211,145,.2); }
+@media (max-width: 850px) { .scanner-grid { grid-template-columns:1fr; } .scanner-reader { min-height:320px; } }
+</style>
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script>
+const result = document.getElementById('result');
+let scanner = null;
+let scanHandled = false;
+function playScanBeep() {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'sine';
+    oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.16);
+    setTimeout(() => ctx.close(), 260);
+  } catch (error) {
+    // Beep is a UX enhancement; scanner should keep working if audio is blocked.
+  }
+}
+async function lookup(code) {
+  playScanBeep();
+  result.textContent = `Scanned: ${code}\nLooking up item…`;
+  try {
+    const res = await fetch(`/scan-lookup-api/?code=${encodeURIComponent(code)}`);
+    if (!res.ok) {
+      result.textContent = `Scanned: ${code}\nNo matching inventory item.`;
+      scanHandled = false;
+      return;
+    }
+    const data = await res.json();
+    if (data.is_location) {
+      result.textContent = `Scanned: ${code}\nOpening location… ${data.location_key}`;
+      if (scanner) {
+        try { await scanner.stop(); await scanner.clear(); } catch (error) {}
+      }
+      window.location.href = data.location_url;
+      return;
+    }
+    result.textContent = `Scanned. Opening item…\nPart #: ${data.part_number}\nItem: ${data.name}\nCurrent Qty: ${data.quantity_on_hand}`;
+    if (scanner) {
+      try { await scanner.stop(); await scanner.clear(); } catch (error) {}
+    }
+    window.location.href = data.item_url;
+  } catch (error) {
+    result.textContent = `Scanned: ${code}\nLookup failed. Check network and try again.`;
+    scanHandled = false;
+  }
+}
+function onScanSuccess(decodedText) {
+  if (scanHandled) return;
+  scanHandled = true;
+  lookup(decodedText);
+}
+if (window.Html5Qrcode) {
+  scanner = new Html5Qrcode("inventory-camera-reader");
+  scanner.start(
+    { facingMode: { exact: 'environment' } },
+    { fps: 10, qrbox: { width: 260, height: 260 } },
+    onScanSuccess,
+    () => {}
+  ).then(() => {
+    result.textContent = "Camera active. Point the rear camera at a barcode or QR code.";
+  }).catch((error) => {
+    result.textContent = "Camera permission denied or unavailable. Please grant camera permission or use a USB scanner. " + (error || "");
+  });
+} else {
+  result.textContent = "Scanner library could not load. Use a USB scanner or type the code manually.";
+}
+</script>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends "inventory/base.html" %}
+{% block title %}Bulk Adjust Inventory - Warehouse{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Bulk Adjust Inventory</h1>
+  <div class="actions">
+    <a href="{% url 'inventory_list' %}" class="btn light">Back to Inventory</a>
+  </div>
+</div>
+<div class="grid-2">
+  <section class="card">
+    <h2>Add Adjustment Line</h2>
+    <form method="post" class="form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add_line">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.item.id_for_label }}">Existing Item <span class="optional">(optional)</span></label>
+          {{ form.item }}
+          <p class="helptext">{{ form.item.help_text }}</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.part_number.id_for_label }}">Part # <span class="optional">(required for new)</span></label>
+          {{ form.part_number }}
+          <p class="helptext">{{ form.part_number.help_text }}</p>
+        </div>
+        <div class="form-group">
+          <label for="{{ form.name.id_for_label }}">Name <span class="optional">(required for new)</span></label>
+          {{ form.name }}
+          <p class="helptext">{{ form.name.help_text }}</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.quantity_delta.id_for_label }}">Quantity Delta <span class="required">*</span></label>
+          {{ form.quantity_delta }}
+          <p class="helptext">{{ form.quantity_delta.help_text }}</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="{{ form.notes.id_for_label }}">Notes</label>
+          {{ form.notes }}
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn">Add Line</button>
+      </div>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Pending Adjustments</h2>
+    {% if lines %}
+    <div class="pending-list">
+      {% for line in lines %}
+      <div class="pending-item">
+        <div class="item-info">
+          <strong>{{ line.item_name }}</strong>
+          <span class="part-badge">{{ line.part_number }}</span>
+        </div>
+        <div class="item-delta {% if line.quantity_delta > 0 %}positive{% else %}negative{% endif %}">
+          {% if line.quantity_delta > 0 %}+{% endif %}{{ line.quantity_delta }}
+        </div>
+        {% if line.notes %}
+        <div class="item-notes">{{ line.notes }}</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      <div class="pending-summary">
+        <strong>Total lines:</strong> {{ lines|length }} &nbsp;|&nbsp;
+        <strong>Net change:</strong> 
+        <span class="{% if net_change > 0 %}positive{% elif net_change < 0 %}negative{% endif %}">
+          {{ net_change }}
+        </span>
+      </div>
+    </div>
+    <div class="pending-actions">
+      <form method="post" style="display: inline;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="commit">
+        <button type="submit" class="btn primary">Commit All ({{ lines|length }})</button>
+      </form>
+      <form method="post" style="display: inline;">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="clear">
+        <button type="submit" class="btn danger" onclick="return confirm('Clear all pending adjustments?')">Clear All</button>
+      </form>
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M12 3v12M12 15l4-4M12 15l-4-4M4 11h16M4 7h16M4 19h16"/>
+      </svg>
+      <p>No pending adjustments. Add lines above to build a batch.</p>
+    </div>
+    {% endif %}
+  </section>
+</div>
+<style>
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+@media (max-width: 768px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+.pending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pending-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.item-info .part-badge {
+  font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
+}
+.item-delta {
+  font-weight: 700;
+  font-size: 18px;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+.item-delta.positive { color: #166534; }
+.item-delta.negative { color: #991b1b; }
+.item-notes {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.pending-summary {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  margin-top: 12px;
+  font-size: 14px;
+}
+.pending-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+</style>
+{% endblock %}

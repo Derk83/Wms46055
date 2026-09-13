@@ -1,0 +1,72 @@
+{% extends "inventory/base.html" %}
+{% block title %}Material Requests · Black Box{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>{% if view_mode == "queue" %}Warehouse Work Queue{% else %}Material Requests{% endif %}</h1>
+    <div class="meta">{% if view_mode == "queue" %}Priority-sorted fulfillment work · urgent and overdue requests rise automatically{% else %}Live fulfillment board · updates automatically when ticket status changes{% endif %}</div>
+  </div>
+  <div class="actions">
+    {% if is_warehouse %}
+      {% if view_mode == "queue" %}<a class="btn btn-secondary" href="?view=board">View Kanban</a>{% else %}<a class="btn btn-secondary" href="?view=queue">View Work Queue</a>{% endif %}
+    {% endif %}
+    <a class="btn btn-secondary" href="{% url 'material_request_archive' %}">Request archive</a>
+    <a class="btn btn-primary" href="{% url 'material_request_create' %}">New request</a>
+  </div>
+</section>
+<form method="get" class="card queue-filters no-print" role="search">
+  <input type="hidden" name="view" value="{{ view_mode }}">
+  <div><label for="request-search">Search</label><input id="request-search" name="q" value="{{ query }}" placeholder="Request, ticket, requestor, or location"></div>
+  {% if is_warehouse and view_mode == "queue" %}
+  <div><label for="focus-filter">Focus</label><select id="focus-filter" name="focus">
+    <option value="actionable"{% if focus_filter == "actionable" %} selected{% endif %}>All actionable</option>
+    <option value="urgent"{% if focus_filter == "urgent" %} selected{% endif %}>Urgent</option>
+    <option value="overdue"{% if focus_filter == "overdue" %} selected{% endif %}>Overdue</option>
+    <option value="due_today"{% if focus_filter == "due_today" %} selected{% endif %}>Due today</option>
+    <option value="awaiting_requester"{% if focus_filter == "awaiting_requester" %} selected{% endif %}>Awaiting requester</option>
+    <option value="not_ready"{% if focus_filter == "not_ready" %} selected{% endif %}>Needs reschedule</option>
+  </select></div>
+  {% endif %}
+  <div><label for="status-filter">Status</label><select id="status-filter" name="status"><option value="">{% if view_mode == "queue" %}Active statuses{% else %}All statuses{% endif %}</option>{% for value, label in statuses %}<option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  {% if is_warehouse %}
+  <div><label for="assignment-filter">Assignment</label><select id="assignment-filter" name="assignment">
+    <option value=""{% if not assignment_filter %} selected{% endif %}>Anyone</option>
+    <option value="mine"{% if assignment_filter == "mine" %} selected{% endif %}>Assigned to me</option>
+    <option value="unassigned"{% if assignment_filter == "unassigned" %} selected{% endif %}>Unassigned</option>
+  </select></div>
+  {% endif %}
+  <button class="btn btn-secondary" type="submit">Apply filters</button>
+  <a class="btn light" href="{% url 'material_request_board' %}{% if view_mode == 'kanban' %}?view=kanban{% endif %}">Reset</a>
+</form>
+<div id="material-request-live-region" data-material-request-board-poll>
+  {% if view_mode == "queue" %}{% include "inventory/_material_request_queue.html" %}{% else %}{% include "inventory/_material_request_columns.html" %}{% endif %}
+</div>
+<script>
+(() => {
+  const region = document.querySelector('[data-material-request-board-poll]');
+  if (!region) return;
+  let busy = false;
+  region.addEventListener('change', (event) => {
+    const form = event.target.closest('.assignment-form');
+    if (form) form.dataset.dirty = 'true';
+  });
+  async function refreshBoard() {
+    if (busy || document.hidden || region.querySelector('.assignment-form[data-dirty="true"]')) return;
+    if (region.contains(document.activeElement) && /^(INPUT|SELECT|BUTTON)$/.test(document.activeElement.tagName)) return;
+    busy = true;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('partial', '1');
+      const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'text/html'}});
+      if (response.ok) {
+        const html = await response.text();
+        if (html.trim() && html !== region.innerHTML) region.innerHTML = html;
+      }
+    } catch (_) { /* retry on next interval */ }
+    finally { busy = false; }
+  }
+  window.setInterval(refreshBoard, 10000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshBoard(); });
+})();
+</script>
+{% endblock %}

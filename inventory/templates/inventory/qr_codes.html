@@ -1,0 +1,166 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}QR Codes - Warehouse{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>QR Codes</h1>
+  <div class="actions">
+    <a href="{% url 'location_list' %}" class="btn light">View All Locations</a>
+    <a href="{% url 'app_qr_code' %}" class="btn light">📱 App QR</a>
+    <a href="{% url 'inventory_new' %}" class="btn light">Add New Item</a>
+    <a href="{% url 'inventory_list' %}" class="btn light">Back to Inventory</a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <strong>📍 Location QR Codes — Print &amp; place at each bin</strong>
+    <span class="badge">{{ location_qrs|length }} total</span>
+  </div>
+  <div class="card-body">
+    <div class="qr-grid">
+      {% for lq in location_qrs %}
+      <div class="qr-cell" data-key="{{ lq.key }}">
+        <a href="{% url 'location_detail' location_key=lq.key %}" class="qr-link">
+          <img src="data:image/png;base64,{{ lq.qr_b64 }}" alt="{{ lq.key }}"
+               class="qr-img" loading="lazy">
+        </a>
+        <div class="qr-label"><strong>{{ lq.key }}</strong></div>
+        <div class="qr-count">{{ lq.item_count }} item{{ lq.item_count|pluralize }}</div>
+        <button type="button" class="btn sm light qr-print-btn"
+                onclick="printQrCard('{{ lq.key|escapejs }}', '{{ lq.qr_b64 }}')">
+          🖨️ Print
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<div id="qrPrintArea"></div>
+
+<script>
+function printQrCard(key, qrB64) {
+  try {
+    let area = document.getElementById('qrPrintArea');
+    area.innerHTML = `
+      <div class="qr-single-print">
+        <div class="qr-print-card">
+          <div class="qr-print-label">SCAN ME</div>
+          <img src="data:image/png;base64,${qrB64}" alt="${key}" class="qr-print-img">
+          <div class="qr-print-key">${key}</div>
+        </div>
+      </div>`;
+    // Force synchronous layout so the DOM renders before print dialog opens
+    void area.offsetHeight;
+
+    // Move to document.body so it's not hidden by parent containers
+    let origParent = area.parentNode;
+    let nextSibling = area.nextSibling;
+    document.body.appendChild(area);
+    void area.offsetHeight;
+
+    window.print();
+
+    // Restore after print dialog closes
+    var restoreTimer = setInterval(function() {
+      if (!window.matchMedia('print').matches) {
+        clearInterval(restoreTimer);
+        if (origParent) {
+          if (nextSibling) {
+            origParent.insertBefore(area, nextSibling);
+          } else {
+            origParent.appendChild(area);
+          }
+        }
+        area.innerHTML = '';
+      }
+    }, 500);
+  } catch (err) {
+    console.error('Print error:', err);
+    alert('Print failed: ' + err.message);
+  }
+}
+</script>
+
+<style>
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+}
+.qr-cell {
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 10px 6px 8px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.qr-cell:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(236,31,39,.15);
+}
+.qr-link { display: block; }
+.qr-img {
+  width: 110px; height: 110px;
+  background: white; padding: 6px;
+  border-radius: var(--radius-sm);
+  image-rendering: pixelated;
+}
+.qr-label { font-size: 12px; margin: 4px 0 0; }
+.qr-count { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.qr-print-btn { font-size: 11px; padding: 2px 8px; }
+
+#qrPrintArea { display: none; }
+@media print {
+  @page { margin: 0.5in; }
+  html, body { height: auto; }
+  body > :not(#qrPrintArea) { display: none !important; }
+  #qrPrintArea {
+    display: block !important;
+    margin: 0; padding: 0;
+    background: white;
+  }
+  .qr-single-print {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .qr-print-card {
+    text-align: center;
+    padding: 24px;
+    border: 2px dashed #888;
+    border-radius: 12px;
+    background: #fff;
+    display: inline-block;
+  }
+  .qr-print-label {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #555;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .qr-print-img {
+    width: 240px; height: 240px;
+    background: white;
+    padding: 10px;
+    image-rendering: pixelated;
+  }
+  .qr-print-key {
+    margin-top: 10px;
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #111;
+  }
+}
+@media (max-width: 640px) {
+  .qr-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .qr-img { width: 80px; height: 80px; }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends "inventory/base.html" %}
+{% block title %}Transaction History - Warehouse{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2>Transaction History</h2>
+        <a href="{% url 'export_transactions_csv' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-download me-1"></i> Export CSV
+        </a>
+    </div>
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">Filters</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-3">
+                    <label for="id_type" class="form-label">Transaction Type</label>
+                    <select name="type" id="id_type" class="form-select form-select-sm">
+                        <option value="">All Types</option>
+                        {% for value, label in tx_types %}
+                        <option value="{{ value }}" {% if tx_type == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_item" class="form-label">Item</label>
+                    <select name="item" id="id_item" class="form-select form-select-sm">
+                        <option value="">All Items</option>
+                        {% for item in all_items %}
+                        <option value="{{ item.pk }}" {% if item_id == item.pk|stringformat:"s" %}selected{% endif %}>{{ item.name }} ({{ item.part_number }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="id_user" class="form-label">User</label>
+                    <select name="user" id="id_user" class="form-select form-select-sm">
+                        <option value="">All Users</option>
+                        {% for user in all_users %}
+                        <option value="{{ user.pk }}" {% if user_id == user.pk|stringformat:"s" %}selected{% endif %}>{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="id_date_from" class="form-label">Date From</label>
+                    <input type="date" name="date_from" id="id_date_from" class="form-control form-control-sm" value="{{ date_from }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="id_date_to" class="form-label">Date To</label>
+                    <input type="date" name="date_to" id="id_date_to" class="form-control form-control-sm" value="{{ date_to }}">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+                    <a href="{% url 'transaction_history' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Transaction Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Transactions ({{ page_obj.paginator.count }} total)</h5>
+        </div>
+        <div class="card-body p-0">
+            {% if page_obj.object_list %}
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date/Time</th>
+                            <th>Type</th>
+                            <th>Item</th>
+                            <th>Qty Δ</th>
+                            <th>User</th>
+                            <th>Pick Ticket</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in page_obj %}
+                        <tr>
+                            <td class="text-nowrap">{{ tx.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <span class="tx-type-badge tx-type-{{ tx.transaction_type|lower }}">
+                                    {{ tx.get_transaction_type_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if tx.item %}
+                                <a href="{% url 'item_transaction_history' tx.item.pk %}">{{ tx.item.name }}</a>
+                                <br><small class="text-muted">{{ tx.item.part_number }}</small>
+                                {% else %}—{% endif %}
+                            </td>
+                            <td class="{% if tx.quantity_delta < 0 %}text-danger{% elif tx.quantity_delta > 0 %}text-success{% endif %} fw-bold">
+                                {{ tx.quantity_delta|default_if_none:"0"|yesno:"+,-" }}
+                            </td>
+                            <td>{{ tx.created_by.username|default:"System" }}</td>
+                            <td>{% if tx.pick_ticket %}<a href="{% url 'ticket_detail' tx.pick_ticket.pk %}">{{ tx.pick_ticket.ticket_number }}</a>{% else %}—{% endif %}</td>
+                            <td>{{ tx.notes|default:"—"|truncatechars:50 }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- Pagination -->
+            {% if page_obj.paginator.num_pages > 1 %}
+            <div class="card-footer">
+                <nav aria-label="Transaction history pagination">
+                    <ul class="pagination pagination-sm justify-content-center mb-0">
+                        {% if page_obj.has_previous %}
+                        <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.previous_page_number }}">Previous</a></li>
+                        {% endif %}
+                        {% for num in page_obj.paginator.page_range %}
+                            {% if page_obj.number == num %}
+                            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                            {% elif num > page_obj.number|add:-3 and num < page_obj.number|add:3 %}
+                            <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ num }}">{{ num }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if page_obj.has_next %}
+                        <li class="page-item"><a class="page-link" href="?{% for key, value in request.GET.items %}{% if key != 'page' %}{{ key }}={{ value }}&{% endif %}{% endfor %}page={{ page_obj.next_page_number }}">Next</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="text-center py-5 text-muted">No transactions found.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<style>
+.tx-type-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .02em;
+  border: 1px solid transparent;
+}
+.tx-type-pick { background: rgba(248, 113, 113, .18); color: #fecaca; border-color: rgba(248, 113, 113, .55); }
+.tx-type-receipt { background: rgba(74, 222, 128, .18); color: #bbf7d0; border-color: rgba(74, 222, 128, .55); }
+.tx-type-adjustment { background: rgba(250, 204, 21, .18); color: #fde68a; border-color: rgba(250, 204, 21, .6); }
+.tx-type-import { background: rgba(96, 165, 250, .18); color: #bfdbfe; border-color: rgba(96, 165, 250, .55); }
+</style>
+{% endblock %}

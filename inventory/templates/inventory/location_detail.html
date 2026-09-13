@@ -1,0 +1,124 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Location: {{ location_key }}{% endblock %}
+{% block content %}
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <a href="{% url 'location_list' %}" class="btn btn-sm btn-outline-secondary mb-2">&larr; All Locations</a>
+    <h1 class="mb-0">📍 {{ location_key }}</h1>
+    <small class="text-muted">
+      {% if parsed.rack %}Rack {{ parsed.rack }}, Section {{ parsed.section }}, Bin {{ parsed.bin_location }}{% else %}Standalone: {{ parsed.bin_location }}{% endif %}
+      &middot; {{ items|length }} item{{ items|length|pluralize }}
+    </small>
+  </div>
+  <div>
+    {% if is_lead %}
+    <a href="{% url 'location_add_item' location_key=location_key %}" class="btn btn-success">
+      + Add Item
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-3">
+        <strong>Items at {{ location_key }}</strong>
+      </div>
+      <div class="card-body">
+        {% if items %}
+        <div class="table-responsive">
+          <table class="table table-hover table-sm">
+            <thead>
+              <tr>
+                <th>Part #</th>
+                <th>Name</th>
+                <th>Qty</th>
+                <th>UOM</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in items %}
+              <tr>
+                <td><a href="{% url 'item_detail' pk=item.pk %}">{{ item.part_number }}</a></td>
+                <td>{{ item.name|truncatechars:40 }}</td>
+                <td>{{ item.quantity_on_hand }}</td>
+                <td>{{ item.uom }}</td>
+                <td>
+                  <a href="{% url 'item_detail' pk=item.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                  {% if is_lead %}
+                  <form method="POST" action="{% url 'location_remove_item' location_key=location_key item_pk=item.pk %}"
+                        style="display:inline" onsubmit="return confirm('Remove {{ item.part_number }} from {{ location_key }}?')">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="empty-state">
+          <p>No items currently assigned to {{ location_key }}.</p>
+          {% if is_lead %}
+          <a href="{% url 'location_add_item' location_key=location_key %}" class="btn btn-success">+ Add Item</a>
+          {% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><strong>Location QR Code</strong></div>
+      <div class="card-body text-center">
+        {% with ''|center:1 as range %}
+        {% endwith %}
+        <img src="data:image/png;base64,{{ qr_b64 }}" alt="QR for {{ location_key }}" style="width: 200px; height: 200px; image-rendering: pixelated;" id="location-qr-image">
+        <p><a href="{{ qr_url }}">Open this location inventory</a></p>
+        <small>Scan to open this location and its current inventory</small>
+        <p class="mt-2 mb-0">
+          <code>LOC:{{ location_key }}</code>
+          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="printLocationQR()">🖨️ Print</button>
+        </p>
+        <p class="text-muted small">Scan with any QR scanner to view this location's items.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not is_lead %}
+<div class="alert alert-info mt-3">
+  Only Lead and Manager roles can add or remove items from locations. Contact a supervisor to make changes.
+</div>
+{% endif %}
+
+<script>
+function printLocationQR() {
+  const img = document.getElementById('location-qr-image');
+  const win = window.open('', '', 'width=400,height=400');
+  win.document.write(`<html><head><title>QR: {{ location_key }}</title></head><body style="text-align:center;padding:20px">`);
+  win.document.write(`<p style="font-size:18px;font-weight:bold">{{ location_key }}</p>`);
+  win.document.write(img.outerHTML);
+  win.document.write(`<p style="font-size:12px;color:#666">LOC:{{ location_key }}</p>`);
+  win.document.write('</body></html>');
+  win.document.close();
+  win.print();
+}
+</script>
+
+<style>
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6c757d;
+}
+</style>
+{% endblock %}

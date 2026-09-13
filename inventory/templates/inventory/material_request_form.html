@@ -1,0 +1,135 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}{% if mode == 'edit' %}Edit {{ material_request.request_number }}{% else %}New Material Request{% endif %} · Black Box{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>{% if mode == 'edit' %}Edit {{ material_request.request_number }}{% else %}New material request{% endif %}</h1>
+    <div class="meta">Browse live inventory and build the request without leaving this page.</div>
+  </div>
+</section>
+
+<form method="post" id="material-request-form" class="request-workspace" data-material-request-draft="{{ mode }}" data-has-errors="{% if has_form_errors %}true{% else %}false{% endif %}">
+  {% csrf_token %}
+  <section class="card request-builder" aria-labelledby="request-details-heading">
+    <div class="section-heading">
+      <div><span class="step-number">1</span><h2 id="request-details-heading">Request details</h2></div>
+      {% if mode == 'create' %}<button type="button" class="btn secondary sm" id="clear-request-draft">Start over</button>{% endif %}
+    </div>
+    {{ form.non_field_errors }}
+    <p class="helptext request-optional-note">Requestor and destination details are optional. A delivery date and time are required.</p>
+    <div class="form-row request-detail-fields">
+      {% for field in form %}
+        {% if field.name != 'delivery_at' and field.name != 'urgent' %}
+        <div class="form-group">
+          <label for="{{ field.id_for_label }}">{{ field.label }} <span class="optional-label">Optional</span></label>
+          {{ field }}{{ field.errors }}
+          {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <div class="urgent-request-control">
+      {{ form.urgent }}
+      <label for="{{ form.urgent.id_for_label }}"><strong>Urgent request</strong><span>Flag this request for immediate warehouse attention.</span></label>
+      {{ form.urgent.errors }}
+    </div>
+
+    <div class="delivery-schedule-block">
+      <div class="delivery-schedule-icon" aria-hidden="true">◷</div>
+      <div class="delivery-schedule-copy">
+        <label for="id_delivery_at_0">Delivery date &amp; time <span class="required-label">Required</span></label>
+        <span class="helptext">Choose a date and an available 15-minute delivery slot. Two requests cannot share the same slot.</span>
+      </div>
+      <div class="delivery-schedule-control">{{ form.delivery_at }}{{ form.delivery_at.errors }}</div>
+    </div>
+
+    <div class="section-heading material-lines-heading">
+      <div><span class="step-number">2</span><h2>Requested material</h2></div>
+      <span class="draft-status" id="request-draft-status" aria-live="polite"></span>
+    </div>
+    {{ formset.management_form }}{{ formset.non_form_errors }}
+    <div class="table-responsive request-lines-table">
+      <table>
+        <thead><tr><th>Item</th><th>Quantity</th><th>Line notes</th><th><span class="sr-only">Remove</span></th></tr></thead>
+        <tbody id="request-lines-body">
+          {% for line_form in formset %}
+          <tr class="request-line" data-line-index="{{ forloop.counter0 }}">
+            <td>{{ line_form.id }}{{ line_form.item }}{{ line_form.item.errors }}</td>
+            <td>{{ line_form.quantity }}{{ line_form.quantity.errors }}</td>
+            <td>{{ line_form.notes }}{{ line_form.notes.errors }}</td>
+            <td class="line-remove-cell"><span class="delete-field">{{ line_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <template id="empty-request-line">
+      <tr class="request-line" data-line-index="__prefix__">
+        <td>{{ formset.empty_form.id }}{{ formset.empty_form.item }}{{ formset.empty_form.item.errors }}</td>
+        <td>{{ formset.empty_form.quantity }}{{ formset.empty_form.quantity.errors }}</td>
+        <td>{{ formset.empty_form.notes }}{{ formset.empty_form.notes.errors }}</td>
+        <td class="line-remove-cell"><span class="delete-field">{{ formset.empty_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></td>
+      </tr>
+    </template>
+    <button type="button" class="btn secondary sm" id="add-request-line">+ Add blank line</button>
+
+    <div class="actions request-submit-actions">
+      <button class="btn" type="submit">{% if mode == 'edit' %}Save and synchronize{% else %}Submit request{% endif %}</button>
+      <a class="btn secondary" href="{% url 'material_request_board' %}">Cancel</a>
+    </div>
+  </section>
+
+  <aside class="card inventory-picker" id="inventory-picker" aria-labelledby="inventory-picker-heading">
+    <div class="inventory-picker-sticky">
+      <div class="section-heading inventory-picker-title">
+        <div><span class="step-number">3</span><h2 id="inventory-picker-heading">Choose from inventory</h2></div>
+        <div class="inventory-picker-actions"><span class="inventory-result-count" id="inventory-result-count">{{ inventory_items|length }} items</span><button type="button" class="btn secondary sm" id="open-inventory-browser">Browse full inventory</button></div>
+      </div>
+      <label for="inventory-search">Search inventory</label>
+      <input type="search" id="inventory-search" placeholder="Part #, FB Part #, description, category, or location" autocomplete="off">
+      <p class="helptext">Select an item and it is added to your request immediately. Your form is saved in this browser while you work.</p>
+      <div class="inventory-picker-list" id="inventory-picker-list">
+        {% for item in inventory_items %}
+        <article class="inventory-picker-item" data-item-id="{{ item.pk }}" data-category="{{ item.category }}" data-search="{{ item.part_number|lower }} {{ item.fb_part_number|lower }} {{ item.model_number|lower }} {{ item.name|lower }} {{ item.description|lower }} {{ item.category|lower }} {{ item.building_room|lower }} {{ item.rack|lower }} {{ item.section|lower }} {{ item.bin_location|lower }}">
+          <div class="inventory-item-main">
+            <strong>{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</strong>
+            <span>{{ item.name }}</span>
+            <small>{{ item.category|default:"Uncategorized" }}{% if item.building_room %} · {{ item.building_room }}{% endif %}{% if item.storage_location %} · {{ item.storage_location }}{% endif %}</small>
+          </div>
+          <div class="inventory-item-action">
+            <span class="stock-amount{% if item.quantity_on_hand <= item.low_stock_threshold %} low{% endif %}">{{ item.quantity_on_hand }} {{ item.unit }}</span>
+            <button type="button" class="btn sm add-inventory-item" data-item-id="{{ item.pk }}">Add</button>
+          </div>
+        </article>
+        {% empty %}
+        <div class="empty-state"><strong>No active inventory</strong><p>Ask a warehouse administrator to add inventory items.</p></div>
+        {% endfor %}
+        <div class="empty-state" id="inventory-no-results" hidden><strong>No matching inventory</strong><p>Try a part number, description, category, or location.</p></div>
+      </div>
+    </div>
+  </aside>
+
+  <dialog id="inventory-browser-dialog" class="inventory-browser-dialog" aria-labelledby="inventory-browser-title">
+    <div class="inventory-browser-shell">
+      <header class="inventory-browser-header">
+        <div><span class="eyebrow">Material request</span><h2 id="inventory-browser-title">Browse full inventory</h2><p>Search or choose a section, then add as many items as needed.</p></div>
+        <button type="button" class="icon-button inventory-browser-close" aria-label="Close inventory browser">×</button>
+      </header>
+      <div class="inventory-browser-controls">
+        <label for="inventory-modal-search">Search all inventory</label>
+        <input type="search" id="inventory-modal-search" placeholder="Part #, FB Part #, description, category, or location" autocomplete="off">
+        <div class="inventory-category-filters" role="group" aria-label="Inventory sections">
+          <button type="button" class="category-filter active" data-category-filter="">All</button>
+          {% for value, label in category_choices %}<button type="button" class="category-filter" data-category-filter="{{ value }}">{{ label }}</button>{% endfor %}
+        </div>
+        <div class="inventory-browser-count" id="inventory-modal-result-count">{{ inventory_items|length }} items</div>
+      </div>
+      <div class="inventory-browser-list" id="inventory-modal-list"></div>
+      <div class="empty-state" id="inventory-modal-no-results" hidden><strong>No matching inventory</strong><p>Choose another section or change your search.</p></div>
+    </div>
+  </dialog>
+</form>
+<script src="{% static 'inventory/js/material-request-form.js' %}" defer></script>
+{% endblock %}

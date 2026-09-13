@@ -1,0 +1,119 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Add Item to {{ location_key }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <a href="{% url 'location_detail' location_key=location_key %}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Back to {{ location_key }}</a>
+  <h1>➕ Add Item to {{ location_key }}</h1>
+</div>
+
+<div class="row mt-3">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header"><strong>Search and assign an item</strong></div>
+      <div class="card-body">
+        <form method="POST" id="add-item-form">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label for="item-search" class="form-label">Search Item</label>
+            <input
+              type="text"
+              id="item-search"
+              class="form-control"
+              placeholder="Type at least 3 characters (part # or name)..."
+              autocomplete="off"
+            >
+            <input type="hidden" name="item_id" id="selected-item-id">
+            <div class="form-text">Type 3+ characters to search. Select an item, then click Assign.</div>
+          </div>
+
+          <div id="search-results" class="list-group mb-3" style="max-height: 400px; overflow-y: auto;"></div>
+
+          <div id="selected-display" class="alert alert-success d-none mb-3">
+            ✅ Selected: <strong id="selected-label"></strong>
+          </div>
+
+          <button type="submit" id="submit-btn" class="btn btn-success" disabled>Assign to {{ location_key }}</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not assignable_items %}
+<div class="alert alert-info mt-3">
+  All active items are already assigned to {{ location_key }}.
+  <a href="{% url 'location_detail' location_key=location_key %}" class="alert-link">Return to location</a>
+</div>
+{% endif %}
+
+<script>
+(function() {
+  const searchInput = document.getElementById('item-search');
+  const resultsContainer = document.getElementById('search-results');
+  const selectedId = document.getElementById('selected-item-id');
+  const selectedDisplay = document.getElementById('selected-display');
+  const selectedLabel = document.getElementById('selected-label');
+  const submitBtn = document.getElementById('submit-btn');
+  let debounceTimer = null;
+
+  searchInput.addEventListener('input', function() {
+    clearTimeout(debounceTimer);
+    const q = this.value.trim();
+
+    selectedId.value = '';
+    selectedDisplay.classList.add('d-none');
+    submitBtn.disabled = true;
+
+    if (q.length < 3) {
+      resultsContainer.innerHTML = '';
+      return;
+    }
+
+    debounceTimer = setTimeout(function() {
+      fetch('/item-search-api/?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          resultsContainer.innerHTML = '';
+          if (!data.results || data.results.length === 0) {
+            resultsContainer.innerHTML = '<div class="list-group-item text-muted">No items found.</div>';
+            return;
+          }
+          data.results.forEach(function(item) {
+            const div = document.createElement('button');
+            div.type = 'button';
+            div.className = 'list-group-item list-group-item-action text-start';
+            div.innerHTML = '<strong>' + escapeHtml(item.part_number) + '</strong> &mdash; ' +
+              escapeHtml(item.name) + '<br><small class="text-muted">Qty: ' +
+              item.quantity_on_hand + ' | Loc: ' + (item.storage_location || '—') + '</small>';
+            div.dataset.id = item.id;
+            div.dataset.label = item.part_number + ' — ' + item.name;
+            div.addEventListener('click', function() {
+              selectItem(this.dataset.id, this.dataset.label);
+            });
+            resultsContainer.appendChild(div);
+          });
+        })
+        .catch(function() {
+          resultsContainer.innerHTML = '<div class="list-group-item text-danger">Search failed. Try again.</div>';
+        });
+    }, 250);
+  });
+
+  function selectItem(id, label) {
+    selectedId.value = id;
+    selectedLabel.textContent = label;
+    selectedDisplay.classList.remove('d-none');
+    submitBtn.disabled = false;
+    resultsContainer.innerHTML = '';
+    searchInput.value = label;
+  }
+
+  function escapeHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+})();
+</script>
+{% endblock %}

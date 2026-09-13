@@ -1,0 +1,13 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<div class="card">
+  <h1>Receive Stock: {{ item.name }}</h1>
+  <p><strong>Current quantity:</strong> {{ item.quantity_on_hand }}</p>
+  <form method="post">
+    {% csrf_token %}
+    <label>Quantity received</label><input name="quantity" type="number" min="1" required autofocus>
+    <label>Notes</label><textarea name="notes" rows="3"></textarea>
+    <div class="actions"><button class="btn" type="submit">Receive</button><a class="btn light" href="{% url 'inventory_list' %}">Cancel</a></div>
+  </form>
+</div>
+{% endblock %}

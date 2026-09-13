@@ -1,0 +1,87 @@
+{% load static %}
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0b0c0e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="{% if is_request_portal %}BBX Requests{% else %}BBX WMS{% endif %}">
+  <title>{% block title %}Black Box Warehouse{% endblock %}</title>
+  <script>try{const t=localStorage.getItem('bbx-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')}catch(e){}</script>
+  <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'inventory/css/notification-center.css' %}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{% static 'inventory/icons/apple-touch-icon.png' %}">
+</head>
+<body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
+<header class="site-header">
+  <a class="brand" href="{% url 'dashboard' %}" aria-label="Black Box Warehouse home">
+    <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">
+    <span>{% if request.is_request_portal %}Material Requests{% else %}Warehouse{% endif %}</span>
+  </a>
+  {% if user.is_authenticated %}
+  <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle>
+    <span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+    <span data-mobile-nav-label>Menu</span>
+  </button>
+  <nav id="site-nav" class="site-nav" aria-label="Main navigation" data-mobile-nav-panel>
+    <div class="mobile-nav-head">
+      <div><strong>Menu</strong><small>Warehouse navigation</small></div>
+      <button type="button" class="mobile-nav-close" aria-label="Close navigation menu" data-mobile-nav-close>&times;</button>
+    </div>
+    {% if request.is_request_portal %}
+      <a href="{% url 'material_request_board' %}">Request Board</a>
+      {% if perms.inventory.view_inventoryitem %}<a href="{% url 'inventory_list' %}">Inventory</a>{% endif %}
+      {% if perms.inventory.add_materialrequest %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
+    {% else %}
+      <a href="{% url 'inventory_list' %}">Inventory</a>
+      {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
+      {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
+      {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}">Receiving</a>{% endif %}
+      {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
+      <a href="{% url 'location_list' %}">Locations</a>
+      {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
+      {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<a href="{% url 'settings' %}">Settings</a>{% endif %}
+    {% endif %}
+    <div class="mobile-nav-account">
+      <span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span>
+      <form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form>
+    </div>
+  </nav>
+  <button type="button" class="nav-backdrop" aria-label="Close navigation menu" tabindex="-1" data-mobile-nav-backdrop></button>
+  <div class="header-controls">
+    <span class="user-info">{{ user.get_full_name|default:user.username }}</span>
+    <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app">⇩</button>
+    <div class="notification-center" data-notification-center>
+      <button class="icon-button notification-toggle" type="button" data-notification-toggle aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications">
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="notification-count" data-notification-count hidden>0</span>
+      </button>
+      <section id="notification-panel" class="notification-panel" data-notification-panel hidden aria-label="Notifications">
+        <header><strong>Notifications</strong><button type="button" class="link-button" data-notification-clear>Clear all</button></header>
+        <ul class="notification-list" data-notification-list>
+          {% for message in messages %}<li class="notification-item {{ message.tags }}" data-initial-notification data-popup-message="{{ message }}"><span>{{ message }}</span><time>Now</time></li>{% empty %}<li class="notification-empty" data-notification-empty>No notifications yet.</li>{% endfor %}
+        </ul>
+        {% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}
+        <footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>
+        {% endif %}
+      </section>
+    </div>
+    <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+    <form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary sm" type="submit">Logout</button></form>
+  </div>
+  {% endif %}
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+<div id="toast-region" class="toast-region no-print" aria-live="polite" aria-atomic="true"></div>
+<script src="{% static 'inventory/js/app.js' %}" defer></script>
+<script src="{% static 'inventory/js/pwa.js' %}" defer></script>
+{% if user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% static 'inventory/js/push.js' %}" defer></script>{% endif %}
+</body>
+</html>

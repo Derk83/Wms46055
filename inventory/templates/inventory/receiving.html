@@ -1,0 +1,206 @@
+{% extends "inventory/base.html" %}
+{% block title %}Receiving - Warehouse{% endblock %}
+{% block content %}
+<style>
+  .receiving-shell { display:grid; gap:18px; }
+  .receiving-hero { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; }
+  .receiving-hero h1 { margin:0; }
+  .receiving-hero p { margin:5px 0 0; color:var(--muted); }
+  .ticket-summary { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .summary-pill { padding:8px 12px; border:1px solid var(--border); border-radius:999px; background:rgba(255,255,255,.04); font-size:13px; }
+  .summary-pill strong { color:#fff; }
+  .receiving-workspace { display:grid; grid-template-columns:minmax(0, 1.45fr) minmax(310px, .75fr); gap:18px; align-items:start; }
+  .receiving-card { margin:0; }
+  .receiving-card .card-header h2 { margin:0; font-size:21px; }
+  .step-label { color:#ff7277; font-size:11px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; }
+  .receive-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 16px; }
+  .receive-grid .form-group { min-width:0; }
+  .receive-grid label { margin:0 0 5px; font-size:13px; }
+  .receive-grid input, .receive-grid select, .receive-grid textarea { padding:10px 12px; }
+  .span-2 { grid-column:1 / -1; }
+  .location-panel { grid-column:1 / -1; padding:13px; border:1px solid var(--border-strong); border-radius:var(--radius-md); background:var(--accent-soft); }
+  .location-panel h3 { margin:0 0 2px; font-size:15px; }
+  .location-panel p { margin:0 0 10px; color:var(--muted); font-size:12px; }
+  .location-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .form-errors { grid-column:1 / -1; padding:11px 13px; border-radius:10px; background:rgba(239,106,91,.14); border:1px solid rgba(239,106,91,.35); color:#ffd0cb; }
+  .form-errors ul { margin:0; padding-left:20px; }
+  .ticket-items { display:grid; gap:10px; }
+  .ticket-line { padding:12px; border:1px solid var(--border); border-radius:12px; background:rgba(255,255,255,.035); }
+  .ticket-line-top { display:flex; justify-content:space-between; gap:10px; }
+  .ticket-line strong { color:#fff; }
+  .ticket-line-meta { margin-top:4px; color:var(--muted); font-size:12px; }
+  .ticket-line .location { color:#ff8589; font-weight:850; }
+  .compact-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .compact-actions form { margin:0; }
+  .secondary-grid { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); gap:18px; }
+  details.receiving-card summary { cursor:pointer; font-weight:850; color:#fff; }
+  details.receiving-card[open] summary { margin-bottom:16px; }
+  .recent-table th, .recent-table td { padding:10px 12px; }
+  @media (max-width:980px) { .receiving-workspace,.secondary-grid { grid-template-columns:1fr; } }
+  @media (max-width:620px) { .receive-grid { grid-template-columns:1fr; } .span-2,.location-panel { grid-column:1; } .location-grid { grid-template-columns:repeat(3,minmax(0,1fr)); } .location-grid select { padding:10px 5px; } }
+</style>
+
+<div class="receiving-shell">
+  <div class="receiving-hero page-header">
+    <div>
+      <div class="step-label">Warehouse intake</div>
+      <h1>Receiving</h1>
+      <p>Create a ticket, assign a destination, and receive material in one clear workflow.</p>
+    </div>
+    <div class="actions" style="margin:0;">
+      <a href="{% url 'receiving_log' %}" class="btn secondary">Receiving Log</a>
+      <a href="{% url 'export_center' %}" class="btn light">Export Inventory</a>
+    </div>
+  </div>
+
+  {% if active_ticket %}
+    <div class="card receiving-card">
+      <div class="receiving-hero">
+        <div>
+          <div class="step-label">Active ticket</div>
+          <h2 style="margin:3px 0 0;">{{ active_ticket.ticket_number }}</h2>
+        </div>
+        <div class="ticket-summary">
+          <span class="summary-pill">PO: <strong>{{ active_ticket.po_number|default:"Not entered" }}</strong></span>
+          <span class="summary-pill">Vendor: <strong>{{ active_ticket.vendor|default:"Not entered" }}</strong></span>
+          <span class="summary-pill">Lines: <strong>{{ ticket_lines|length }}</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="receiving-workspace">
+      <section class="card receiving-card">
+        <div class="card-header">
+          <div><div class="step-label">Step 2</div><h2>Receive an Item</h2></div>
+        </div>
+        <form method="post" enctype="multipart/form-data" class="receive-grid" id="receive-item-form">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_line">
+          {% if receiving_form.non_field_errors %}<div class="form-errors">{{ receiving_form.non_field_errors }}</div>{% endif %}
+
+          <div class="form-group span-2">
+            <label for="{{ receiving_form.item.id_for_label }}">Existing inventory item</label>
+            {{ receiving_form.item }}
+            {% for error in receiving_form.item.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+            <span class="helptext">Select an item, or leave blank to create a new one below.</span>
+          </div>
+          <div class="form-group">
+            <label for="{{ receiving_form.part_number.id_for_label }}">New Part Number</label>
+            {{ receiving_form.part_number }}
+            {% for error in receiving_form.part_number.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+          </div>
+          <div class="form-group">
+            <label for="{{ receiving_form.name.id_for_label }}">New Item Name</label>
+            {{ receiving_form.name }}
+            {% for error in receiving_form.name.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+          </div>
+          <div class="form-group">
+            <label for="{{ receiving_form.quantity.id_for_label }}">Quantity Received</label>
+            {{ receiving_form.quantity }}
+            {% for error in receiving_form.quantity.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}
+          </div>
+          <div class="form-group">
+            <label for="{{ receiving_form.shipper.id_for_label }}">Shipper</label>
+            {{ receiving_form.shipper }}
+          </div>
+
+          <div class="location-panel">
+            <h3>Destination Location</h3>
+            <p>Choose where this incoming material will be stored. New items require all three fields.</p>
+            <div class="location-grid">
+              <div class="form-group"><label for="{{ receiving_form.rack.id_for_label }}">Rack</label>{{ receiving_form.rack }}</div>
+              <div class="form-group"><label for="{{ receiving_form.section.id_for_label }}">Section</label>{{ receiving_form.section }}</div>
+              <div class="form-group"><label for="{{ receiving_form.bin_location.id_for_label }}">Bin</label>{{ receiving_form.bin_location }}</div>
+            </div>
+            {% for field in receiving_form %}{% if field.name == 'rack' or field.name == 'section' or field.name == 'bin_location' %}{% for error in field.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}{% endif %}{% endfor %}
+          </div>
+
+          <div class="form-group">
+            <label for="{{ receiving_form.po_number.id_for_label }}">PO Number</label>
+            {{ receiving_form.po_number }}
+          </div>
+          <div class="form-group">
+            <label for="{{ receiving_form.document.id_for_label }}">Delivery Document</label>
+            {{ receiving_form.document }}
+            {{ receiving_form.source }}
+          </div>
+          <div class="form-group span-2">
+            <label for="{{ receiving_form.notes.id_for_label }}">Notes</label>
+            {{ receiving_form.notes }}
+          </div>
+          <div class="span-2 compact-actions">
+            <button type="submit" class="btn">Add Item to Ticket</button>
+            <label style="margin:0; display:flex; align-items:center; gap:7px; font-weight:650;"><input type="checkbox" id="camera-source" style="width:auto;"> Use phone camera</label>
+          </div>
+        </form>
+      </section>
+
+      <aside class="card receiving-card">
+        <div class="card-header">
+          <div><div class="step-label">Current ticket</div><h2>Items on Ticket</h2></div>
+          <span class="badge status-open">{{ ticket_lines|length }} line{{ ticket_lines|length|pluralize }}</span>
+        </div>
+        {% if ticket_lines %}
+          <div class="ticket-items">
+            {% for line in ticket_lines %}
+              <div class="ticket-line">
+                <div class="ticket-line-top"><strong>{{ line.item.part_number }}</strong><strong>× {{ line.quantity }}</strong></div>
+                <div>{{ line.item.name }}</div>
+                <div class="ticket-line-meta"><span class="location">{{ line.item.storage_location|default:"No location" }}</span>{% if line.shipper %} · {{ line.shipper }}{% endif %}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state" style="padding:30px 12px;">No items added yet.</div>
+        {% endif %}
+        <div class="compact-actions">
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="finalize_ticket"><button type="submit" class="btn">Finalize & Print</button></form>
+          <a href="{% url 'receiving_ticket_print' active_ticket.pk %}" class="btn secondary" target="_blank">Preview</a>
+          <form method="post">{% csrf_token %}<input type="hidden" name="action" value="discard_ticket"><button type="submit" class="btn light" onclick="return confirm('Discard this ticket and reverse its received quantities?')">Discard</button></form>
+        </div>
+      </aside>
+    </div>
+  {% else %}
+    <section class="card receiving-card">
+      <div class="card-header"><div><div class="step-label">Step 1</div><h2>Start a Receiving Ticket</h2></div></div>
+      <form method="post" class="receive-grid">
+        {% csrf_token %}<input type="hidden" name="action" value="create_receiving_ticket">
+        {% if ticket_form.non_field_errors %}<div class="form-errors">{{ ticket_form.non_field_errors }}</div>{% endif %}
+        {% for field in ticket_form %}
+          <div class="form-group{% if field.name == 'notes' %} span-2{% endif %}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<span class="text-danger small">{{ error }}</span>{% endfor %}</div>
+        {% endfor %}
+        <div class="span-2"><button type="submit" class="btn">Create Ticket & Continue</button></div>
+      </form>
+    </section>
+  {% endif %}
+
+  <div class="secondary-grid">
+    <details class="card receiving-card">
+      <summary>Bulk Receive from Spreadsheet</summary>
+      <p class="helptext">Upload an .xlsx file containing Part # (or SKU), Quantity, and optional Shipper and Notes columns.</p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}<input type="hidden" name="action" value="bulk_receive">
+        {% for field in bulk_form %}<div class="form-group"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}</div>{% endfor %}
+        <div class="compact-actions"><button type="submit" class="btn secondary">Upload & Receive</button></div>
+      </form>
+    </details>
+
+    <section class="card receiving-card">
+      <div class="card-header"><h2>Recent Tickets</h2><a href="{% url 'receiving_log' %}">View all</a></div>
+      {% if recent_tickets %}
+        <div class="table-responsive"><table class="recent-table"><thead><tr><th>Ticket</th><th>PO / Vendor</th><th>Items</th><th>Date</th></tr></thead><tbody>
+          {% for ticket in recent_tickets %}<tr><td><a href="{% url 'receiving_ticket_print' ticket.pk %}"><strong>{{ ticket.ticket_number }}</strong></a></td><td>{{ ticket.po_number|default:"—" }}{% if ticket.vendor %}<div class="small text-muted">{{ ticket.vendor }}</div>{% endif %}{% for line in ticket.lines.all %}{% if line.shipper %}<div class="small text-muted">Shipper: {{ line.shipper }}</div>{% endif %}{% endfor %}</td><td>{{ ticket.lines.count }}</td><td>{{ ticket.date|date:"M j, Y" }}</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% else %}<div class="empty-state" style="padding:25px;">No receiving tickets yet.</div>{% endif %}
+    </section>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const camera = document.getElementById('camera-source');
+  const source = document.querySelector('#receive-item-form input[name="source"]');
+  if (camera && source) camera.addEventListener('change', function () { source.value = camera.checked ? 'camera' : 'file'; });
+});
+</script>
+{% endblock %}

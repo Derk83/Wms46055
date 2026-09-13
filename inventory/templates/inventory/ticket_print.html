@@ -1,0 +1,162 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Black Box — Pick Ticket {{ ticket.ticket_number }}</title>
+<style>
+:root{--black:#111;--charcoal:#242424;--red:#e31e2b;--gray:#5f6368;--line:#aeb2b7;--paper:#fff;--canvas:#ececec;--soft:#f2f3f4;--sans:Arial,"Helvetica Neue",sans-serif;--mono:"Courier New",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--black);font-family:var(--sans)}
+.toolbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 18px;background:rgba(17,17,17,.97);border-bottom:3px solid var(--red);color:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border:1px solid #626262;border-radius:5px;background:#292929;color:#fff;text-decoration:none;font:700 12px var(--sans);cursor:pointer}
+.btn.print{border-color:var(--red);background:var(--red)}
+.status{margin-left:auto;color:#d4d4d4;font:11px var(--mono)}
+.preview{padding:22px;overflow:auto}
+.print-page{position:relative;display:block;width:11in;height:8.5in;margin:0 auto 22px;padding:.32in .38in .29in;background:var(--paper);box-shadow:0 10px 30px rgba(0,0,0,.14);page-break-after:always;overflow:hidden}
+.print-page:last-child{page-break-after:auto}
+.header{display:grid;grid-template-columns:1.7in 1fr auto;align-items:center;gap:.18in;padding-bottom:.10in;border-bottom:4px solid var(--red)}
+.logo{display:block;width:1.55in;height:auto}
+.document-name{padding-left:.18in;border-left:1px solid #bbb}
+.document-name strong{display:block;font-size:20px;line-height:1;text-transform:uppercase;letter-spacing:.04em}
+.document-name span{display:block;margin-top:4px;color:var(--gray);font:8px var(--mono);letter-spacing:.08em}
+.ticket-id{text-align:right}
+.ticket-id .label{color:var(--gray);font:7px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.ticket-id .value{margin-top:3px;font:700 18px var(--mono)}
+.page-note{margin-top:3px;color:var(--gray);font:700 7px var(--mono)}
+.page-number{display:inline-block;margin-top:5px;padding:3px 7px;border:1px solid var(--red);border-radius:3px;color:var(--black);font:700 8px var(--mono);letter-spacing:.04em;background:#fff}
+.summary{display:grid;grid-template-columns:.8fr 1.2fr 1.25fr 1.25fr;gap:.07in;margin-top:.12in}
+.info-box{min-height:.44in;padding:.05in .075in;border:1px solid var(--line);border-top:3px solid var(--charcoal);background:#fff}
+.info-box.accent{border-top-color:var(--red)}
+.label{color:var(--gray);font:700 6.8px var(--mono);letter-spacing:.075em;text-transform:uppercase}
+.value{margin-top:.035in;font-size:9.5px;font-weight:700;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}
+.schedule-strip{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:.07in;margin-top:.07in}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-top:.11in;padding:.045in .075in;background:var(--charcoal);border-left:5px solid var(--red);color:#fff;font:700 7.4px var(--mono);letter-spacing:.11em;text-transform:uppercase}
+.section-title span{color:#ddd;font-weight:400;letter-spacing:.04em}
+table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px}
+thead{display:table-header-group}
+th{padding:.05in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
+td{height:.22in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle;line-height:1.08;overflow-wrap:anywhere}
+tbody tr:nth-child(even) td{background:var(--soft)}
+tr{page-break-inside:avoid}
+.col-num{width:4%;text-align:center}.col-bin{width:15%}.col-part{width:18%}.col-description{width:auto}.col-qty{width:12%;text-align:center}
+.receipt{position:absolute;left:.38in;right:.38in;bottom:.30in;page-break-inside:avoid}
+.receipt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.07in}
+.receipt .info-box{min-height:.40in}
+.notes-box{min-height:.38in;margin-top:.04in;padding:.045in .075in;border:1px solid var(--line)}
+.sign-line{height:.12in;margin-top:.10in;border-bottom:1px solid #555}
+.footer{position:absolute;left:.38in;right:.38in;bottom:.12in;display:flex;justify-content:space-between;padding-top:.055in;border-top:1px solid #aaa;color:#555;font:7px var(--mono)}
+.footer-after-receipt{margin-top:0}
+.pdf-mode .footer{left:.29in;right:.29in;bottom:.08in}
+.pdf-mode .print-page{padding:.22in .29in .20in}.pdf-mode .header{padding-bottom:.06in}.pdf-mode .summary{margin-top:.07in}.pdf-mode .section-title{margin-top:.07in}.pdf-mode td{height:.20in}.pdf-mode .receipt{left:.29in;right:.29in;bottom:.25in}
+@media(max-width:760px){.toolbar{flex-wrap:wrap}.status{width:100%;margin-left:0}.preview{padding:8px}}
+@media print{@page{size:Letter landscape;margin:.24in}html,body{width:100%!important;height:auto!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none!important}.preview{width:100%!important;margin:0!important;padding:0!important}.print-page{width:100%!important;height:8.02in!important;margin:0!important;padding:.18in .24in!important;box-shadow:none!important;break-after:page;page-break-after:always}.receipt{left:.24in;right:.24in;bottom:.24in}.print-page:last-child{break-after:auto;page-break-after:auto}}
+</style>
+</head>
+<body class="{% if pdf_mode %}pdf-mode{% endif %}">
+{% if not pdf_mode %}
+<div class="toolbar">
+  <button type="button" class="btn print" onclick="backupAndPrint()">Download Backup &amp; Print</button>
+  <a class="btn" href="{% url 'ticket_detail' ticket.pk %}">Back to Ticket</a>
+  <span class="status" id="printStatus">The generated time will use this computer's clock.</span>
+</div>
+{% endif %}
+<main class="preview">
+{% for page in ticket_pages %}
+<section class="print-page">
+  <header class="header">
+    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">{% endif %}
+    <div class="document-name"><strong>Pick Ticket</strong><span>WAREHOUSE FULFILLMENT DOCUMENT</span></div>
+    <div class="ticket-id"><div class="label">Pick ticket number</div><div class="value">{{ ticket.ticket_number }}</div><div class="page-number">Page {{ page.number }} of {{ total_pages }}</div>{% if not page.is_first %}<div class="page-note">CONTINUED</div>{% endif %}</div>
+  </header>
+
+  {% if page.is_first %}
+  <div class="summary">
+    <div class="info-box accent"><div class="label">QA BY</div><div class="sign-line"></div></div>
+    <div class="info-box accent"><div class="label">PICKED BY</div><div class="value">{{ ticket.picked_by_name|default:" " }}</div></div>
+    <div class="info-box"><div class="label">POC (POINT OF CONTACT)</div><div class="value">{{ ticket.requested_by_name|default:" " }}</div></div>
+    <div class="info-box"><div class="label">DATE GENERATED AT PRINT</div><div class="value" data-client-generated-at>{% if generated_at_display %}{{ generated_at_display }}{% else %}{{ generated_at|date:"m/d/Y g:i:s A T" }}{% endif %}</div></div>
+  </div>
+  <div class="schedule-strip">
+    <div class="info-box"><div class="label">PICK TICKET #</div><div class="value">{{ ticket.ticket_number }}</div></div>
+    <div class="info-box accent"><div class="label">SCHEDULED DELIVERY</div><div class="value">{% if scheduled_delivery %}{{ scheduled_delivery|date:"m/d/Y g:i A" }}{% else %}Not scheduled{% endif %}</div></div>
+    <div class="info-box"><div class="label">DELIVERY LOCATION</div><div class="value">{{ delivery_location|default:" " }}</div></div>
+  </div>
+  {% else %}
+  <div class="schedule-strip">
+    <div class="info-box"><div class="label">PICK TICKET #</div><div class="value">{{ ticket.ticket_number }}</div></div>
+    <div class="info-box"><div class="label">DATE GENERATED AT PRINT</div><div class="value" data-client-generated-at>{% if generated_at_display %}{{ generated_at_display }}{% else %}{{ generated_at|date:"m/d/Y g:i:s A T" }}{% endif %}</div></div>
+    <div class="info-box"><div class="label">DELIVERY LOCATION</div><div class="value">{{ delivery_location|default:" " }}</div></div>
+  </div>
+  {% endif %}
+
+  <div class="section-title">ITEMS TO PICK <span>{{ ticket.lines.count }} line{{ ticket.lines.count|pluralize }}</span></div>
+  <table>
+    <thead><tr><th class="col-num">#</th><th class="col-bin">BIN LOCATION</th><th class="col-part">PART #</th><th class="col-description">ITEM DESCRIPTION</th><th class="col-qty">QTY REQUESTED</th><th class="col-qty">QTY FILLED</th></tr></thead>
+    <tbody>
+    {% for row in page.rows %}
+      <tr><td class="col-num">{{ row.number }}</td><td>{{ row.line.item.storage_location|default:"" }}</td><td>{{ row.line.item.part_number }}</td><td>{{ row.line.item.name }}</td><td class="col-qty">{{ row.line.quantity }}</td><td class="col-qty"></td></tr>
+    {% empty %}
+      <tr><td class="col-num">1</td><td></td><td></td><td></td><td class="col-qty"></td><td class="col-qty"></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  {% if page.is_last %}
+  <section class="receipt">
+    <div class="section-title">DELIVERY / RECEIPT CONFIRMATION</div>
+    <div class="receipt-grid">
+      <div class="info-box"><div class="label">PRINT NAME</div><div class="value">{{ ticket.received_by_name|default:" " }}</div></div>
+      <div class="info-box"><div class="label">RECEIVER SIGNATURE</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">RECEIVED DATE / TIME</div><div class="sign-line"></div></div>
+    </div>
+    <div class="notes-box"><div class="label">DELIVERY / RECEIPT NOTES</div><div class="value">{{ ticket.notes|default:" " }}</div></div>
+  </section>
+  {% endif %}
+  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Pick Ticket · Retain the downloaded PDF for records</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+</section>
+{% endfor %}
+</main>
+{% if not pdf_mode %}
+<script>
+let backupStarted = false;
+let generatedAtForPrint = '';
+function computerGeneratedTime() {
+  return new Intl.DateTimeFormat(undefined, {
+    month: '2-digit', day: '2-digit', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', second: '2-digit', timeZoneName: 'short'
+  }).format(new Date());
+}
+function updateGeneratedAt() {
+  generatedAtForPrint = computerGeneratedTime();
+  document.querySelectorAll('[data-client-generated-at]').forEach((node) => {
+    node.textContent = generatedAtForPrint;
+  });
+  return generatedAtForPrint;
+}
+function downloadLocalBackup() {
+  if (backupStarted) return;
+  backupStarted = true;
+  const localTime = updateGeneratedAt();
+  const link = document.createElement('a');
+  const baseUrl = '{% url "ticket_print_pdf" ticket.pk %}';
+  link.href = `${baseUrl}?generated_at=${encodeURIComponent(localTime)}`;
+  link.download = 'Black_Box_Pick_Ticket_{{ ticket.ticket_number }}.pdf';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+function backupAndPrint() {
+  const status = document.getElementById('printStatus');
+  updateGeneratedAt();
+  downloadLocalBackup();
+  if (status) status.textContent = 'PDF backup downloaded. Opening print dialog…';
+  setTimeout(() => { window.focus(); updateGeneratedAt(); window.print(); }, 450);
+}
+updateGeneratedAt();
+window.addEventListener('beforeprint', () => { updateGeneratedAt(); downloadLocalBackup(); });
+</script>
+{% endif %}
+</body>
+</html>

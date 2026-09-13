@@ -1,0 +1,10 @@
+{% extends "inventory/base.html" %}
+{% block title %}Sign in · Black Box{% endblock %}
+{% block content %}
+<div class="card" style="max-width:440px;margin:7vh auto">
+  <h1>Welcome back</h1>
+  <p class="text-muted">Sign in to {% if request.is_request_portal %}submit and track material requests{% else %}Black Box Warehouse{% endif %}.</p>
+  {% if form.errors %}<div class="messages"><li class="error">The username or password was not recognized.</li></div>{% endif %}
+  <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">{{ form.as_p }}<button class="btn lg" type="submit" style="width:100%">Sign in</button></form>
+</div>
+{% endblock %}

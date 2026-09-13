@@ -1,0 +1,55 @@
+{% extends "inventory/base.html" %}
+{% block title %}Delete Ticket - Warehouse Ticket Portal{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 600px;">
+  <h1>Delete Pick Ticket</h1>
+  <div class="alert warning">
+    <strong>Warning:</strong> This action cannot be undone.
+  </div>
+  <p>Are you sure you want to delete ticket <strong>{{ ticket.ticket_number }}</strong>?</p>
+  <div style="background: var(--bg); padding: 16px; border-radius: var(--radius-md); margin: 16px 0;">
+    <h3 style="margin: 0 0 12px; font-size: 14px;">Ticket Details:</h3>
+    <dl style="margin: 0; display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px;">
+      <dt>Date:</dt><dd>{{ ticket.date }}</dd>
+      <dt>Status:</dt><dd>{{ ticket.get_status_display }}</dd>
+      <dt>Picked By:</dt><dd>{{ ticket.picked_by_name }}</dd>
+      <dt>Received By:</dt><dd>{{ ticket.received_by_name }}</dd>
+      <dt>Requested By:</dt><dd>{{ ticket.requested_by_name }}</dd>
+      <dt>BLDG/Room:</dt><dd>{{ ticket.building_room }}</dd>
+      <dt>Location:</dt><dd>{{ ticket.location }}</dd>
+    </dl>
+  </div>
+  <h3 style="font-size: 14px; margin: 16px 0 8px;">Line Items (will be restored to inventory):</h3>
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Part #</th>
+          <th>Name</th>
+          <th>Qty</th>
+          <th>Current Stock</th>
+          <th>After Restore</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in ticket.lines.all %}
+        <tr>
+          <td>{{ line.item.part_number }}</td>
+          <td>{{ line.item.name }}</td>
+          <td>{{ line.quantity }}</td>
+          <td>{{ line.item.quantity_on_hand }}</td>
+          <td>{{ line.item.quantity_on_hand|add:line.quantity }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <form method="post">
+    {% csrf_token %}
+    <div class="actions">
+      <button type="submit" class="btn danger">Yes, Delete Ticket</button>
+      <a href="{% url 'ticket_detail' ticket.pk %}" class="btn light">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

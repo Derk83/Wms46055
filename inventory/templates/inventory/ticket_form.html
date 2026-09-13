@@ -1,0 +1,373 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+{% if is_edit and ticket.pk %}
+<h1>Edit Pick Ticket {{ ticket.ticket_number }}</h1>
+{% else %}
+<h1>New Pick Ticket</h1>
+{% endif %}
+<form method="post" class="card">
+  {% csrf_token %}
+  <section aria-labelledby="ticket-details-heading">
+        <h2 id="ticket-details-heading">Ticket Details</h2>
+        <div class="grid">
+          {{ form.non_field_errors }}
+          <div>
+            <label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+            {{ form.date }}
+            {% for error in form.date.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+            {{ form.status }}
+            {% for error in form.status.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.picked_by_name.id_for_label }}">{{ form.picked_by_name.label }}</label>
+            {{ form.picked_by_name }}
+            {% for error in form.picked_by_name.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.received_by_name.id_for_label }}">{{ form.received_by_name.label }}</label>
+            {{ form.received_by_name }}
+            {% for error in form.received_by_name.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.requested_by_name.id_for_label }}">{{ form.requested_by_name.label }}</label>
+            {{ form.requested_by_name }}
+            {% for error in form.requested_by_name.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.building_room.id_for_label }}">{{ form.building_room.label }}</label>
+            {{ form.building_room }}
+            {% for error in form.building_room.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
+            {{ form.location }}
+            {% for error in form.location.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+            {{ form.notes }}
+            {% for error in form.notes.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+          </div>
+        </div>
+      </section>
+  <section aria-labelledby="items-heading" style="margin-top: 1.5rem;">
+    <h2 id="items-heading">Items</h2>
+    <p class="helptext" style="margin-bottom: 1rem; color: var(--muted, #c3d3cd); font-size: 0.95rem;">
+      Use the <strong>📷 scan button</strong> to scan a barcode/QR code, or use the item search box and dropdown.
+    </p>
+    {{ formset.management_form }}
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Scan</th>
+            <th>Item</th>
+            <th>Qty</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line_form in formset %}
+            <tr class="line-row">
+              <td>
+                {% for hidden in line_form.hidden_fields %}{% if hidden.name != 'scan_code' %}{{ hidden }}{% endif %}{% endfor %}
+                {{ line_form.scan_code }}
+                <button type="button" class="btn light scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
+                <div class="scan-status" aria-live="polite"></div>
+                {% if line_form.non_field_errors %}<div class="negative">{{ line_form.non_field_errors }}</div>{% endif %}
+                {% for error in line_form.scan_code.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+              </td>
+              <td class="item-picker-cell">
+                <input type="text" class="item-search-input" placeholder="Search by part #, name, category, or bin…" aria-label="Search items">
+                {{ line_form.item }}
+                <div class="helptext item-picker-help">Type to narrow the dropdown, then choose the matching item.</div>
+                {% for error in line_form.item.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+              </td>
+              <td>{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+              <td>
+                {% if line_form.instance.pk %}
+                  <label class="btn light" style="padding: 4px 8px; font-size: 0.8rem;">{{ line_form.DELETE }} Remove</label>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div id="ticket-scanner-panel" class="ticket-scanner-panel" hidden>
+      <div class="ticket-scanner-toolbar">
+        <strong>Scan barcode / QR code</strong>
+        <button type="button" class="btn light" id="ticketScannerClose">Close</button>
+      </div>
+      <div id="ticket-camera-reader" class="ticket-camera-reader"></div>
+      <pre id="ticketScannerResult" class="ticket-scanner-result">Camera starting…</pre>
+    </div>
+    <table id="empty-form-template" style="display: none;">
+      <tbody>
+        <tr class="line-row">
+          <td>
+            {{ formset.empty_form.scan_code }}
+            <button type="button" class="btn light scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
+            <div class="scan-status" aria-live="polite"></div>
+          </td>
+          <td>
+            <input type="text" class="item-search-input" placeholder="Search by part #, name, category, or bin…" aria-label="Search items">
+            {{ formset.empty_form.item }}
+            <div class="helptext item-picker-help">Type to narrow the dropdown, then choose the matching item.</div>
+          </td>
+          <td>{{ formset.empty_form.quantity }}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+    {% if formset.non_form_errors %}<div class="negative" style="margin-top: 0.5rem;">{{ formset.non_form_errors }}</div>{% endif %}
+    <div class="actions" style="margin-top: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
+      <button class="btn" type="submit">{% if is_edit and ticket.pk %}Update Ticket{% else %}Submit Pick Ticket{% endif %}</button>
+      <a class="btn light" href="{% url 'ticket_list' %}">Cancel</a>
+      <button class="btn light" type="button" id="add-line" style="background: #e5e7eb; color: #374151;">+ Add Another Item</button>
+    </div>
+</form>
+{% if is_edit and ticket.pk %}
+<form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="margin-top: 1rem;">
+  {% csrf_token %}
+  <input type="hidden" name="status" value="{{ ticket.Status.CLOSED }}">
+  <button class="btn light" type="submit">Mark Completed</button>
+</form>
+{% endif %}
+<style>
+  .item-picker-cell {
+    min-width: 280px;
+  }
+  .item-search-input {
+    width: 100%;
+    margin-bottom: 0.35rem;
+    border-color: rgba(215, 154, 42, 0.45);
+  }
+  .item-picker-cell select,
+  #empty-form-template select {
+    width: 100%;
+  }
+  .item-picker-help {
+    margin-top: 0.25rem;
+    color: var(--muted, #c3d3cd);
+    font-size: 0.82rem;
+  }
+  .scan-emoji-btn {
+    min-width: 52px;
+    min-height: 44px;
+    font-size: 1.4rem;
+    line-height: 1;
+    padding: 0.55rem 0.75rem;
+  }
+  .scan-code-hidden { display: none; }
+  .scan-status {
+    margin-top: 0.35rem;
+    color: var(--muted, #c3d3cd);
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  .ticket-scanner-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--border, rgba(255,255,255,.16));
+    border-radius: 18px;
+    background: var(--card-2, #223c35);
+  }
+  .ticket-scanner-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 0.75rem;
+  }
+  .ticket-camera-reader {
+    width: 100%;
+    max-width: 520px;
+    min-height: 320px;
+    border: 1px solid var(--border, rgba(255,255,255,.16));
+    border-radius: 14px;
+    overflow: hidden;
+    background: #071310;
+  }
+  .ticket-scanner-result {
+    white-space: pre-wrap;
+    margin: 0.75rem 0 0;
+    padding: 0.85rem;
+    border-radius: 12px;
+    color: #eaf5ef;
+    background: #0b1714;
+  }
+</style>
+<script>
+  let ticketScanner = null;
+  let activeScanRow = null;
+  function playTicketScanBeep() {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.16);
+      setTimeout(() => ctx.close(), 260);
+    } catch (error) {}
+  }
+  function attachScanLookup(row) {
+    const input = row.querySelector('input[name$="-scan_code"]');
+    if (!input || input.dataset.scanLookupReady === '1') return;
+    input.dataset.scanLookupReady = '1';
+    input.addEventListener('change', async () => {
+      const code = input.value.trim();
+      if (!code) return;
+      const itemSelect = row.querySelector('select[name$="-item"]');
+      const qty = row.querySelector('input[name$="-quantity"]');
+      const status = row.querySelector('.scan-status');
+      if (status) status.textContent = 'Looking up scan…';
+      try {
+        const res = await fetch(`/scan-lookup-api/?code=${encodeURIComponent(code)}`);
+        if (!res.ok) {
+          if (status) status.textContent = 'No item found for that scan.';
+          return;
+        }
+        const data = await res.json();
+        itemSelect.value = data.id;
+        const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+        const searchInput = row.querySelector('.item-search-input');
+        if (searchInput && selectedOption) searchInput.value = selectedOption.text;
+        if (!qty.value) qty.value = 1;
+        if (status) status.textContent = 'Scanned: ' + (data.part_number || code);
+      } catch (e) {
+        console.warn(e);
+        if (status) status.textContent = 'Scan lookup failed.';
+      }
+    });
+  }
+  async function stopTicketScanner(message) {
+    const panel = document.getElementById('ticket-scanner-panel');
+    const result = document.getElementById('ticketScannerResult');
+    if (ticketScanner) {
+      try { await ticketScanner.stop(); await ticketScanner.clear(); } catch (error) {}
+      ticketScanner = null;
+    }
+    if (message && result) result.textContent = message;
+    if (panel) panel.hidden = true;
+  }
+  async function startTicketScanner(row) {
+    activeScanRow = row;
+    const panel = document.getElementById('ticket-scanner-panel');
+    const result = document.getElementById('ticketScannerResult');
+    if (!panel || !result) return;
+    panel.hidden = false;
+    result.textContent = 'Camera starting… Point the rear camera at the product barcode or QR code.';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (!window.Html5Qrcode) {
+      result.textContent = 'Scanner library could not load. Please use the dropdown/search field.';
+      return;
+    }
+    await stopTicketScanner();
+    panel.hidden = false;
+    result.textContent = 'Camera starting… Point the rear camera at the product barcode or QR code.';
+    ticketScanner = new Html5Qrcode('ticket-camera-reader');
+    ticketScanner.start(
+      { facingMode: { exact: 'environment' } },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      async function(text) {
+        playTicketScanBeep();
+        result.textContent = 'Scanned. Adding item to this ticket row…\nCode: ' + text;
+        const input = activeScanRow && activeScanRow.querySelector('input[name$="-scan_code"]');
+        if (input) {
+          input.value = text;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        await stopTicketScanner('Scan complete.');
+      },
+      function() {}
+    ).then(function() {
+      result.textContent = 'Camera active. Scan barcode/QR. Use Close when finished.';
+    }).catch(function(error) {
+      result.textContent = 'Camera error: ' + (error || 'Could not open the rear camera.');
+    });
+  }
+  function attachScanButton(row) {
+    const button = row.querySelector('.scan-emoji-btn');
+    if (!button || button.dataset.scanButtonReady === '1') return;
+    button.dataset.scanButtonReady = '1';
+    button.addEventListener('click', () => startTicketScanner(row));
+  }
+  function filterItemDropdown(row) {
+    const searchInput = row.querySelector('.item-search-input');
+    const itemSelect = row.querySelector('select[name$="-item"]');
+    if (!searchInput || !itemSelect) return [];
+    const query = searchInput.value.trim().toLowerCase();
+    const matches = [];
+    Array.from(itemSelect.options).forEach((option, index) => {
+      if (index === 0 || !option.value) {
+        option.hidden = false;
+        return;
+      }
+      const isMatch = !query || option.text.toLowerCase().includes(query);
+      option.hidden = !isMatch;
+      if (isMatch) matches.push(option);
+    });
+    return matches;
+  }
+  function initItemPicker(row) {
+    const searchInput = row.querySelector('.item-search-input');
+    const itemSelect = row.querySelector('select[name$="-item"]');
+    if (!searchInput || !itemSelect || searchInput.dataset.itemPickerReady === '1') return;
+    searchInput.dataset.itemPickerReady = '1';
+    if (itemSelect.value) {
+      const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+      if (selectedOption) searchInput.value = selectedOption.text;
+    }
+    searchInput.addEventListener('input', () => filterItemDropdown(row));
+    searchInput.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      const matches = filterItemDropdown(row);
+      if (matches.length > 0) {
+        event.preventDefault();
+        itemSelect.value = matches[0].value;
+        searchInput.value = matches[0].text;
+        itemSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+    itemSelect.addEventListener('change', () => {
+      const selectedOption = itemSelect.options[itemSelect.selectedIndex];
+      if (selectedOption && selectedOption.value) searchInput.value = selectedOption.text;
+    });
+  }
+  function initLineRow(row) {
+    attachScanLookup(row);
+    attachScanButton(row);
+    initItemPicker(row);
+  }
+  document.querySelectorAll('tr.line-row').forEach(initLineRow);
+  document.getElementById('ticketScannerClose')?.addEventListener('click', () => stopTicketScanner('Camera off.'));
+  // Add another line row using Django formset empty_form
+  const tbody = document.querySelector('table tbody');
+  const totalForms = document.getElementById('id_lines-TOTAL_FORMS');
+  const emptyRow = document.querySelector('#empty-form-template tbody tr');
+  document.getElementById('add-line').addEventListener('click', () => {
+    const formNum = parseInt(totalForms.value);
+    if (emptyRow) {
+      const clone = emptyRow.cloneNode(true);
+      clone.innerHTML = clone.innerHTML.replace(/__prefix__/g, formNum);
+      tbody.appendChild(clone);
+      initLineRow(clone);
+      totalForms.value = formNum + 1;
+    }
+  });
+</script>
+{% endblock %}

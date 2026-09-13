@@ -1,0 +1,67 @@
+{% extends "inventory/base.html" %}
+{% block title %}Edit Group Permissions - Warehouse{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+        <h1>Edit Group Permissions: {{ group.name }}</h1>
+        <a href="{% url 'settings' %}?tab=users" class="btn light">← Back to Users</a>
+    </div>
+
+    <form method="post" class="card" novalidate>
+        {% csrf_token %}
+        <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-weight: 600;">
+            Permissions for {{ group.name }}
+        </div>
+        <div style="padding: 16px 20px;">
+            <p class="text-muted small mb-3">Check only the permissions this group should have. Users assigned to this group inherit these permissions automatically.</p>
+            <div class="permission-grid">
+                {% for model_name, perms in grouped_perms.items %}
+                <fieldset class="permission-set">
+                    <legend>{{ model_name|title }}</legend>
+                    {% for p in perms %}
+                    <label class="permission-chip">
+                        <input type="checkbox" name="permissions" value="{{ p.pk }}"
+                            {% if p.pk in assigned_permission_ids %}checked{% endif %}>
+                        <span>{{ p.name }}</span>
+                    </label>
+                    {% endfor %}
+                </fieldset>
+                {% endfor %}
+            </div>
+        </div>
+        <div class="d-flex justify-content-end gap-2" style="padding: 16px 20px; border-top: 1px solid var(--border);">
+            <a href="{% url 'settings' %}?tab=users" class="btn secondary">Cancel</a>
+            <button type="submit" class="btn primary">Save Group Permissions</button>
+        </div>
+    </form>
+</div>
+
+<style>
+.text-muted { color: var(--muted); }
+.permission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem;
+}
+.permission-set {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin: 0;
+}
+.permission-set legend { font-weight: 700; padding: 0 0.35rem; font-size: 0.85rem; }
+.permission-chip {
+    display: flex;
+    gap: 0.45rem;
+    align-items: flex-start;
+    padding: 0.25rem 0;
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+.permission-chip span { line-height: 1.25; }
+.permission-chip input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); margin-top: 2px; }
+@media (max-width: 768px) {
+    .permission-grid { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

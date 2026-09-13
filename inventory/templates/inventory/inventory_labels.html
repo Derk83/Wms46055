@@ -1,0 +1,127 @@
+{% extends "inventory/base.html" %}
+{% block title %}Print Labels - {{ item.name }} - Warehouse{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>Print Barcode / QR Labels</h1>
+  <div class="actions">
+    <a href="{% url 'qr_codes' %}" class="btn light">Back to QR Codes</a>
+  </div>
+</div>
+<div class="label-page">
+  <div class="print-header">
+    <h2>{{ item.name }}</h2>
+    <div class="part">{{ item.part_number }}</div>
+    {% if item.storage_location %}
+    <div class="bin-badge">{{ item.storage_location }}</div>
+    {% endif %}
+    <div class="meta">
+      <span>Qty: {{ item.quantity_on_hand }}</span>
+      <span>Auto Barcode: {{ item.auto_barcode_value }}</span>
+    </div>
+  </div>
+  <div class="print-codes">
+    <div class="code-block">
+      <label>Code 128 Barcode (Scannable)</label>
+      <img src="data:image/png;base64,{{ item.barcode_image_b64 }}" alt="Code 128 barcode for {{ item.name }}" class="print-barcode">
+      <div class="code-value">{{ item.barcode_value|default:item.auto_barcode_value }}</div>
+    </div>
+  </div>
+  <div class="print-actions no-print">
+    <button class="btn" onclick="window.print()">Print Label</button>
+    <a href="{% url 'qr_codes' %}" class="btn light">Done</a>
+  </div>
+</div>
+<style>
+.label-page {
+  max-width: 500px;
+  margin: 0 auto;
+}
+.print-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.print-header h2 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+.print-header .part {
+  font-size: 18px;
+  color: var(--primary);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.bin-badge {
+  display: inline-block;
+  background: var(--primary);
+  color: white;
+  padding: 6px 16px;
+  border-radius: var(--radius-md);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+.meta {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.print-codes {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  align-items: center;
+}
+.code-block {
+  text-align: center;
+  width: 100%;
+}
+.code-block label {
+  display: block;
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+.print-barcode {
+  max-width: 100%;
+  height: auto;
+  background: white;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.print-qr {
+  width: 220px;
+  height: 220px;
+  background: white;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin: 0 auto;
+}
+.code-value {
+  margin-top: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+.print-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+@media print {
+  .no-print { display: none !important; }
+  .page-header { display: none !important; }
+  .label-page { max-width: none; }
+  .code-block { break-inside: avoid; }
+  body { background: white; }
+}
+</style>
+{% endblock %}

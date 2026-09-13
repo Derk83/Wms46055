@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.db
+db.sqlite3
+*.sqlite3
+staticfiles/
+media/
+.env
+.env.*
+!.env.example
+backups/*.bak
+*.log
+.pytest_cache/
+.coverage

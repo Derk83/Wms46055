@@ -1,0 +1,52 @@
+{% extends 'inventory/base.html' %}
+{% block content %}
+<div class="card">
+  <div class="actions no-print">
+    <a class="btn" href="{% url 'ticket_edit' ticket.pk %}">Edit Pick Ticket</a>
+    <a class="btn light" href="{% url 'ticket_print' ticket.pk %}" target="_blank">Print Ticket</a>
+    <a class="btn light" href="{% url 'ticket_create' %}">New Pick Ticket</a>
+  </div>
+  <h1>Pick Ticket {{ ticket.ticket_number }}</h1>
+  <div class="grid">
+    <p><strong>Status:</strong><br><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></p>
+    <p><strong>Date:</strong><br>{{ ticket.date }}</p>
+    <p><strong>Picked By:</strong><br>{{ ticket.picked_by_name }}</p>
+    <p><strong>Received By:</strong><br>{{ ticket.received_by_name }}</p>
+    <p><strong>Requested By:</strong><br>{{ ticket.requested_by_name }}</p>
+    <p><strong>BLDG/Room #:</strong><br>{{ ticket.building_room }}</p>
+    <p><strong>Location:</strong><br>{{ ticket.location }}</p>
+  </div>
+  {% if ticket.notes %}<p><strong>Notes:</strong> {{ ticket.notes }}</p>{% endif %}
+  <div class="table-responsive">
+  <table>
+    <tr><th>Part #</th><th>Item</th><th>Quantity</th></tr>
+    {% for line in ticket.lines.all %}
+      <tr><td>{{ line.item.part_number }}</td><td>{{ line.item.name }}</td><td>{{ line.quantity }}</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+  <div class="actions no-print" style="margin-top:20px;">
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="OPEN">
+      <button class="btn {% if ticket.status == 'OPEN' %}secondary{% else %}light{% endif %}" type="submit">Open</button>
+    </form>
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="PICKED">
+      <button class="btn {% if ticket.status == 'PICKED' %}secondary{% else %}light{% endif %}" type="submit">Mark Picked</button>
+    </form>
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="RECEIVED">
+      <button class="btn {% if ticket.status == 'RECEIVED' %}secondary{% else %}light{% endif %}" type="submit">Ready for Delivery</button>
+    </form>
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <input type="hidden" name="status" value="CLOSED">
+      <button class="btn danger" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Closed/Delivered</button>
+    </form>
+    <a class="btn danger" href="{% url 'ticket_delete' ticket.pk %}" style="margin-left: 8px;" onclick="return confirm('Delete this ticket? This will restore picked quantities to inventory.')">Delete Ticket</a>
+  </div>
+</div>
+{% endblock %}

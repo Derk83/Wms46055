@@ -1,0 +1,300 @@
+{% extends "inventory/base.html" %}
+{% block title %}{{ title }} - Warehouse{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+        <h1>{{ title }}</h1>
+        <a href="{% url 'settings' %}?tab=users" class="btn light">← Back to Users</a>
+    </div>
+    {% if messages %}
+    <div class="messages mb-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="row">
+            <!-- Left column: user info -->
+            <div class="col-lg-5 mb-4">
+                <div class="card">
+                    <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-weight: 600;">Account Info</div>
+                    <div style="padding: 20px;">
+                        <div class="mb-4">
+                            <label for="{{ form.username.id_for_label }}" class="form-label">Username <span class="text-danger">*</span></label>
+                            {{ form.username }}
+                            {% if form.username.errors %}
+                            <div class="text-danger small">{{ form.username.errors }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label for="{{ form.first_name.id_for_label }}" class="form-label">First Name</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label for="{{ form.last_name.id_for_label }}" class="form-label">Last Name</label>
+                                {{ form.last_name }}
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label for="{{ form.email.id_for_label }}" class="form-label">Email</label>
+                            {{ form.email }}
+                        </div>
+                        {% if user_obj %}
+                        <div class="mb-4">
+                            <label class="form-label">Password</label>
+                            <p class="text-muted small mb-1">Leave blank to keep current password.</p>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="password" name="password" id="id_password" class="form-control" placeholder="New password" style="flex:1;">
+                                <button type="button" class="btn light sm" onclick="document.getElementById('id_password').value=''" title="Clear">✕</button>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="row">
+                            <div class="col-md-6 mb-4">
+                                <label for="{{ form.password1.id_for_label }}" class="form-label">Password <span class="text-danger">*</span></label>
+                                {{ form.password1 }}
+                                {% if form.password1.errors %}
+                                <div class="text-danger small">{{ form.password1.errors }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6 mb-4">
+                                <label for="{{ form.password2.id_for_label }}" class="form-label">Confirm Password <span class="text-danger">*</span></label>
+                                {{ form.password2 }}
+                                {% if form.password2.errors %}
+                                <div class="text-danger small">{{ form.password2.errors }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <div class="status-toggles">
+                                <label class="toggle-label">
+                                    <input type="checkbox" name="is_staff" {% if form.is_staff.value %}checked{% endif %} {% if user_obj == request.user and user_obj %}disabled{% endif %}>
+                                    <span>Staff</span>
+                                </label>
+                                <label class="toggle-label">
+                                    <input type="checkbox" name="is_superuser" {% if form.is_superuser.value %}checked{% endif %} {% if user_obj == request.user and user_obj %}disabled{% endif %}>
+                                    <span>Superuser</span>
+                                </label>
+                                <label class="toggle-label">
+                                    <input type="checkbox" name="is_active" {% if form.is_active.value %}checked{% endif %} {% if user_obj == request.user and user_obj %}disabled{% endif %}>
+                                    <span>Active</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right column: groups + permissions -->
+            <div class="col-lg-7 mb-4">
+                <div class="card mb-4">
+                    <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-weight: 600;">Groups</div>
+                    <div style="padding: 16px 20px;">
+                        <div class="group-admin-create mb-3">
+                            <input form="group-create-form" type="text" name="name" class="form-control" placeholder="New group name (example: Material Handler)">
+                            <button form="group-create-form" type="submit" class="btn primary sm">Add Group</button>
+                        </div>
+                        {% if all_groups %}
+                        <div class="group-grid">
+                            {% for g in all_groups %}
+                            <label class="group-chip">
+                                <input type="checkbox" name="groups" value="{{ g.pk }}"
+                                    {% if g.pk in user_group_ids %}checked{% endif %}
+                                    {% if user_obj == request.user %}disabled{% endif %}>
+                                <span>{{ g.name }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        <div class="group-admin-list mt-3">
+                            <p class="text-muted small mb-2">Rename groups, edit their permissions, or delete them here. Renaming keeps every user assignment and permission attached to the group.</p>
+                            {% for g in all_groups %}
+                            <div class="group-admin-row">
+                                <label class="sr-only" for="group-name-{{ g.pk }}">Group name</label>
+                                <input id="group-name-{{ g.pk }}" form="group-rename-form-{{ g.pk }}" type="text" name="name" value="{{ g.name }}" class="form-control group-name-input" required maxlength="150">
+                                <button form="group-rename-form-{{ g.pk }}" type="submit" class="btn secondary sm">Rename</button>
+                                <a href="{% url 'group_permissions' g.pk %}" class="btn light sm">Edit Permissions</a>
+                                <button form="group-delete-form-{{ g.pk }}" type="submit" class="btn danger sm" onclick="return confirm('Delete group {{ g.name|escapejs }}? Users in this group will keep their accounts, but lose this group assignment.');">Delete</button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted small mb-0">No groups yet. Add the first group above.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-weight: 600;">Individual Permissions</div>
+                    <div style="padding: 16px 20px;">
+                        <p class="text-muted small mb-3">Permissions from the user's groups apply automatically. Checked items are additional individual permissions assigned directly to this user.</p>
+                        <div class="permission-grid">
+                            {% for model_name, perms in grouped_perms.items %}
+                            <fieldset class="permission-set">
+                                <legend>{{ model_name|title }}</legend>
+                                {% for p in perms %}
+                                <label class="permission-chip">
+                                    <input type="checkbox" name="permissions" value="{{ p.pk }}"
+                                        {% if p.pk in user_perm_ids %}checked{% endif %}>
+                                    <span>{{ p.name }}</span>
+                                </label>
+                                {% endfor %}
+                            </fieldset>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex justify-content-end gap-2 pt-3 border-top mb-4">
+            <button type="submit" class="btn primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                {% if user_obj %}Save Changes{% else %}Create User{% endif %}
+            </button>
+            <a href="{% url 'settings' %}?tab=users" class="btn secondary">Cancel</a>
+        </div>
+    </form>
+
+    <form id="group-create-form" method="post" action="{% url 'group_create' %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    </form>
+    {% for g in all_groups %}
+    <form id="group-rename-form-{{ g.pk }}" method="post" action="{% url 'group_rename' g.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    </form>
+    <form id="group-delete-form-{{ g.pk }}" method="post" action="{% url 'group_delete' g.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    </form>
+    {% endfor %}
+</div>
+
+<style>
+.form-label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; }
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--ink);
+    box-sizing: border-box;
+}
+.form-control:focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+input[type="text"], input[type="email"], input[type="password"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--ink);
+    box-sizing: border-box;
+}
+input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: var(--focus-ring);
+}
+.text-danger { color: #ef4444; }
+.text-muted { color: var(--muted); }
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.toggle-label:hover { background: var(--hover); }
+.toggle-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--primary); }
+.status-toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.group-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.group-admin-create {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+.group-admin-list {
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+.group-admin-row {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) auto auto auto;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.group-admin-name {
+    font-weight: 700;
+    color: var(--ink);
+    padding: 8px 0;
+}
+.group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.group-chip:hover { background: var(--hover); border-color: var(--primary); }
+.group-chip input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); }
+.group-chip:has(input:checked) {
+    background: rgba(var(--primary-rgb, 0,64,45), 0.08);
+    border-color: var(--primary);
+}
+.group-chip input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.permission-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+.permission-set {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem;
+    margin: 0;
+}
+.permission-set legend { font-weight: 700; padding: 0 0.35rem; font-size: 0.85rem; }
+.permission-chip {
+    display: flex;
+    gap: 0.45rem;
+    align-items: flex-start;
+    padding: 0.25rem 0;
+    font-size: 0.84rem;
+    cursor: pointer;
+}
+.permission-chip span { line-height: 1.25; }
+.permission-chip input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); margin-top: 2px; }
+
+@media (max-width: 768px) {
+    .status-toggles { flex-direction: column; }
+    .permission-grid { grid-template-columns: 1fr; }
+    .group-admin-create,
+    .group-admin-row { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}

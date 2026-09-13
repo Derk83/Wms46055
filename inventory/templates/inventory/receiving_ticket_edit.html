@@ -1,0 +1,79 @@
+{% extends "inventory/base.html" %}
+{% block title %}Receiving Ticket {{ ticket.ticket_number }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Edit Receiving Ticket {{ ticket.ticket_number }}</h1>
+    <div class="meta">Update PO details and received line items.</div>
+  </div>
+  <div class="actions">
+    <a href="{% url 'receiving' %}" class="btn secondary">Back to Receiving</a>
+    <a href="{% url 'receiving_ticket_print' ticket.pk %}" class="btn light" target="_blank">Print Ticket</a>
+  </div>
+</div>
+<form method="post" class="card">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <section aria-labelledby="ticket-details-heading">
+    <h2 id="ticket-details-heading">Ticket Details</h2>
+    <div class="grid">
+      <div>
+        <label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+        {{ form.date }}
+        {% for error in form.date.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+      </div>
+      <div>
+        <label for="{{ form.po_number.id_for_label }}">{{ form.po_number.label }}</label>
+        {{ form.po_number }}
+        {% for error in form.po_number.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+      </div>
+      <div>
+        <label for="{{ form.vendor.id_for_label }}">{{ form.vendor.label }}</label>
+        {{ form.vendor }}
+        {% for error in form.vendor.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+        {{ form.notes }}
+        {% for error in form.notes.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+      </div>
+    </div>
+  </section>
+  <section aria-labelledby="lines-heading" style="margin-top: var(--space);">
+    <h2 id="lines-heading">Received Items</h2>
+    {{ formset.management_form }}
+    {% if formset.non_form_errors %}<div class="negative" style="margin-bottom: 1rem;">{{ formset.non_form_errors }}</div>{% endif %}
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th style="width: 140px;">Qty</th>
+            <th>Notes</th>
+            <th style="width: 120px;">Remove</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line_form in formset %}
+          <tr>
+            <td>
+              {% for hidden in line_form.hidden_fields %}{{ hidden }}{% endfor %}
+              {{ line_form.item }}
+              {% for error in line_form.item.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+              {% for error in line_form.id.errors %}<div class="negative">{{ error }}</div>{% endfor %}
+            </td>
+            <td>{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+            <td>{{ line_form.notes }}{% for error in line_form.notes.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+            <td>{% if line_form.instance.pk %}<label style="display:flex;align-items:center;gap:8px;margin:0;">{{ line_form.DELETE }} Remove</label>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <div class="actions" style="margin-top: var(--space);">
+    <button class="btn" type="submit">Save Changes</button>
+    <a href="{% url 'receiving_log' %}" class="btn light">Cancel</a>
+  </div>
+</form>
+{% endblock %}
