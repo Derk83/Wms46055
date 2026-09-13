@@ -1691,7 +1691,14 @@ def receiving(request):
 
 
 def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
-    """Process an uploaded Excel spreadsheet for bulk receiving."""
+    """Process an uploaded Excel spreadsheet for bulk receiving.
+
+    Rows that share the same (PO number, vendor, notes) are grouped into a
+    single ReceivingTicket with one ReceivingLine per row. This matches the
+    physical reality of one receiving event producing one ticket, prevents
+    ledger churn from per-row tickets, and lets us aggregate multiple line
+    items received together under the same audit trail.
+    """
     success_count = 0
     error_count = 0
     errors = []
@@ -1711,6 +1718,8 @@ def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
         qty_col = None
         shipper_col = None
         notes_col = None
+        po_col = None
+        vendor_col = None
         for key, idx in headers.items():
             if "part" in key or "sku" in key:
                 part_col = idx
@@ -1720,28 +1729,37 @@ def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
                 shipper_col = idx
             elif "note" in key:
                 notes_col = idx
+            elif key == "po" or "po " in key or "purchase" in key:
+                po_col = idx
+            elif "vendor" in key or "supplier" in key:
+                vendor_col = idx
 
         if not part_col or not qty_col:
             return 0, 1, ["Spreadsheet must have 'Part #' (or SKU) and 'Quantity' columns"]
 
+        # Two-phase processing:
+        # 1. Parse and validate every row (no DB writes). Collect into
+        #    `parsed_rows` and group by (po, vendor, notes).
+        # 2. Create one ReceivingTicket per group, then ReceivingLines per row,
+        #    each inside its own atomic block so a bad row does not roll back
+        #    an entire batch.
+        parsed_rows = []
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), 2):
             part_cell = row[part_col - 1] if part_col <= len(row) else None
             qty_cell = row[qty_col - 1] if qty_col <= len(row) else None
             shipper_cell = row[shipper_col - 1] if shipper_col and shipper_col <= len(row) else None
             notes_cell = row[notes_col - 1] if notes_col and notes_col <= len(row) else None
+            po_cell = row[po_col - 1] if po_col and po_col <= len(row) else None
+            vendor_cell = row[vendor_col - 1] if vendor_col and vendor_col <= len(row) else None
 
             part_number = part_cell.value
-            quantity = qty_cell.value
-            shipper = str(shipper_cell.value).strip() if shipper_cell and shipper_cell.value else ""
-            row_notes = notes_cell.value if notes_cell else default_notes
-
-            if not part_number:
+            if part_number is None or (isinstance(part_number, str) and not part_number.strip()):
                 continue  # Skip empty rows
 
             try:
-                quantity = int(quantity) if quantity is not None else 0
+                quantity = int(qty_cell.value) if qty_cell and qty_cell.value is not None else 0
             except (ValueError, TypeError):
-                errors.append(f"Row {row_idx}: Invalid quantity '{quantity}'")
+                errors.append(f"Row {row_idx}: Invalid quantity '{qty_cell.value}'")
                 error_count += 1
                 continue
 
@@ -1750,27 +1768,73 @@ def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
                 error_count += 1
                 continue
 
-            with transaction.atomic():
-                item = InventoryItem.objects.select_for_update().filter(
-                    part_number=part_number.strip()
-                ).first()
-                if not item:
-                    errors.append(f"Row {row_idx}: Item not found for part number '{part_number}'")
-                    error_count += 1
-                    continue
+            parsed_rows.append(
+                {
+                    "row_idx": row_idx,
+                    "part_number": str(part_number).strip(),
+                    "quantity": quantity,
+                    "shipper": (
+                        str(shipper_cell.value).strip()
+                        if shipper_cell and shipper_cell.value
+                        else ""
+                    ),
+                    "notes": str(notes_cell.value).strip() if notes_cell and notes_cell.value else (default_notes or ""),
+                    "po_number": str(po_cell.value).strip() if po_cell and po_cell.value else "",
+                    "vendor": str(vendor_cell.value).strip() if vendor_cell and vendor_cell.value else "",
+                }
+            )
 
-                if shipper and item.shipper != shipper:
-                    item.shipper = shipper
-                    item.save(update_fields=["shipper", "updated_at"])
-                ticket = ReceivingTicket.objects.create(created_by=user, notes=row_notes or "")
-                ReceivingLine.objects.create(
-                    ticket=ticket,
-                    item=item,
-                    quantity=quantity,
-                    shipper=shipper,
-                    notes=row_notes or "",
-                )
-            success_count += 1
+        # Group rows by (po_number, vendor, notes). Empty PO/vendor/notes
+        # share a bucket with other empty values.
+        groups: dict[tuple[str, str, str], list[dict]] = {}
+        for row in parsed_rows:
+            key = (row["po_number"], row["vendor"], row["notes"])
+            groups.setdefault(key, []).append(row)
+
+        # Process each group as one ticket; each line in its own atomic block.
+        for (po_number, vendor, notes), group_rows in groups.items():
+            ticket = None
+            for row in group_rows:
+                try:
+                    with transaction.atomic():
+                        item = InventoryItem.objects.select_for_update().filter(
+                            part_number=row["part_number"]
+                        ).first()
+                        if not item:
+                            errors.append(
+                                f"Row {row['row_idx']}: Item not found for part number "
+                                f"'{row['part_number']}'"
+                            )
+                            error_count += 1
+                            continue
+
+                        shipper = row["shipper"]
+                        if shipper and item.shipper != shipper:
+                            item.shipper = shipper
+                            item.save(update_fields=["shipper", "updated_at"])
+
+                        if ticket is None:
+                            ticket = ReceivingTicket.objects.create(
+                                created_by=user,
+                                notes=notes,
+                                po_number=po_number,
+                                vendor=vendor,
+                            )
+                        # Creating the line applies stock and writes its
+                        # uniquely linked ledger entry. ReceivingLine.save()
+                        # is the single source of truth — no separate
+                        # record_receipt() call.
+                        ReceivingLine.objects.create(
+                            ticket=ticket,
+                            item=item,
+                            quantity=row["quantity"],
+                            shipper=shipper,
+                            notes=notes,
+                        )
+                    success_count += 1
+                except Exception as exc:
+                    errors.append(f"Row {row['row_idx']}: {exc}")
+                    error_count += 1
 
     except Exception as e:
         errors.append(f"Failed to process spreadsheet: {str(e)}")
