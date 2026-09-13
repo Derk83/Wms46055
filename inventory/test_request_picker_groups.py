@@ -204,3 +204,130 @@ class GroupRenameTests(TestCase):
             set(group.permissions.values_list("pk", flat=True)),
             {external.pk, inventory_perm.pk},
         )
+
+
+class GroupPermissionsCheckAllTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("check-all-admin", "", "pw")
+        self.client.force_login(self.admin)
+        self.group = Group.objects.create(name="Check All Group")
+
+    def test_group_permissions_page_exposes_check_all_toggle(self):
+        response = self.client.get(reverse("group_permissions", args=[self.group.pk]), secure=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="check-all-permissions"', html=False)
+        self.assertContains(response, "Check all", html=False)
+        self.assertContains(response, 'data-check-all-target=".permission-grid"', html=False)
+
+    def test_check_all_toggle_selects_every_permission(self):
+        perms = Permission.objects.filter(
+            content_type__app_label="inventory",
+            codename__in=[
+                "view_inventoryitem",
+                "add_inventoryitem",
+                "change_pickticket",
+                "view_pickticket",
+            ],
+        )
+        response = self.client.post(
+            reverse("group_permissions", args=[self.group.pk]),
+            {"permissions": [p.pk for p in perms]},
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.group.refresh_from_db()
+        self.assertSetEqual(
+            set(self.group.permissions.values_list("pk", flat=True)),
+            {p.pk for p in perms},
+        )
+
+    def test_unchecking_check_all_deselects_every_permission(self):
+        perms = list(Permission.objects.filter(
+            content_type__app_label="inventory",
+            codename__in=["view_inventoryitem", "change_pickticket"],
+        ))
+        self.group.permissions.add(*perms)
+
+        response = self.client.post(
+            reverse("group_permissions", args=[self.group.pk]),
+            {"permissions": []},
+            secure=True,
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.group.refresh_from_db()
+        self.assertEqual(self.group.permissions.count(), 0)
+
+
+class LogisticsSpecialistVisibilityTests(TestCase):
+    """Logistics Specialist should see all material requests / pick tickets regardless of assignee."""
+
+    def setUp(self):
+        from .models import PickTicket
+
+        self.specialist = User.objects.create_user("ls-specialist", password="pw")
+        specialist_group, _ = Group.objects.get_or_create(name="Logistics Specialist")
+        specialist_group.permissions.add(Permission.objects.get(
+            content_type__app_label="inventory",
+            codename="view_all_materialrequests",
+        ))
+        self.specialist.groups.add(specialist_group)
+        self.specialist.refresh_from_db()
+
+        self.other_user = User.objects.create_user("ls-other", password="pw")
+
+        def _make_request(name, creator, building, *, assigned_to=None):
+            ticket = PickTicket.objects.create(
+                picked_by_name="", received_by_name="", requested_by_name=name,
+                building_room=building, location="Dock",
+                created_by=self.other_user,
+            )
+            return MaterialRequest.objects.create(
+                requestor_name=name, creator=creator,
+                building_room=building, location="Dock",
+                assigned_to=assigned_to, pick_ticket=ticket,
+            )
+
+        self.request_mine = _make_request("Specialist", self.specialist, "BLDG 1")
+        self.request_others = _make_request("Other", self.other_user, "BLDG 2")
+        self.request_assigned_to_other = _make_request(
+            "Other", self.other_user, "BLDG 3", assigned_to=self.other_user,
+        )
+        self.request_assigned_to_specialist = _make_request(
+            "Other", self.other_user, "BLDG 4", assigned_to=self.specialist,
+        )
+
+        self.ticket_unassigned = self.request_others.pick_ticket
+        self.ticket_assigned_to_other = self.request_assigned_to_other.pick_ticket
+        self.ticket_assigned_to_specialist = self.request_assigned_to_specialist.pick_ticket
+
+        self.client.force_login(self.specialist)
+
+    def test_specialist_sees_all_material_requests_regardless_of_creator(self):
+        from .views import _visible_material_requests
+
+        visible = _visible_material_requests(
+            type("R", (), {"user": self.specialist})()
+        )
+        ids = set(visible.values_list("pk", flat=True))
+        self.assertSetEqual(
+            ids,
+            {
+                self.request_mine.pk,
+                self.request_others.pk,
+                self.request_assigned_to_other.pk,
+                self.request_assigned_to_specialist.pk,
+            },
+        )
+
+    def test_specialist_sees_all_pick_tickets_regardless_of_assignee(self):
+        from .views import _visible_pick_tickets
+
+        visible = _visible_pick_tickets(
+            type("R", (), {"user": self.specialist})()
+        )
+        ids = set(visible.values_list("pk", flat=True))
+        self.assertIn(self.ticket_unassigned.pk, ids)
+        self.assertIn(self.ticket_assigned_to_other.pk, ids)
