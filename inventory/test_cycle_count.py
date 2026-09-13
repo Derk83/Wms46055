@@ -99,6 +99,47 @@ def test_pick_random_items_skips_empty_category():
 
 
 @pytest.mark.django_db
+def test_cycle_count_categories_dedupes_regardless_of_item_count():
+    """Regression: `.values_list('category').distinct().order_by(name)` returns
+    one row per (category, name) pair, not one per category. The view must
+    dedupe categories in Python so the create form shows exactly one row per
+    category instead of one row per item in that category."""
+    _seed_items("CFCI", 5)
+    _seed_items("Equipment", 8)
+    _seed_items("OFCI", 12)
+    _seed_items("Supplies", 3)
+
+    from inventory.views import _cycle_count_categories
+    cats = _cycle_count_categories()
+    assert cats == ["CFCI", "Equipment", "OFCI", "Supplies"], (
+        f"Expected 4 distinct categories, got {len(cats)}: {cats}"
+    )
+
+
+def test_cycle_count_create_form_renders_one_row_per_category(client, manager):
+    """Regression: the create form template loops over the categories list,
+    so the bug above produced a row per item. After the fix the GET form
+    must render exactly one row per category."""
+    _seed_items("CFCI", 5)
+    _seed_items("Equipment", 8)
+    _seed_items("OFCI", 12)
+    _seed_items("Supplies", 3)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_create"))
+    assert resp.status_code == 200
+    body = resp.content.decode("utf-8")
+    # Count rows: each is `<tr ... data-label="Category">`
+    # The header has `data-label="Category"` too, so look for the strong tag.
+    import re
+    rows = re.findall(r'<strong>(CFCI|Equipment|OFCI|Supplies)</strong>', body)
+    assert sorted(set(rows)) == ["CFCI", "Equipment", "OFCI", "Supplies"], (
+        f"Form rendered duplicate category rows: {rows}"
+    )
+    # Each category should appear exactly once.
+    for cat in ("CFCI", "Equipment", "OFCI", "Supplies"):
+        assert rows.count(cat) == 1, f"{cat} rendered {rows.count(cat)} times"
+
+
 def test_cycle_count_list_requires_perm(client, user, manager, counter, outsider):
     url = reverse("cycle_count_list")
     client.force_login(outsider)

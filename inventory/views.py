@@ -3824,13 +3824,16 @@ def material_request_events(request):
 
 def _cycle_count_categories():
     """Distinct category names present on active inventory, sorted."""
-    return sorted(
+    # NOTE: cannot rely on .distinct() + .order_by(name) here — Django appends
+    # `name` to the SELECT DISTINCT when sorting, which gives one row per
+    # unique (category, name) pair instead of one per category. Dedup in Python.
+    names = set(
         InventoryItem.objects.filter(active=True)
         .exclude(category__isnull=True)
         .exclude(category="")
         .values_list("category", flat=True)
-        .distinct()
     )
+    return sorted(names)
 
 
 def _parse_percent(value):
