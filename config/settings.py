@@ -32,7 +32,23 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes", "on"}
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.0.177', '100.85.76.22', 'hermes-ppe-inventory', '.ts.net', '0.0.0.0', 'bbx.rplwms.com', 'requests.rplwms.com', 'rplwms.com', 'www.rplwms.com', 'warehouse.bonksystems.com', 'wms.bonksystems.com', 'warehouse.directline.local']
+# ALLOWED_HOSTS governs which Host: headers Django will accept requests for.
+# Internal LAN/Tailscale hostnames were pruned on 2026-09-13 to reduce attack
+# surface; if you need to expose the app directly on the internal network
+# again, add them back as concrete entries (no wildcards) and document why.
+# The reverse proxy at bbx.rplwms.com / requests.rplwms.com terminates TLS
+# and forwards to gunicorn on 127.0.0.1:8089, so this list only needs
+# loopback entries plus the public hostnames.
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    'bbx.rplwms.com',
+    'requests.rplwms.com',
+    'rplwms.com',
+    'www.rplwms.com',
+    'wms.bonksystems.com',
+    'warehouse.bonksystems.com',
+]
 
 APP_URL = 'https://bbx.rplwms.com'
 REQUESTS_URL = 'https://requests.rplwms.com'

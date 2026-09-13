@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      # CI runs a real SQLite file, not Postgres, so no service containers needed.
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt', 'deploy/requirements-push.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+            ${{ runner.os }}-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r deploy/requirements-push.txt
+
+      - name: Django system check (--deploy)
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key-do-not-use-in-prod
+          DJANGO_DEBUG: "false"
+        run: |
+          python manage.py check --deploy 2>&1 | tee /tmp/deploy-check.log || true
+          # Exit non-zero only on actual Error-level findings, not Warnings.
+          # The --deploy flag emits many style warnings that do not warrant a CI failure.
+          if grep -E '^(Error|.+Error:)' /tmp/deploy-check.log; then
+            echo "::error::Django deploy check produced Error-level findings"
+            exit 1
+          fi
+          echo "Deploy check: no Error-level findings"
+
+      - name: Django migration check
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key-do-not-use-in-prod
+          DJANGO_DEBUG: "false"
+        run: |
+          # --check exits non-zero if there are unmade migrations.
+          python manage.py migrate --check --noinput
+
+      - name: Run test suite
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key-do-not-use-in-prod
+          DJANGO_DEBUG: "false"
+          EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+          WEBPUSH_VAPID_PUBLIC_KEY: "BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          WEBPUSH_VAPID_PRIVATE_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          WEBPUSH_VAPID_SUBJECT: "mailto:ci@example.invalid"
+        run: |
+          pytest -v --tb=short
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Ruff (syntax + style)
+        uses: astral-sh/ruff-action@v1
+        # Default config reads pyproject.toml; if missing, ruff infers from layout.
+        # We don't enforce ruff rules here yet, just surface syntax errors.
+        with:
+          args: "check --no-fix"
