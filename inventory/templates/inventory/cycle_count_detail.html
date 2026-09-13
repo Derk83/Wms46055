@@ -109,42 +109,57 @@
 </form>
 
 {% if cycle_count.status != "cancelled" %}
-<form method="post" class="card form-actions-row">
-  {% csrf_token %}
-  <input type="hidden" name="action" value="complete">
-  <p class="muted">All items have a count? Mark this cycle count complete to lock it in. Variance review happens on the listing page.</p>
-  <button class="btn" type="submit" data-action="success" {% if uncounted_count %}disabled{% endif %}>Mark complete</button>
-  {% if uncounted_count %}
-    <small class="muted">{{ uncounted_count }} item{{ uncounted_count|pluralize }} still need a count.</small>
-  {% endif %}
-</form>
+<div class="card cycle-count-actions">
+  <h3 class="actions-heading">Manage this count</h3>
 
-<form method="post" class="card form-actions-row">
-  {% csrf_token %}
-  <input type="hidden" name="action" value="cancel">
-  <button class="btn" type="submit" data-action="danger">Cancel cycle count</button>
-  <small class="muted">Cancels the count and removes the open items. Use only if you started it by mistake.</small>
-</form>
+  <form method="post" class="action-row">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="complete">
+    <button class="btn" type="submit" data-action="success" {% if uncounted_count %}disabled{% endif %}>Mark complete</button>
+    {% if uncounted_count %}
+      <small class="muted">{{ uncounted_count }} item{{ uncounted_count|pluralize }} still need a count.</small>
+    {% else %}
+      <small class="muted">Locks in the counts and unlocks the reconciliation PDF.</small>
+    {% endif %}
+  </form>
+
+  <form method="post" class="action-row">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="cancel">
+    <button class="btn" type="submit" data-action="danger">Cancel cycle count</button>
+    <small class="muted">Cancels the count and removes the open items. Use only if you started it by mistake.</small>
+  </form>
+</div>
 {% elif cycle_count.status == "cancelled" %}
-<form method="post" class="card form-actions-row">
-  {% csrf_token %}
-  <input type="hidden" name="action" value="reopen">
-  <button class="btn" type="submit">Reopen cycle count</button>
-</form>
+<div class="card cycle-count-actions">
+  <h3 class="actions-heading">Manage this count</h3>
+  <form method="post" class="action-row">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="reopen">
+    <button class="btn" type="submit">Reopen cycle count</button>
+    <small class="muted">Reopens this cancelled count so it can be re-counted or re-completed.</small>
+  </form>
+</div>
 {% endif %}
 
 {% if cycle_count.can_be_archived and perms.inventory.archive_cycle_counts %}
-<form method="post" action="{% url 'cycle_count_archive_action' cycle_count.pk %}" class="card form-actions-row">
-  {% csrf_token %}
-  <button class="btn" type="submit" data-action="warning">Archive cycle count</button>
-  <small class="muted">Removes this completed count from the active list. The data, reconciliation PDF, and signatures stay available in the archive.</small>
-</form>
+<div class="card cycle-count-actions">
+  <h3 class="actions-heading">Archive</h3>
+  <form method="post" action="{% url 'cycle_count_archive_action' cycle_count.pk %}" class="action-row">
+    {% csrf_token %}
+    <button class="btn" type="submit" data-action="warning">Archive cycle count</button>
+    <small class="muted">Removes this completed count from the active list. The data, reconciliation PDF, and signatures stay available in the archive.</small>
+  </form>
+</div>
 {% elif cycle_count.is_archived and perms.inventory.archive_cycle_counts %}
-<form method="post" action="{% url 'cycle_count_unarchive_action' cycle_count.pk %}" class="card form-actions-row">
-  {% csrf_token %}
-  <button class="btn" type="submit">Restore to active list</button>
-  <small class="muted">Archived {{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %} by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}{% endif %}. Restoring puts it back on the active cycle counts list.</small>
-</form>
+<div class="card cycle-count-actions">
+  <h3 class="actions-heading">Archive</h3>
+  <form method="post" action="{% url 'cycle_count_unarchive_action' cycle_count.pk %}" class="action-row">
+    {% csrf_token %}
+    <button class="btn" type="submit">Restore to active list</button>
+    <small class="muted">Archived {{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %} by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}{% endif %}. Restoring puts it back on the active cycle counts list.</small>
+  </form>
+</div>
 {% endif %}
 
 <style>
@@ -158,14 +173,63 @@
 .row-counted {
   background: rgba(46, 204, 113, 0.06);
 }
-.form-actions-row {
-  margin-top: 12px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
+/*
+  Bottom action surface — mirrors the top page-header .actions row:
+  buttons sit in a horizontal flex row with consistent spacing, on a
+  single card surface, just like the top actions. Action descriptions
+  sit underneath each button on their own line so they stay close to
+  the action they describe without crowding the button row.
+*/
+.cycle-count-actions {
+  margin-top: 16px;
+  padding: 16px;
 }
-.form-actions-row .btn { margin: 0; }
+.cycle-count-actions .actions-heading {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cycle-count-actions .action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+}
+.cycle-count-actions .action-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+.cycle-count-actions .action-row:last-child {
+  padding-bottom: 0;
+}
+.cycle-count-actions .action-row .btn {
+  margin: 0;
+  min-width: 180px;
+}
+.cycle-count-actions .action-row .muted {
+  flex: 1 1 240px;
+  margin: 0;
+}
+@media (max-width: 600px) {
+  .cycle-count-actions .action-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .cycle-count-actions .action-row .btn {
+    width: 100%;
+    min-width: 0;
+  }
+  .cycle-count-actions .action-row .muted {
+    flex-basis: auto;
+    text-align: left;
+  }
+}
 input[type="number"][name^="count_"], input[type="text"][name^="note_"] {
   width: 100%;
   max-width: 200px;
