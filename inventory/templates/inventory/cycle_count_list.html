@@ -81,15 +81,15 @@
             <td data-label="Created">{{ cc.created_at|date:"Y-m-d H:i" }}</td>
             <td data-label="Created by">{{ cc.created_by.get_full_name|default:cc.created_by.username }}</td>
             <td data-label="Actions">
-              <a class="action-chip" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
-              <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
+              <a class="btn" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
+              <a class="btn" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
               {% if cc.status == "completed" and perms.inventory.manage_cycle_counts %}
-              <a class="action-chip" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Results</a>
+              <a class="btn" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Results</a>
               {% endif %}
               {% if cc.can_be_archived and perms.inventory.archive_cycle_counts %}
-              <form method="post" action="{% url 'cycle_count_archive_action' cc.pk %}" style="display:inline">
+              <form method="post" action="{% url 'cycle_count_archive_action' cc.pk %}" class="row-action-form">
                 {% csrf_token %}
-                <button class="action-chip" type="submit" data-action="warning" aria-label="Archive {{ cc.display_name }}">Archive</button>
+                <button class="btn" type="submit" data-action="warning" aria-label="Archive {{ cc.display_name }}">Archive</button>
               </form>
               {% endif %}
             </td>
@@ -154,6 +154,37 @@
 .status-pill.status-cancelled {
   border-color: var(--muted);
   color: var(--muted);
+}
+/*
+  Row action buttons sit in a flex row that wraps onto multiple lines
+  when there's not enough horizontal space. Same .btn styling as the
+  top header buttons (matches 'New Cycle Count' exactly), just with
+  slightly tighter padding so 3-4 of them fit comfortably per row.
+*/
+table td[data-label="Actions"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px;
+}
+table td[data-label="Actions"] .btn {
+  margin: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+.row-action-form {
+  display: inline-flex;
+  margin: 0;
+}
+@media (max-width: 600px) {
+  table td[data-label="Actions"] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  table td[data-label="Actions"] .btn {
+    width: 100%;
+  }
 }
 </style>
 {% endblock %}
