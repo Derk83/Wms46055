@@ -1,5 +1,5 @@
 {% extends "inventory/base.html" %}
-{% block title %}{{ material_request.request_number }} · Black Box{% endblock %}
+{% block title %}{{ material_request.request_number }} · Black Box RPL Warehouse{% endblock %}
 {% block content %}
 <section class="page-header"><div><h1>{{ material_request.request_number }} {% if material_request.urgent %}<span class="badge urgent-badge">🚨 Urgent</span>{% endif %}</h1><div class="meta">Linked ticket {{ material_request.pick_ticket.ticket_number }} · submitted {{ material_request.created_at|date:"M j, Y g:i a" }}</div></div><span class="badge status-{{ material_request.pick_ticket.status|lower }}">{{ material_request.pick_ticket.get_status_display }}</span></section>
 <div class="grid">

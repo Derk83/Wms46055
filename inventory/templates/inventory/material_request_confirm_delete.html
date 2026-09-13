@@ -1,5 +1,5 @@
 {% extends "inventory/base.html" %}
-{% block title %}Delete {{ material_request.request_number }} · Black Box{% endblock %}
+{% block title %}Delete {{ material_request.request_number }} · Black Box RPL Warehouse{% endblock %}
 {% block content %}
 <section class="page-header"><div><h1>Delete {{ material_request.request_number }}?</h1><div class="meta">This also deletes {{ material_request.pick_ticket.ticket_number }} and restores all inventory deducted by it.</div></div></section>
 <form method="post" class="card">{% csrf_token %}<p>This action cannot be undone.</p><div class="actions"><button class="btn danger" type="submit">Delete request and restore stock</button><a class="btn secondary" href="{% url 'material_request_detail' material_request.pk %}">Cancel</a></div></form>

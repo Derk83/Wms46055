@@ -1,5 +1,5 @@
 {% extends "inventory/base.html" %}
-{% block title %}Request Archive · Black Box{% endblock %}
+{% block title %}Request Archive · Black Box RPL Warehouse{% endblock %}
 {% block content %}
 <section class="page-header"><div><h1>Material Request Archive</h1><div class="meta">Closed/delivered requests archived daily at 5:00 AM Central</div></div><a class="btn secondary" href="{% url 'material_request_board' %}">Active board</a></section>
 <form method="get" class="card search-form no-print" role="search"><div><label for="archive-search">Search archive</label><input id="archive-search" name="q" value="{{ query }}" placeholder="Request, ticket, requestor, or location"></div><button class="btn secondary" type="submit">Search</button></form>

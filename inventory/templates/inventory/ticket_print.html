@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Black Box — Pick Ticket {{ ticket.ticket_number }}</title>
+<title>Black Box RPL Warehouse — Pick Ticket {{ ticket.ticket_number }}</title>
 <style>
 :root{--black:#111;--charcoal:#242424;--red:#e31e2b;--gray:#5f6368;--line:#aeb2b7;--paper:#fff;--canvas:#ececec;--soft:#f2f3f4;--sans:Arial,"Helvetica Neue",sans-serif;--mono:"Courier New",monospace}
 *{box-sizing:border-box}
@@ -66,7 +66,7 @@ tr{page-break-inside:avoid}
 {% for page in ticket_pages %}
 <section class="print-page">
   <header class="header">
-    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">{% endif %}
+    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box RPL Warehouse">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box RPL Warehouse">{% endif %}
     <div class="document-name"><strong>Pick Ticket</strong><span>WAREHOUSE FULFILLMENT DOCUMENT</span></div>
     <div class="ticket-id"><div class="label">Pick ticket number</div><div class="value">{{ ticket.ticket_number }}</div><div class="page-number">Page {{ page.number }} of {{ total_pages }}</div>{% if not page.is_first %}<div class="page-note">CONTINUED</div>{% endif %}</div>
   </header>
@@ -114,7 +114,7 @@ tr{page-break-inside:avoid}
     <div class="notes-box"><div class="label">DELIVERY / RECEIPT NOTES</div><div class="value">{{ ticket.notes|default:" " }}</div></div>
   </section>
   {% endif %}
-  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Pick Ticket · Retain the downloaded PDF for records</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box RPL Warehouse · Pick Ticket · Retain the downloaded PDF for records</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
 </section>
 {% endfor %}
 </main>

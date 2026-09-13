@@ -124,7 +124,7 @@ from django.urls import reverse
 def pwa_manifest(request):
     """Return an install manifest tailored to the hostname being installed."""
     is_portal = getattr(request, "is_request_portal", False)
-    name = "Black Box Material Requests" if is_portal else "Black Box Warehouse"
+    name = "Black Box RPL Warehouse — Material Requests" if is_portal else "Black Box RPL Warehouse"
     short_name = "BBX Requests" if is_portal else "BBX WMS"
     shortcuts = [
         {
@@ -144,7 +144,7 @@ def pwa_manifest(request):
         "id": "/",
         "name": name,
         "short_name": short_name,
-        "description": "Black Box warehouse inventory and material request operations.",
+        "description": "Black Box RPL Warehouse — inventory and material request operations.",
         "start_url": "/",
         "scope": "/",
         "display": "standalone",
@@ -4635,6 +4635,9 @@ def reports_pdf(request, kind):
     from django.conf import settings as django_settings
     from django.template.loader import render_to_string
     from weasyprint import HTML
+
+    logo_path = django_settings.BASE_DIR / "inventory" / "static" / "inventory" / "img" / "blackbox-logo.png"
+    ctx["logo_uri"] = logo_path.as_uri()
 
     html = render_to_string(template_name, ctx, request=request)
     pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()

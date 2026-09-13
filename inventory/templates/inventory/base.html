@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{% if is_request_portal %}BBX Requests{% else %}BBX WMS{% endif %}">
-  <title>{% block title %}Black Box Warehouse{% endblock %}</title>
+  <title>{% block title %}Black Box RPL Warehouse{% endblock %}</title>
   <script nonce="{{ request.csp_nonce }}">try{const t=localStorage.getItem('bbx-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')}catch(e){}</script>
   <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
   <link rel="stylesheet" href="{% static 'inventory/css/notification-center.css' %}">
@@ -20,9 +20,10 @@
 </head>
 <body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
 <header class="site-header">
-  <a class="brand" href="{% url 'dashboard' %}" aria-label="Black Box Warehouse home">
-    <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">
-    <span>{% if request.is_request_portal %}Material Requests{% else %}Warehouse{% endif %}</span>
+  <a class="brand" href="{% url 'dashboard' %}" aria-label="Black Box RPL Warehouse home">
+    <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box RPL Warehouse">
+    <span class="brand-primary">Black Box RPL</span>
+    <span class="brand-subtitle">{% if request.is_request_portal %}Material Requests{% else %}Warehouse{% endif %}</span>
   </a>
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle>
@@ -39,17 +40,32 @@
       {% if perms.inventory.view_inventoryitem %}<a href="{% url 'inventory_list' %}">Inventory</a>{% endif %}
       {% if perms.inventory.add_materialrequest %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
     {% else %}
-      <a href="{% url 'inventory_list' %}">Inventory</a>
-      {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
-      {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
-      {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}">Receiving</a>{% endif %}
-      {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
-      <a href="{% url 'location_list' %}">Locations</a>
-      {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
-      {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
-      {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}
-      {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}
-      {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<a href="{% url 'settings' %}">Settings</a>{% endif %}
+      <div class="nav-section">
+        <a href="{% url 'inventory_list' %}">Inventory</a>
+        {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
+        {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
+        {% if perms.inventory.receive_stock or perms.inventory.view_receiving_log %}<a href="{% url 'receiving' %}">Receiving</a>{% endif %}
+      </div>
+      {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}
+      <div class="nav-section">
+        <div class="nav-section-label">Insights</div>
+        {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
+        {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}
+      </div>
+      {% endif %}
+      <div class="nav-section">
+        <div class="nav-section-label">Tools</div>
+        <a href="{% url 'location_list' %}">Locations</a>
+        {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
+        {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
+        {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}
+      </div>
+      {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}
+      <div class="nav-section">
+        <div class="nav-section-label">Admin</div>
+        <a href="{% url 'settings' %}">Settings</a>
+      </div>
+      {% endif %}
     {% endif %}
     <div class="mobile-nav-account">
       <span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span>

@@ -1,6 +1,6 @@
 # WMS4605
 
-A Django warehouse-management system (WMS) for Black Box, deployed at
+A Django warehouse-management system (WMS) for Black Box RPL Warehouse, deployed at
 `https://bbx.rplwms.com`. This is the codebase that backs the working
 production deployment: item catalog, pick tickets, material requests,
 cycle counts, receiving, browser push for delivery notifications, and a
@@ -158,7 +158,7 @@ these in `/etc/ppe-inventory.env`:
 | `DJANGO_DEBUG` | `True` / `False`. Defaults to `False`. |
 | `EMAIL_BACKEND` | `django.core.mail.backends.smtp.EmailBackend` for Postfix on localhost |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_TIMEOUT` | Standard SMTP wiring |
-| `DEFAULT_FROM_EMAIL` | Override the default `From:` header (default: `Black Box Warehouse <noreply@rplwms.com>`) |
+| `DEFAULT_FROM_EMAIL` | Override the default `From:` header (default: `Black Box RPL Warehouse <noreply@rplwms.com>`) |
 | `WEBPUSH_VAPID_PUBLIC_KEY`, `WEBPUSH_VAPID_PRIVATE_KEY`, `WEBPUSH_VAPID_SUBJECT` | VAPID keys for browser push. Private key must be root-readable only. See `deploy/PWA_PUSH.md`. |
 | `REQUEST_PORTAL_BASE_URL` | Defaults to `https://requests.rplwms.com` |
 

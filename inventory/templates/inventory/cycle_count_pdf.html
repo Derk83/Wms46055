@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Black Box — Cycle Count {{ cycle_count.display_name }}</title>
+<title>Black Box RPL Warehouse — Cycle Count {{ cycle_count.display_name }}</title>
 <style>
 :root{--black:#111;--charcoal:#242424;--red:#e31e2b;--gray:#5f6368;--line:#aeb2b7;--paper:#fff;--canvas:#ececec;--soft:#f2f3f4;--sans:Arial,"Helvetica Neue",sans-serif;--mono:"Courier New",monospace}
 *{box-sizing:border-box}
@@ -85,7 +85,7 @@ tr{page-break-inside:avoid}
 {% for page in pages %}
 <section class="print-page">
   <header class="header">
-    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">{% endif %}
+    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box RPL Warehouse">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box RPL Warehouse">{% endif %}
     <div class="document-name"><strong>Cycle Count</strong><span>WAREHOUSE INVENTORY AUDIT DOCUMENT</span></div>
     <div class="ticket-id"><div class="label">Cycle Count #</div><div class="value">{{ cycle_count.display_name }}</div><div class="page-number">Page {{ page.number }} of {{ total_pages }}</div>{% if not page.is_first and not page.is_last %}<div class="page-note">CONTINUED</div>{% endif %}</div>
   </header>
@@ -145,7 +145,7 @@ tr{page-break-inside:avoid}
     <div class="notes-box" style="min-height:.30in"><div class="label">RECONCILIATION NOTES</div><div class="value">&nbsp;</div></div>
   </section>
   {% endif %}
-  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Cycle Count · Count each item by physical verification — system quantity hidden intentionally</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box RPL Warehouse · Cycle Count · Count each item by physical verification — system quantity hidden intentionally</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
 </section>
 {% endfor %}
 </main>

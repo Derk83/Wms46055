@@ -108,6 +108,7 @@ class Command(BaseCommand):
 
         # Build the same context the manual PDF view uses, minus the weekly-only
         # sections (audit events, trends, aging, cycle counts).
+        logo_path = settings.BASE_DIR / "inventory" / "static" / "inventory" / "img" / "blackbox-logo.png"
         ctx = {
             "kind": "weekly",
             "range": rng,
@@ -123,6 +124,7 @@ class Command(BaseCommand):
             "top_items": top_items(rng),
             "status_of": material_request_status,
             "now": timezone.now(),
+            "logo_uri": logo_path.as_uri(),
         }
 
         html = render_to_string(
@@ -181,7 +183,7 @@ class Command(BaseCommand):
                     "No real recipients with email addresses found; skipping email."
                 ))
                 return
-            subject = f"WMS Weekly Activity Report — {rng.label}"
+            subject = f"RPL Warehouse Weekly Report — {rng.label}"
             body = (
                 f"Attached: WMS Weekly Activity Report for {rng.label}.\n\n"
                 f"Generated {timezone.now():%Y-%m-%d %H:%M} America/Chicago.\n"

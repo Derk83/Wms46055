@@ -57,7 +57,7 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (error) {
-    data = {title: 'Black Box Warehouse', body: 'A warehouse update is available.', url: '/'};
+    data = {title: 'Black Box RPL Warehouse', body: 'A warehouse update is available.', url: '/'};
   }
   let url = new URL(data.url || '/', self.location.origin);
   if (url.origin !== self.location.origin) url = new URL('/', self.location.origin);
@@ -84,7 +84,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.clients.matchAll({type: 'window', includeUncontrolled: true}).then((windows) => {
       windows.forEach((client) => client.postMessage({type: 'push-notification', payload: data}));
-      return self.registration.showNotification(data.title || 'Black Box Warehouse', options);
+      return self.registration.showNotification(data.title || 'Black Box RPL Warehouse', options);
     })
   );
 });

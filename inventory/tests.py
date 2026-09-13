@@ -459,7 +459,7 @@ class TicketImprovementTests(TestCase):
 
         self.assertContains(response, "brand-bar")
         self.assertContains(response, "blackbox-logo.png")
-        self.assertContains(response, 'alt="Black Box"')
+        self.assertContains(response, 'alt="Black Box RPL Warehouse"')
         self.assertContains(response, "min-height: calc(100vh - 0.4in)")
         self.assertContains(response, "margin: 0.2in")
         self.assertContains(response, "openPrintDialog")
