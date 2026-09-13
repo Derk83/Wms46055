@@ -3459,6 +3459,7 @@ def material_request_board(request):
         "status_filter": status,
         "statuses": PickTicket.Status.choices,
         "is_warehouse": is_warehouse,
+        "can_assign": request.user.has_perm("inventory.assign_materialrequest"),
         "view_mode": view_mode,
         "assignment_filter": assignment_filter,
         "focus_filter": focus_filter,
@@ -3478,7 +3479,7 @@ def material_request_board(request):
 
 @login_required
 @request_portal_access_required
-@any_perm_required("inventory.view_all_materialrequests")
+@any_perm_required("inventory.assign_materialrequest")
 @require_POST
 def material_request_assign(request, pk):
     from .services import assign_material_request

@@ -32,6 +32,7 @@
     </div>
 
     <div class="work-queue-card__actions no-print">
+      {% if can_assign %}
       <form method="post" action="{% url 'material_request_assign' material_request.pk %}" class="assignment-form">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -46,6 +47,12 @@
           <button class="btn btn-secondary btn-sm" type="submit">Save</button>
         </div>
       </form>
+      {% else %}
+      <div class="assignment-readonly" aria-label="Current assignment">
+        <span class="assignment-readonly__label">Assigned to</span>
+        <span class="assignment-readonly__value">{% if material_request.assigned_to %}{{ material_request.assigned_to.get_full_name|default:material_request.assigned_to.username }}{% else %}<em>Unassigned</em>{% endif %}</span>
+      </div>
+      {% endif %}
       <a class="btn btn-primary btn-sm" href="{% url 'material_request_detail' material_request.pk %}">Open request</a>
       <a class="btn btn-secondary btn-sm" href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">Open ticket</a>
     </div>
