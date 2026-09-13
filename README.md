@@ -164,8 +164,12 @@ these in `/etc/ppe-inventory.env`:
 
 ## Deployment
 
-Production deploy is on a Proxmox LXC at `192.168.0.177`. Three systemd
-units:
+Production deploy is on a Proxmox LXC at `192.168.0.177`. See
+[`docs/operations.md`](docs/operations.md) for the full
+scheduled-tasks / backup / restore contract including the systemd
+unit files for the daily 04:00 America/Chicago encrypted NAS backup,
+the push-notifications drain timer, and the deploy procedure. The
+summary:
 
 - `ppe-inventory.service` — gunicorn binding `127.0.0.1:8089`,
   reloaded via `systemctl reload ppe-inventory` after migrations
