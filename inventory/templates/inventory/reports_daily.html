@@ -11,7 +11,7 @@
   </div>
   <div class="actions">
     <a class="btn secondary" href="{% url 'reports_index' %}">← All reports</a>
-    <a class="btn" href="{% url 'reports_pdf' 'daily' %}?{% if preset != 'custom' %}preset={{ preset }}{% else %}date={{ date_value }}{% endif %}">Download PDF</a>
+    <a class="btn" href="{% url 'reports_pdf_viewer' 'daily' %}?{% if preset != 'custom' %}preset={{ preset }}{% else %}date={{ date_value }}{% endif %}">Open PDF</a>
   </div>
 </section>
 

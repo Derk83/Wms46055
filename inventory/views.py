@@ -4647,3 +4647,35 @@ def reports_pdf(request, kind):
         f'inline; filename="wms-daily-activity-{filename_date}.pdf"'
     )
     return response
+
+
+@login_required
+@manager_required
+def reports_pdf_viewer(request, kind):
+    """Wrap the PDF inside an HTML chrome bar with a back button.
+
+    The iframe wrapper prevents Safari (especially iPad) from taking over the
+    full-screen PDF viewer, where the back gesture becomes invisible and
+    users get trapped. The viewer always exposes a "Back to Dashboard" link
+    regardless of what the underlying PDF viewer does.
+    """
+    if kind != "daily":
+        return HttpResponse("Unknown report kind", status=404)
+    preset = request.GET.get("preset")
+    if preset and preset != "custom":
+        from inventory.reports import preset_dates
+        start_d, _ = preset_dates(preset)
+        query_string = f"preset={preset}"
+    else:
+        query_string = f"date={request.GET.get('date') or ''}"
+    return render(
+        request,
+        "inventory/reports_pdf_viewer.html",
+        {
+            "kind": kind,
+            "pdf_url": f"{reverse('reports_pdf', args=[kind])}?{query_string}",
+            "back_url": reverse("reports_daily") + (
+                f"?{query_string}" if query_string else ""
+            ),
+        },
+    )

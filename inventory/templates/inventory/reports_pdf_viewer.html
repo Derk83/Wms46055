@@ -1,0 +1,52 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Daily Report Viewer · Black Box RPL Warehouse{% endblock %}
+
+{% block content %}
+<section class="pdf-viewer-page">
+  <div class="pdf-viewer-chrome no-print">
+    <a class="btn secondary pdf-viewer-back" href="{{ back_url }}">
+      <span aria-hidden="true">←</span> Back to Daily Report
+    </a>
+    <div class="pdf-viewer-meta">
+      <strong>Daily Activity Report</strong>
+      <span class="meta">PDF viewer — open in browser so you always have a back button.</span>
+    </div>
+    <div class="pdf-viewer-actions">
+      <a class="btn secondary sm" href="{{ pdf_url }}" download>⬇ Download</a>
+      <button class="btn secondary sm" type="button" data-pdf-viewer-print>🖨 Print</button>
+      <a class="btn secondary sm" href="{{ pdf_url }}" target="_blank" rel="noopener">↗ Open in new tab</a>
+    </div>
+  </div>
+
+  <div class="pdf-viewer-frame-wrap">
+    <iframe
+      class="pdf-viewer-frame"
+      src="{{ pdf_url }}"
+      title="Daily Activity Report PDF"
+      aria-label="Daily Activity Report PDF"
+    ></iframe>
+  </div>
+</section>
+{% endblock %}
+{% block content_tail %}
+<script nonce="{{ request.csp_nonce }}">
+  (function () {
+    const printBtn = document.querySelector('[data-pdf-viewer-print]');
+    if (!printBtn) return;
+    printBtn.addEventListener('click', function () {
+      const frame = document.querySelector('.pdf-viewer-frame');
+      if (!frame || !frame.contentWindow) {
+        window.open(frame ? frame.src : '{{ pdf_url|escapejs }}', '_blank');
+        return;
+      }
+      try {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+      } catch (e) {
+        window.open(frame.src, '_blank');
+      }
+    });
+  })();
+</script>
+{% endblock %}

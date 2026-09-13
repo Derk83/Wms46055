@@ -103,5 +103,6 @@
 <script src="{% static 'inventory/js/app.js' %}" defer></script>
 <script src="{% static 'inventory/js/pwa.js' %}" defer></script>
 {% if user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% static 'inventory/js/push.js' %}" defer></script>{% endif %}
+{% block content_tail %}{% endblock %}
 </body>
 </html>

@@ -117,4 +117,5 @@ urlpatterns = [
     path("reports/", views.reports_index, name="reports_index"),
     path("reports/daily/", views.reports_daily, name="reports_daily"),
     path("reports/<str:kind>/pdf/", views.reports_pdf, name="reports_pdf"),
+    path("reports/<str:kind>/viewer/", views.reports_pdf_viewer, name="reports_pdf_viewer"),
 ]
