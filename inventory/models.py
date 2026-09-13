@@ -183,6 +183,7 @@ class InventoryItem(models.Model):
             ("manage_group_permissions", "Can edit warehouse group permissions"),
             ("perform_cycle_count", "Can perform cycle counts"),
             ("manage_cycle_counts", "Can create and manage cycle counts"),
+            ("archive_cycle_counts", "Can archive completed cycle counts"),
         ]
 
     def __str__(self):
@@ -1056,6 +1057,17 @@ class CycleCount(models.Model):
         default=Status.OPEN,
     )
     notes = models.TextField(blank=True)
+    # Archive support: a completed cycle count can be archived to remove it
+    # from the active list while preserving the audit trail (PDFs, signatures,
+    # reconciliation data). Mirrors MaterialRequest.archived_at.
+    archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    archived_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cycle_counts_archived",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -1084,8 +1096,19 @@ class CycleCount(models.Model):
         return self.items.exclude(
             counted_quantity__isnull=True,
         ).exclude(
-            system_quantity=models.F("counted_quantity"),
+            counted_quantity=models.F("system_quantity"),
         ).count()
+
+    @property
+    def is_archived(self):
+        return self.archived_at is not None
+
+    @property
+    def can_be_archived(self):
+        """Only completed counts are eligible for archiving — the audit trail
+        is sealed at completion, so archiving is a pure UI housekeeping move
+        (removes the row from the active list while preserving the data)."""
+        return self.status == self.Status.COMPLETED and not self.is_archived
 
 
 class CycleCountItem(models.Model):

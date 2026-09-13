@@ -1,0 +1,94 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Cycle Count Archive{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Cycle Count Archive</h1>
+  <div class="actions">
+    <a class="btn" href="{% url 'cycle_count_list' %}">Back to Active Counts</a>
+    {% if perms.inventory.manage_cycle_counts %}
+    <a class="btn" href="{% url 'cycle_count_create' %}">New Cycle Count</a>
+    {% endif %}
+  </div>
+</div>
+
+<section class="summary-tiles" aria-label="Archive summary">
+  <div class="summary-tile">
+    <span class="summary-tile-label">Total archived</span>
+    <span class="summary-tile-value">{{ total_archived }}</span>
+  </div>
+  <div class="summary-tile">
+    <span class="summary-tile-label">Showing</span>
+    <span class="summary-tile-value">{% if cycle_counts %}{{ cycle_counts|length }}{% else %}0{% endif %}</span>
+  </div>
+</section>
+
+<form method="get" class="search-form">
+  <div class="form-row">
+    <div class="form-group">
+      <label for="category">Filter by category</label>
+      <select id="category" name="category">
+        <option value="">All categories</option>
+        {% for c in categories %}
+          <option value="{{ c }}" {% if c == category_filter %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <button class="btn" type="submit">Apply</button>
+    </div>
+  </div>
+</form>
+
+<div class="card">
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th>Variances</th>
+          <th>Archived</th>
+          <th>Archived by</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cc in cycle_counts %}
+          <tr>
+            <td data-label="Name">{{ cc.display_name }}</td>
+            <td data-label="Status"><span class="status-pill status-{{ cc.status }}">{{ cc.get_status_display }}</span></td>
+            <td data-label="Items">{{ cc.total_items }}</td>
+            <td data-label="Variances">{{ cc.variance_count }}</td>
+            <td data-label="Archived">{{ cc.archived_at|date:"Y-m-d H:i" }}</td>
+            <td data-label="Archived by">{{ cc.archived_by.get_full_name|default:cc.archived_by.username|default:"—" }}</td>
+            <td data-label="Actions">
+              <a class="action-chip" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
+              <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
+              {% if cc.status == "completed" and perms.inventory.manage_cycle_counts %}
+              <a class="action-chip" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Results</a>
+              {% endif %}
+              <form method="post" action="{% url 'cycle_count_unarchive_action' cc.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button class="action-chip" type="submit" data-action="warning" aria-label="Restore {{ cc.display_name }} to the active list">Unarchive</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="empty-row">No archived cycle counts yet. Completed counts can be archived from their detail page.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+.empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 28px 12px;
+}
+</style>
+{% endblock %}

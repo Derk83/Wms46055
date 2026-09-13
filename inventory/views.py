@@ -3850,8 +3850,17 @@ def _parse_percent(value):
 @login_required
 @any_perm_required("inventory.perform_cycle_count", "inventory.manage_cycle_counts")
 def cycle_count_list(request):
-    """Dashboard of all cycle counts (most recent first)."""
-    cycle_counts = CycleCount.objects.select_related("created_by").all()
+    """Dashboard of active (non-archived) cycle counts (most recent first).
+
+    Archived counts are hidden by default — visit ``/cycle-counts/archive/``
+    to see them. The ``?archived=1`` query string is provided for power users
+    who want to keep archived rows visible alongside active ones (used for
+    "View all" buttons in the UI).
+    """
+    cycle_counts = CycleCount.objects.select_related("created_by", "archived_by")
+    show_archived = request.GET.get("archived") == "1"
+    if not show_archived:
+        cycle_counts = cycle_counts.filter(archived_at__isnull=True)
     category_filter = request.GET.get("category", "").strip()
     if category_filter:
         cycle_counts = cycle_counts.filter(items__category=category_filter).distinct()
@@ -3864,13 +3873,91 @@ def cycle_count_list(request):
         "cancelled": cycle_counts.filter(status=CycleCount.Status.CANCELLED).count(),
     }
 
+    archived_count = CycleCount.objects.filter(archived_at__isnull=False).count()
+
     context = {
         "cycle_counts": cycle_counts,
         "summary": summary,
         "category_filter": category_filter,
         "categories": _cycle_count_categories(),
+        "show_archived": show_archived,
+        "archived_count": archived_count,
     }
     return render(request, "inventory/cycle_count_list.html", context)
+
+
+@login_required
+@any_perm_required("inventory.archive_cycle_counts")
+def cycle_count_archive(request):
+    """List view of all archived cycle counts (most-recently-archived first).
+
+    Gated to ``archive_cycle_counts`` because this is a manager-only
+    housekeeping surface. The data is read-only from here — to make changes
+    to an archived count, unarchive it first via the action on its detail
+    page.
+    """
+    cycle_counts = (
+        CycleCount.objects
+        .select_related("created_by", "archived_by")
+        .filter(archived_at__isnull=False)
+        .order_by("-archived_at")
+    )
+    category_filter = request.GET.get("category", "").strip()
+    if category_filter:
+        cycle_counts = cycle_counts.filter(items__category=category_filter).distinct()
+
+    context = {
+        "cycle_counts": cycle_counts,
+        "category_filter": category_filter,
+        "categories": _cycle_count_categories(),
+        "total_archived": cycle_counts.count(),
+    }
+    return render(request, "inventory/cycle_count_archive.html", context)
+
+
+@login_required
+@any_perm_required("inventory.archive_cycle_counts")
+def cycle_count_archive_action(request, pk):
+    """POST-only handler that archives a completed cycle count.
+
+    Refuses to archive anything that is not completed — the audit trail is
+    sealed at completion, so archiving is a pure UI housekeeping move that
+    should not be conflated with completing or cancelling an open count.
+    """
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    if not cycle_count.can_be_archived:
+        messages.error(
+            request,
+            f"Cannot archive: {cycle_count.display_name} must be completed first "
+            f"(currently {cycle_count.get_status_display()}).",
+        )
+        return redirect("cycle_count_detail", pk=cycle_count.pk)
+    cycle_count.archived_at = timezone.now()
+    cycle_count.archived_by = request.user
+    cycle_count.save(update_fields=["archived_at", "archived_by"])
+    messages.success(request, f"{cycle_count.display_name} archived.")
+    return redirect("cycle_count_archive")
+
+
+@login_required
+@any_perm_required("inventory.archive_cycle_counts")
+def cycle_count_unarchive_action(request, pk):
+    """POST-only handler that restores an archived cycle count to the active list."""
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    if not cycle_count.is_archived:
+        messages.error(
+            request,
+            f"{cycle_count.display_name} is not archived.",
+        )
+        return redirect("cycle_count_detail", pk=cycle_count.pk)
+    cycle_count.archived_at = None
+    cycle_count.archived_by = None
+    cycle_count.save(update_fields=["archived_at", "archived_by"])
+    messages.success(
+        request,
+        f"{cycle_count.display_name} restored to the active cycle count list.",
+    )
+    return redirect("cycle_count_archive")
 
 
 @login_required

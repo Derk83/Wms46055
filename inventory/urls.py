@@ -105,8 +105,11 @@ urlpatterns = [
     path("api/material-request-events/", views.material_request_events, name="material_request_events"),
     # Cycle counting
     path("cycle-counts/", views.cycle_count_list, name="cycle_count_list"),
+    path("cycle-counts/archive/", views.cycle_count_archive, name="cycle_count_archive"),
     path("cycle-counts/new/", views.cycle_count_create, name="cycle_count_create"),
     path("cycle-counts/<int:pk>/", views.cycle_count_detail, name="cycle_count_detail"),
     path("cycle-counts/<int:pk>/pdf/", views.cycle_count_pdf, name="cycle_count_pdf"),
     path("cycle-counts/<int:pk>/results-pdf/", views.cycle_count_results_pdf, name="cycle_count_results_pdf"),
+    path("cycle-counts/<int:pk>/archive/", views.cycle_count_archive_action, name="cycle_count_archive_action"),
+    path("cycle-counts/<int:pk>/unarchive/", views.cycle_count_unarchive_action, name="cycle_count_unarchive_action"),
 ]

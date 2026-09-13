@@ -6,9 +6,12 @@
   <h1>{{ cycle_count.display_name }}</h1>
   <div class="actions">
     <a class="btn" href="{% url 'cycle_count_list' %}">Back to cycle counts</a>
-    <a class="btn" href="{% url 'cycle_count_pdf' cycle_count.pk %}" target="_blank" rel="noopener">Print PDF</a>
+    {% if cycle_count.is_archived and perms.inventory.archive_cycle_counts %}
+    <a class="btn" href="{% url 'cycle_count_archive' %}">View Archives</a>
+    {% endif %}
+    <a class="btn" href="{% url 'cycle_count_pdf' cycle_count.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
     {% if cycle_count.status == "completed" and perms.inventory.manage_cycle_counts %}
-    <a class="btn btn-primary" href="{% url 'cycle_count_results_pdf' cycle_count.pk %}" target="_blank" rel="noopener">Download Reconciliation PDF</a>
+    <a class="btn" href="{% url 'cycle_count_results_pdf' cycle_count.pk %}" target="_blank" rel="noopener" data-action="primary">Download Reconciliation PDF</a>
     {% endif %}
   </div>
 </div>
@@ -34,6 +37,12 @@
     <span class="summary-tile-label">Created</span>
     <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.created_at|date:"Y-m-d H:i" }}</span>
   </div>
+  {% if cycle_count.is_archived %}
+  <div class="summary-tile">
+    <span class="summary-tile-label">Archived</span>
+    <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %}<br><small style="font-weight:400;color:var(--muted)">by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}</small>{% endif %}</span>
+  </div>
+  {% endif %}
 </section>
 
 {% if cycle_count.notes %}
@@ -121,6 +130,20 @@
   {% csrf_token %}
   <input type="hidden" name="action" value="reopen">
   <button class="btn" type="submit">Reopen cycle count</button>
+</form>
+{% endif %}
+
+{% if cycle_count.can_be_archived and perms.inventory.archive_cycle_counts %}
+<form method="post" action="{% url 'cycle_count_archive_action' cycle_count.pk %}" class="card form-actions-row">
+  {% csrf_token %}
+  <button class="btn" type="submit" data-action="warning">Archive cycle count</button>
+  <small class="muted">Removes this completed count from the active list. The data, reconciliation PDF, and signatures stay available in the archive.</small>
+</form>
+{% elif cycle_count.is_archived and perms.inventory.archive_cycle_counts %}
+<form method="post" action="{% url 'cycle_count_unarchive_action' cycle_count.pk %}" class="card form-actions-row">
+  {% csrf_token %}
+  <button class="btn" type="submit">Restore to active list</button>
+  <small class="muted">Archived {{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %} by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}{% endif %}. Restoring puts it back on the active cycle counts list.</small>
 </form>
 {% endif %}
 

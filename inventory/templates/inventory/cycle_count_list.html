@@ -6,6 +6,9 @@
 <div class="page-header">
   <h1>Cycle Counts</h1>
   <div class="actions">
+    {% if perms.inventory.archive_cycle_counts %}
+    <a class="btn" href="{% url 'cycle_count_archive' %}">View Archives{% if archived_count %} ({{ archived_count }}){% endif %}</a>
+    {% endif %}
     {% if perms.inventory.manage_cycle_counts %}
     <a class="btn" href="{% url 'cycle_count_create' %}">New Cycle Count</a>
     {% endif %}
@@ -79,9 +82,15 @@
             <td data-label="Created by">{{ cc.created_by.get_full_name|default:cc.created_by.username }}</td>
             <td data-label="Actions">
               <a class="action-chip" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
-              <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener">Print PDF</a>
+              <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
               {% if cc.status == "completed" and perms.inventory.manage_cycle_counts %}
-              <a class="action-chip" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener">Results</a>
+              <a class="action-chip" href="{% url 'cycle_count_results_pdf' cc.pk %}" target="_blank" rel="noopener" data-action="primary">Results</a>
+              {% endif %}
+              {% if cc.can_be_archived and perms.inventory.archive_cycle_counts %}
+              <form method="post" action="{% url 'cycle_count_archive_action' cc.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button class="action-chip" type="submit" data-action="warning" aria-label="Archive {{ cc.display_name }}">Archive</button>
+              </form>
               {% endif %}
             </td>
           </tr>

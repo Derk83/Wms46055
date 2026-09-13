@@ -3,6 +3,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.urls import reverse
+from django.utils import timezone
 
 from inventory.models import (
     CycleCount,
@@ -22,11 +23,12 @@ def user(db):
 @pytest.fixture
 def manager(db):
     mgr = User.objects.create_user(username="cc-manager", password="x")
-    perm = Permission.objects.get(
-        content_type__app_label="inventory",
-        codename="manage_cycle_counts",
-    )
-    mgr.user_permissions.add(perm)
+    for codename in ("manage_cycle_counts", "archive_cycle_counts"):
+        perm = Permission.objects.get(
+            content_type__app_label="inventory",
+            codename=codename,
+        )
+        mgr.user_permissions.add(perm)
     return mgr
 
 
@@ -36,6 +38,18 @@ def counter(db):
     perm = Permission.objects.get(
         content_type__app_label="inventory",
         codename="perform_cycle_count",
+    )
+    u.user_permissions.add(perm)
+    return u
+
+
+@pytest.fixture
+def archiver(db):
+    """User with the archive_cycle_counts permission but not manage_cycle_counts."""
+    u = User.objects.create_user(username="cc-archiver", password="x")
+    perm = Permission.objects.get(
+        content_type__app_label="inventory",
+        codename="archive_cycle_counts",
     )
     u.user_permissions.add(perm)
     return u
@@ -608,3 +622,259 @@ def test_cycle_count_detail_hides_download_button_when_open(client, manager):
     resp = client.get(reverse("cycle_count_detail", kwargs={"pk": cc.pk}))
     assert resp.status_code == 200
     assert "Download Reconciliation PDF" not in resp.content.decode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Archive feature
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_list_shows_archived_counts(client, manager):
+    """The archive list page shows only archived counts."""
+    cc = _make_completed_cycle_count(manager)
+    # Archive the count
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_archive"))
+    assert resp.status_code == 200
+    body = resp.content.decode("utf-8")
+    assert '<td data-label="Name">' + cc.display_name in body, (
+        f"Archive page should list archived count {cc.display_name} as a row"
+    )
+    assert "archived" in body.lower()
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_list_excludes_active_counts(client, manager):
+    """An open or completed-but-not-archived count must NOT appear on the archive page."""
+    _seed_items("OFCI", 3)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc_active = CycleCount.objects.get()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_archive"))
+    body = resp.content.decode("utf-8")
+    # The active count must NOT appear as a row in the archive table.
+    # (It will appear in a notification-center success message from the create
+    # POST, which is fine — that's the messages framework, not the table.)
+    assert '<td data-label="Name">' + cc_active.display_name not in body, (
+        f"Archive page table contains the active count {cc_active.display_name}; "
+        f"the archive queryset is supposed to filter out non-archived counts."
+    )
+    assert "No archived cycle counts yet" in body
+
+
+@pytest.mark.django_db
+def test_cycle_count_list_hides_archived_by_default(client, manager):
+    """The active list page must hide archived counts (they belong on the archive page)."""
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_list"))
+    body = resp.content.decode("utf-8")
+    # The archived count must NOT appear as a row in the active list table.
+    # (Messages framework may render it elsewhere; that's fine.)
+    assert '<td data-label="Name">' + cc.display_name not in body, (
+        f"Active list table contains the archived count {cc.display_name}; "
+        f"the active list queryset is supposed to hide archived counts."
+    )
+
+
+@pytest.mark.django_db
+def test_cycle_count_list_shows_archived_count_when_flag_set(client, manager):
+    """Power users can opt in to see archived counts on the active list (?archived=1)."""
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_list") + "?archived=1")
+    body = resp.content.decode("utf-8")
+    assert '<td data-label="Name">' + cc.display_name in body, (
+        f"Active list (?archived=1) should show archived count {cc.display_name} as a row"
+    )
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_action_archives_completed_count(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.post(reverse("cycle_count_archive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("/cycle-counts/archive/")
+    cc.refresh_from_db()
+    assert cc.is_archived
+    assert cc.archived_by == manager
+    assert cc.archived_at is not None
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_action_rejects_open_count(client, manager):
+    """An open (not yet completed) count must not be archivable — the audit
+    trail isn't sealed until completion."""
+    _seed_items("OFCI", 3)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc = CycleCount.objects.get()
+    client.force_login(manager)
+    resp = client.post(reverse("cycle_count_archive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302  # redirected with error message
+    assert resp["Location"].endswith(f"/cycle-counts/{cc.pk}/")
+    cc.refresh_from_db()
+    assert not cc.is_archived
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_action_rejects_already_archived(client, manager):
+    """Archiving an already-archived count is a no-op error."""
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    original_archived_at = cc.archived_at
+    client.force_login(manager)
+    resp = client.post(reverse("cycle_count_archive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302
+    cc.refresh_from_db()
+    # Should not have re-archived (timestamp should be unchanged)
+    assert cc.archived_at == original_archived_at
+
+
+@pytest.mark.django_db
+def test_cycle_count_archive_action_requires_archive_perm(client, manager, counter, archiver):
+    """The archive perm is its own gate — counter (perform only) cannot archive,
+    but the archiver fixture (archive only, no manage) can."""
+    cc = _make_completed_cycle_count(manager)
+    # Counter should be denied
+    client.force_login(counter)
+    resp = client.post(reverse("cycle_count_archive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code in (302, 403)
+    cc.refresh_from_db()
+    assert not cc.is_archived
+    # Archiver should be allowed
+    client.force_login(archiver)
+    resp = client.post(reverse("cycle_count_archive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302
+    cc.refresh_from_db()
+    assert cc.is_archived
+
+
+@pytest.mark.django_db
+def test_cycle_count_unarchive_action_restores_to_active_list(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.post(reverse("cycle_count_unarchive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 302
+    assert resp["Location"].endswith("/cycle-counts/archive/")
+    cc.refresh_from_db()
+    assert not cc.is_archived
+    assert cc.archived_at is None
+    assert cc.archived_by is None
+    # Now visible on active list again
+    resp = client.get(reverse("cycle_count_list"))
+    assert '<td data-label="Name">' + cc.display_name in resp.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+def test_cycle_count_unarchive_action_requires_archive_perm(client, manager, counter):
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(counter)
+    resp = client.post(reverse("cycle_count_unarchive_action", kwargs={"pk": cc.pk}))
+    assert resp.status_code in (302, 403)
+    cc.refresh_from_db()
+    assert cc.is_archived  # still archived
+
+
+@pytest.mark.django_db
+def test_cycle_count_can_be_archived_property():
+    """Model property: only completed + not-already-archived counts are archivable."""
+    from inventory.models import InventoryItem
+    item = InventoryItem.objects.create(part_number="X-1", name="X", category="OFCI", active=True)
+    cc = CycleCount.objects.create(
+        name="open",
+        created_by=User.objects.create_user(username="u", password="x"),
+        status=CycleCount.Status.OPEN,
+    )
+    assert cc.can_be_archived is False
+    cc.status = CycleCount.Status.IN_PROGRESS
+    cc.save()
+    assert cc.can_be_archived is False
+    cc.status = CycleCount.Status.COMPLETED
+    cc.completed_at = timezone.now()
+    cc.save()
+    assert cc.can_be_archived is True
+    # Archive it
+    cc.archived_at = timezone.now()
+    cc.archived_by = cc.created_by
+    cc.save()
+    assert cc.can_be_archived is False
+    assert cc.is_archived is True
+    item.delete()
+
+
+@pytest.mark.django_db
+def test_cycle_count_detail_shows_archive_button_when_completed(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_detail", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    body = resp.content.decode("utf-8")
+    assert "Archive cycle count" in body
+    # The form posts to /cycle-counts/<pk>/archive/
+    assert f"/cycle-counts/{cc.pk}/archive/" in body
+
+
+@pytest.mark.django_db
+def test_cycle_count_detail_shows_unarchive_button_when_archived(client, manager):
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_detail", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    body = resp.content.decode("utf-8")
+    assert "Restore to active list" in body
+    assert f"/cycle-counts/{cc.pk}/unarchive/" in body
+    # Archive form must NOT be present
+    assert "Archive cycle count</button>" not in body
+
+
+@pytest.mark.django_db
+def test_cycle_count_results_pdf_still_works_after_archive(client, manager):
+    """Archiving is a UI housekeeping move — the reconciliation PDF must still
+    be downloadable after a count is archived. This is the whole point of
+    preserving the audit trail."""
+    cc = _make_completed_cycle_count(manager)
+    cc.archived_at = timezone.now()
+    cc.archived_by = manager
+    cc.save()
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_results_pdf", kwargs={"pk": cc.pk}))
+    assert resp.status_code == 200
+    assert resp["Content-Type"] == "application/pdf"
+    assert resp.content[:4] == b"%PDF"
+
+
+@pytest.mark.django_db
+def test_cycle_count_list_archived_count_in_actions(client, manager):
+    """The Archive action chip must appear on completed, unarchived rows when
+    the user has the archive perm."""
+    cc = _make_completed_cycle_count(manager)
+    client.force_login(manager)
+    resp = client.get(reverse("cycle_count_list"))
+    body = resp.content.decode("utf-8")
+    # The cycle_count isn't archived yet, so the archive button must be present
+    assert f"/cycle-counts/{cc.pk}/archive/" in body
+    assert "Archive" in body
