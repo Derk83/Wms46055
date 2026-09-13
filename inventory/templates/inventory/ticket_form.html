@@ -1,6 +1,7 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% block content %}
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="{% static 'inventory/js/vendor/html5-qrcode.min.js' %}" type="text/javascript"></script>
 {% if is_edit and ticket.pk %}
 <h1>Edit Pick Ticket {{ ticket.ticket_number }}</h1>
 {% else %}

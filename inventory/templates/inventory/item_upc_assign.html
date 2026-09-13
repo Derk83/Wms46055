@@ -1,6 +1,7 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% block content %}
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="{% static 'inventory/js/vendor/html5-qrcode.min.js' %}" type="text/javascript"></script>
 <div class="page-header"><div><h1>Assign Existing UPC</h1><p class="subtitle">{{ item.part_number }} · {{ item.name }}</p></div><a class="btn light" href="{% url 'item_detail' item.pk %}">Cancel</a></div>
 <div class="card upc-card">
   <p>Scan the UPC already printed on this item, or enter it manually. Saving replaces the item's current barcode value.</p>

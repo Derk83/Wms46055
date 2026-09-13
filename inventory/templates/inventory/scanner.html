@@ -1,6 +1,7 @@
 {% extends 'inventory/base.html' %}
+{% load static %}
 {% block content %}
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script src="{% static 'inventory/js/vendor/html5-qrcode.min.js' %}" type="text/javascript"></script>
 <div class="scanner-shell">
   <div class="page-header scanner-hero">
     <div>
@@ -45,8 +46,7 @@
 .scanner-tips span { padding:10px 12px; border-radius:999px; background:rgba(87,211,145,.1); border:1px solid rgba(87,211,145,.2); }
 @media (max-width: 850px) { .scanner-grid { grid-template-columns:1fr; } .scanner-reader { min-height:320px; } }
 </style>
-<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 const result = document.getElementById('result');
 let scanner = null;
 let scanHandled = false;
