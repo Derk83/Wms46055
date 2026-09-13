@@ -11,7 +11,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="{% if is_request_portal %}BBX Requests{% else %}BBX WMS{% endif %}">
   <title>{% block title %}Black Box Warehouse{% endblock %}</title>
-  <script>try{const t=localStorage.getItem('bbx-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')}catch(e){}</script>
+  <script nonce="{{ request.csp_nonce }}">try{const t=localStorage.getItem('bbx-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')}catch(e){}</script>
   <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
   <link rel="stylesheet" href="{% static 'inventory/css/notification-center.css' %}">
   <link rel="manifest" href="/manifest.webmanifest">

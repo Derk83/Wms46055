@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+from csp.constants import NONCE
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -101,7 +103,7 @@ AXES_VERBOSE_IP_AND_USERNAME = False
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ("'self'",),
-        "script-src": ("'self'",),
+        "script-src": ("'self'", NONCE),
         "style-src": ("'self'", "'unsafe-inline'"),
         "img-src": ("'self'", "data:"),
         "connect-src": ("'self'",),

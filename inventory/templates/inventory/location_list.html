@@ -51,7 +51,7 @@
 .section-summary{display:flex;justify-content:space-between;gap:10px;margin:12px 0 10px;padding-top:10px;border-top:1px solid var(--border);font-size:.9rem}.section-bins{display:flex;flex-wrap:wrap;gap:7px}.bin-link{display:grid;gap:1px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);text-decoration:none}.bin-link:hover{border-color:var(--accent)}.bin-link strong{font-size:.83rem}.bin-link small{font-size:.72rem}.empty-state{text-align:center;padding:3rem 1rem;color:var(--muted)}
 @media(max-width:720px){.location-print-controls{top:67px;flex-wrap:wrap}.location-print-controls .btn{flex:1 1 100%}.section-grid{grid-template-columns:1fr}.section-card{padding:14px}}
 </style>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (() => {
   const form = document.getElementById('location-print-form');
   if (!form) return;
