@@ -583,14 +583,24 @@ class TicketImprovementTests(TestCase):
         self.assertEqual(self.item_a.quantity_on_hand, 10)
 
     def test_transaction_type_badges_are_color_coded(self):
-        InventoryTransaction.objects.create(item=self.item_a, transaction_type="PICK", quantity_delta=-1, created_by=self.user)
+        self.item_a.adjust_quantity(
+            -1,
+            InventoryTransaction.TransactionType.PICK,
+            user=self.user,
+            notes="Pick badge test",
+        )
         self.item_a.adjust_quantity(
             2,
             InventoryTransaction.TransactionType.RECEIPT,
             user=self.user,
             notes="Receipt badge test",
         )
-        InventoryTransaction.objects.create(item=self.item_a, transaction_type="ADJUSTMENT", quantity_delta=3, created_by=self.user)
+        self.item_a.adjust_quantity(
+            3,
+            InventoryTransaction.TransactionType.ADJUSTMENT,
+            user=self.user,
+            notes="Adjustment badge test",
+        )
 
         response = self.client.get(reverse("transaction_history"))
 

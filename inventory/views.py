@@ -2336,24 +2336,25 @@ def inventory_bulk_edit(request):
                     
                     if changes:
                         old_qty = item.quantity_on_hand
+                        qty_changed = old_qty != new_qty
                         item.name = new_name
                         item.shipper = new_shipper
                         item.category = new_category
-                        item.quantity_on_hand = new_qty
                         item.building_room = new_building_room
                         item.rack = new_rack
                         item.section = new_section
                         item.bin_location = new_bin
                         item.low_stock_threshold = new_threshold or 0
+                        # Persist non-quantity fields first so the audit row references final metadata
                         item.save()
-                        
-                        # Log quantity change as adjustment transaction
-                        if old_qty != new_qty:
-                            InventoryTransaction.objects.create(
-                                item=item,
+
+                        if qty_changed:
+                            # Route the quantity change through adjust_quantity so the
+                            # ledger entry is created atomically with select_for_update.
+                            item.adjust_quantity(
+                                new_qty - old_qty,
                                 transaction_type=InventoryTransaction.TransactionType.ADJUSTMENT,
-                                quantity_delta=new_qty - old_qty,
-                                created_by=request.user,
+                                user=request.user,
                                 notes=f"Bulk edit: {', '.join(changes)}",
                             )
                         updated_count += 1
