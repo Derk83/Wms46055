@@ -1,129 +1,193 @@
 {% load static %}
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>{{ cycle_count.display_name }} — Cycle Count Sheet</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Black Box — Cycle Count {{ cycle_count.display_name }}</title>
 <style>
-  @page {
-    size: Letter;
-    margin: 0.5in;
-  }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 11pt;
-    color: #000;
-    background: #fff;
-    margin: 0;
-  }
-  h1 {
-    font-size: 18pt;
-    margin: 0 0 4pt 0;
-  }
-  .meta {
-    font-size: 10pt;
-    color: #333;
-    margin-bottom: 16pt;
-  }
-  .meta-row { display: block; margin-bottom: 2pt; }
-  .notes {
-    border: 1px solid #888;
-    padding: 6pt 8pt;
-    margin-bottom: 12pt;
-    font-size: 10pt;
-    white-space: pre-wrap;
-  }
-  .category-header {
-    background: #222;
-    color: #fff;
-    padding: 4pt 8pt;
-    font-weight: 700;
-    margin: 12pt 0 0 0;
-    font-size: 11pt;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 0;
-  }
-  th, td {
-    border: 1px solid #555;
-    padding: 4pt 6pt;
-    vertical-align: top;
-    font-size: 10pt;
-  }
-  th {
-    background: #ddd;
-    text-align: left;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-  tr.spacer td { border: 0; height: 4pt; }
-  .col-part { width: 18%; }
-  .col-name { width: 38%; }
-  .col-storage { width: 18%; }
-  .col-count { width: 14%; }
-  .col-note { width: 12%; }
-  .count-box {
-    display: inline-block;
-    border: 1px solid #000;
-    min-width: 60pt;
-    height: 14pt;
-  }
-  .footer {
-    margin-top: 16pt;
-    font-size: 9pt;
-    color: #444;
-    border-top: 1px solid #888;
-    padding-top: 6pt;
-  }
+:root{--black:#111;--charcoal:#242424;--red:#e31e2b;--gray:#5f6368;--line:#aeb2b7;--paper:#fff;--canvas:#ececec;--soft:#f2f3f4;--sans:Arial,"Helvetica Neue",sans-serif;--mono:"Courier New",monospace}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--canvas);color:var(--black);font-family:var(--sans)}
+.toolbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;padding:12px 18px;background:rgba(17,17,17,.97);border-bottom:3px solid var(--red);color:#fff}
+.btn{display:inline-flex;align-items:center;justify-content:center;padding:9px 14px;border:1px solid #626262;border-radius:5px;background:#292929;color:#fff;text-decoration:none;font:700 12px var(--sans);cursor:pointer}
+.btn.print{border-color:var(--red);background:var(--red)}
+.status{margin-left:auto;color:#d4d4d4;font:11px var(--mono)}
+.preview{padding:22px;overflow:auto}
+.print-page{position:relative;display:block;width:11in;height:8.5in;margin:0 auto 22px;padding:.32in .38in .29in;background:var(--paper);box-shadow:0 10px 30px rgba(0,0,0,.14);page-break-after:always;overflow:hidden}
+.print-page:last-child{page-break-after:auto}
+.header{display:grid;grid-template-columns:1.7in 1fr auto;align-items:center;gap:.18in;padding-bottom:.10in;border-bottom:4px solid var(--red)}
+.logo{display:block;width:1.55in;height:auto}
+.document-name{padding-left:.18in;border-left:1px solid #bbb}
+.document-name strong{display:block;font-size:20px;line-height:1;text-transform:uppercase;letter-spacing:.04em}
+.document-name span{display:block;margin-top:4px;color:var(--gray);font:8px var(--mono);letter-spacing:.08em}
+.ticket-id{text-align:right}
+.ticket-id .label{color:var(--gray);font:7px var(--mono);letter-spacing:.1em;text-transform:uppercase}
+.ticket-id .value{margin-top:3px;font:700 18px var(--mono)}
+.page-note{margin-top:3px;color:var(--gray);font:700 7px var(--mono)}
+.page-number{display:inline-block;margin-top:5px;padding:3px 7px;border:1px solid var(--red);border-radius:3px;color:var(--black);font:700 8px var(--mono);letter-spacing:.04em;background:#fff}
+.summary{display:grid;grid-template-columns:.8fr 1.2fr 1.25fr 1.25fr;gap:.07in;margin-top:.12in}
+.info-box{min-height:.44in;padding:.05in .075in;border:1px solid var(--line);border-top:3px solid var(--charcoal);background:#fff}
+.info-box.accent{border-top-color:var(--red)}
+.label{color:var(--gray);font:700 6.8px var(--mono);letter-spacing:.075em;text-transform:uppercase}
+.value{margin-top:.035in;font-size:9.5px;font-weight:700;line-height:1.2;white-space:pre-wrap;overflow-wrap:anywhere}
+.section-title{display:flex;align-items:center;justify-content:space-between;margin-top:.11in;padding:.045in .075in;background:var(--charcoal);border-left:5px solid var(--red);color:#fff;font:700 7.4px var(--mono);letter-spacing:.11em;text-transform:uppercase}
+.section-title span{color:#ddd;font-weight:400;letter-spacing:.04em}
+table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px}
+thead{display:table-header-group}
+th{padding:.05in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
+td{height:.22in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle;line-height:1.08;overflow-wrap:anywhere}
+tbody tr:nth-child(even) td{background:var(--soft)}
+tr{page-break-inside:avoid}
+.col-num{width:4%;text-align:center}
+.col-bin{width:15%}
+.col-part{width:20%}
+.col-description{width:auto}
+.col-count{width:14%;text-align:center}
+.col-note{width:14%}
+.count-box{display:inline-block;width:.65in;height:.18in;border:1px solid #000;background:#fff;vertical-align:middle}
+.receipt{position:absolute;left:.38in;right:.38in;bottom:.30in;page-break-inside:avoid}
+.receipt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.07in}
+.receipt .info-box{min-height:.40in}
+.notes-box{min-height:.38in;margin-top:.04in;padding:.045in .075in;border:1px solid var(--line)}
+.notes-box .value{min-height:.22in}
+.sign-line{height:.12in;margin-top:.10in;border-bottom:1px solid #555}
+.footer{position:absolute;left:.38in;right:.38in;bottom:.12in;display:flex;justify-content:space-between;padding-top:.055in;border-top:1px solid #aaa;color:#555;font:7px var(--mono)}
+.footer-after-receipt{margin-top:0}
+.recon-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:8.6px;margin-top:.05in}
+.recon-table th{padding:.04in .035in;border:1px solid #555;background:#dedede;color:#222;font:700 6.8px var(--mono);letter-spacing:.035em;text-align:left;vertical-align:middle}
+.recon-table td{height:.20in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle}
+.recon-table tbody tr:nth-child(even) td{background:var(--soft)}
+.recon-col-cat{width:50%}
+.recon-col-num{width:25%;text-align:center}
+.recon-col-sig{width:25%}
+.pdf-mode .footer{left:.29in;right:.29in;bottom:.08in}
+.pdf-mode .print-page{padding:.22in .29in .20in}
+.pdf-mode .header{padding-bottom:.06in}
+.pdf-mode .summary{margin-top:.07in}
+.pdf-mode .section-title{margin-top:.07in}
+.pdf-mode td{height:.20in}
+.pdf-mode .receipt{left:.29in;right:.29in;bottom:.25in}
+.pdf-mode .recon-table td{height:.18in}
+@media(max-width:760px){.toolbar{flex-wrap:wrap}.status{width:100%;margin-left:0}.preview{padding:8px}}
+@media print{@page{size:Letter landscape;margin:.24in}html,body{width:100%!important;height:auto!important;background:#fff!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none!important}.preview{width:100%!important;margin:0!important;padding:0!important}.print-page{width:100%!important;height:8.02in!important;margin:0!important;padding:.18in .24in!important;box-shadow:none!important;break-after:page;page-break-after:always}.receipt{left:.24in;right:.24in;bottom:.24in}.print-page:last-child{break-after:auto;page-break-after:auto}}
 </style>
 </head>
-<body>
-<h1>Cycle Count Sheet — {{ cycle_count.display_name }}</h1>
-<div class="meta">
-  <span class="meta-row"><strong>Created:</strong> {{ cycle_count.created_at|date:"Y-m-d H:i" }} by {{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }}</span>
-  <span class="meta-row"><strong>Generated:</strong> {{ generated_at|date:"Y-m-d H:i" }} by {{ generator.get_full_name|default:generator.username }}</span>
-  <span class="meta-row"><strong>Total items:</strong> {{ cycle_count.total_items }}</span>
+<body class="{% if pdf_mode %}pdf-mode{% endif %}">
+{% if not pdf_mode %}
+<div class="toolbar">
+  <button type="button" class="btn print" onclick="backupAndPrint()">Download Backup &amp; Print</button>
+  <a class="btn" href="{% url 'cycle_count_detail' cycle_count.pk %}">Back to Cycle Count</a>
+  <span class="status" id="printStatus">The generated time will use this computer's clock.</span>
 </div>
-
-{% if cycle_count.notes %}
-<div class="notes"><strong>Notes:</strong> {{ cycle_count.notes }}</div>
 {% endif %}
+<main class="preview">
+{% for page in pages %}
+<section class="print-page">
+  <header class="header">
+    {% if pdf_mode %}<img class="logo" src="{{ logo_uri }}" alt="Black Box">{% else %}<img class="logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">{% endif %}
+    <div class="document-name"><strong>Cycle Count</strong><span>WAREHOUSE INVENTORY AUDIT DOCUMENT</span></div>
+    <div class="ticket-id"><div class="label">Cycle Count #</div><div class="value">{{ cycle_count.display_name }}</div><div class="page-number">Page {{ page.number }} of {{ total_pages }}</div>{% if not page.is_first and not page.is_last %}<div class="page-note">CONTINUED</div>{% endif %}</div>
+  </header>
 
-{% regroup items by category as grouped %}
-{% for group in grouped %}
-  <div class="category-header">{{ group.grouper }} ({{ group.list|length }} item{{ group.list|length|pluralize }})</div>
+  {% if page.is_first %}
+  <div class="summary">
+    <div class="info-box accent"><div class="label">COUNTED BY</div><div class="sign-line"></div></div>
+    <div class="info-box accent"><div class="label">CREATED BY</div><div class="value">{{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }}</div></div>
+    <div class="info-box"><div class="label">CATEGORIES</div><div class="value">{{ category_summaries|length }}{% if category_summaries %} — {% for summary in category_summaries %}{{ summary.name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</div></div>
+    <div class="info-box"><div class="label">DATE GENERATED AT PRINT</div><div class="value" data-client-generated-at>{{ generated_at|date:"m/d/Y g:i A" }}</div></div>
+  </div>
+  {% else %}
+  <div class="summary">
+    <div class="info-box"><div class="label">CYCLE COUNT #</div><div class="value">{{ cycle_count.display_name }}</div></div>
+    <div class="info-box"><div class="label">DATE GENERATED AT PRINT</div><div class="value" data-client-generated-at>{{ generated_at|date:"m/d/Y g:i A" }}</div></div>
+    <div class="info-box"><div class="label">CONTINUED FROM PAGE</div><div class="value">{{ page.number|add:-1 }} OF {{ total_pages }}</div></div>
+    <div class="info-box"><div class="label">REMAINING ITEMS</div><div class="value">SEE TABLE BELOW</div></div>
+  </div>
+  {% endif %}
+
+  <div class="section-title">ITEMS TO COUNT <span>{{ cycle_count.total_items }} item{{ cycle_count.total_items|pluralize }} · {{ category_summaries|length }} categor{% if category_summaries|length == 1 %}y{% else %}ies{% endif %}</span></div>
   <table>
-    <thead>
-      <tr>
-        <th class="col-part">Part #</th>
-        <th class="col-name">Name</th>
-        <th class="col-storage">Storage</th>
-        <th class="col-count">Counted Qty</th>
-        <th class="col-note">Note</th>
-      </tr>
-    </thead>
+    <thead><tr><th class="col-num">#</th><th class="col-bin">STORAGE</th><th class="col-part">PART #</th><th class="col-description">ITEM DESCRIPTION</th><th class="col-count">COUNTED QTY</th><th class="col-note">NOTE</th></tr></thead>
     <tbody>
-      {% for entry in group.list %}
-        <tr>
-          <td>{{ entry.item.part_number }}</td>
-          <td>{{ entry.item.name }}</td>
-          <td>{% if entry.item.storage_location %}{{ entry.item.storage_location }}{% else %}—{% endif %}</td>
-          <td><span class="count-box">&nbsp;</span></td>
-          <td>&nbsp;</td>
-        </tr>
-      {% endfor %}
+    {% for row in page.rows %}
+      <tr><td class="col-num">{{ row.number }}</td><td>{{ row.entry.item.storage_location|default:"" }}</td><td>{{ row.entry.item.part_number }}</td><td>{{ row.entry.item.name }}</td><td class="col-count"><span class="count-box"></span></td><td></td></tr>
+    {% empty %}
+      <tr><td class="col-num">1</td><td></td><td></td><td></td><td class="col-count"></td><td></td></tr>
+    {% endfor %}
     </tbody>
   </table>
-{% endfor %}
 
-<div class="footer">
-  Count each item by physical verification only. Do not reference the system on-hand quantity when counting.
-  Record the counted quantity in the box, and use the note column for any discrepancy context (damaged, missing, mis-located).
-  Return this sheet to {{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }} for reconciliation.
-</div>
+  {% if page.is_last %}
+  <section class="receipt">
+    <div class="section-title">RECONCILIATION &amp; VERIFICATION</div>
+    <div class="receipt-grid">
+      <div class="info-box"><div class="label">COUNTER PRINT NAME</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">COUNTER SIGNATURE</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">COUNT DATE / TIME</div><div class="sign-line"></div></div>
+    </div>
+    <div class="receipt-grid" style="margin-top:.07in">
+      <div class="info-box"><div class="label">REVIEWED BY (MANAGER)</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">MANAGER SIGNATURE</div><div class="sign-line"></div></div>
+      <div class="info-box"><div class="label">REVIEW DATE</div><div class="sign-line"></div></div>
+    </div>
+    <div class="notes-box"><div class="label">PER-CATEGORY BREAKDOWN</div>
+      <table class="recon-table">
+        <thead><tr><th class="recon-col-cat">CATEGORY</th><th class="recon-col-num">ITEMS COUNTED</th><th class="recon-col-sig">VARIANCES (FILL IN)</th></tr></thead>
+        <tbody>
+        {% for summary in category_summaries %}
+          <tr><td>{{ summary.name }}</td><td class="recon-col-num">{{ summary.total }}</td><td class="recon-col-sig">&nbsp;</td></tr>
+        {% endfor %}
+        <tr><td><strong>TOTAL</strong></td><td class="recon-col-num"><strong>{{ cycle_count.total_items }}</strong></td><td class="recon-col-sig">&nbsp;</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="notes-box" style="min-height:.30in"><div class="label">RECONCILIATION NOTES</div><div class="value">&nbsp;</div></div>
+  </section>
+  {% endif %}
+  <footer class="footer{% if page.is_last %} footer-after-receipt{% endif %}"><span>Black Box · Cycle Count · Count each item by physical verification — system quantity hidden intentionally</span><span>Page {{ page.number }} of {{ total_pages }}</span></footer>
+</section>
+{% endfor %}
+</main>
+{% if not pdf_mode %}
+<script>
+let backupStarted = false;
+let generatedAtForPrint = '';
+function computerGeneratedTime() {
+  return new Intl.DateTimeFormat(undefined, {
+    month: '2-digit', day: '2-digit', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  }).format(new Date());
+}
+function updateGeneratedAt() {
+  generatedAtForPrint = computerGeneratedTime();
+  document.querySelectorAll('[data-client-generated-at]').forEach((node) => {
+    node.textContent = generatedAtForPrint;
+  });
+  return generatedAtForPrint;
+}
+function downloadLocalBackup() {
+  if (backupStarted) return;
+  backupStarted = true;
+  const localTime = updateGeneratedAt();
+  const link = document.createElement('a');
+  const baseUrl = '{% url "cycle_count_pdf" cycle_count.pk %}';
+  link.href = `${baseUrl}?generated_at=${encodeURIComponent(localTime)}`;
+  link.download = 'Black_Box_Cycle_Count_{{ cycle_count.display_name }}.pdf';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+function backupAndPrint() {
+  const status = document.getElementById('printStatus');
+  updateGeneratedAt();
+  downloadLocalBackup();
+  if (status) status.textContent = 'PDF backup downloaded. Opening print dialog…';
+  setTimeout(() => { window.focus(); updateGeneratedAt(); window.print(); }, 450);
+}
+updateGeneratedAt();
+window.addEventListener('beforeprint', () => { updateGeneratedAt(); downloadLocalBackup(); });
+</script>
+{% endif %}
 </body>
 </html>

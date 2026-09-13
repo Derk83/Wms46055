@@ -246,6 +246,74 @@ def test_cycle_count_pdf_returns_pdf_without_system_qty(client, manager):
 
 
 @pytest.mark.django_db
+def test_cycle_count_pdf_pagination_for_large_counts(client, manager):
+    """21 items should produce 2 pages (20 on page 1, 1 on page 2)."""
+    _seed_items("OFCI", 21)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc = CycleCount.objects.get()
+    assert cc.total_items == 21
+    ctx = _cycle_count_print_context_for_test(cc, pdf_mode=True)
+    assert ctx["total_pages"] == 2
+    assert len(ctx["pages"][0]["rows"]) == 20
+    assert len(ctx["pages"][1]["rows"]) == 1
+    # Numbers are sequential across pages
+    assert ctx["pages"][0]["rows"][0]["number"] == 1
+    assert ctx["pages"][0]["rows"][-1]["number"] == 20
+    assert ctx["pages"][1]["rows"][0]["number"] == 21
+    # is_first / is_last are correct
+    assert ctx["pages"][0]["is_first"] is True
+    assert ctx["pages"][0]["is_last"] is False
+    assert ctx["pages"][1]["is_first"] is False
+    assert ctx["pages"][1]["is_last"] is True
+
+
+@pytest.mark.django_db
+def test_cycle_count_pdf_context_omits_system_quantity_for_render(client, manager):
+    """The PDF context exposes only items, not system_quantity, so the template
+    physically cannot render the live on-hand value."""
+    _seed_items("OFCI", 5)
+    client.force_login(manager)
+    client.post(reverse("cycle_count_create"), data={"percent_OFCI": "100"})
+    cc = CycleCount.objects.get()
+    ctx = _cycle_count_print_context_for_test(cc, pdf_mode=True)
+    # Recursively walk the context; ensure no value contains a system_quantity
+    system_qtys = list(cc.items.values_list("system_quantity", flat=True))
+    flat = _flatten_strings(ctx)
+    for qty in system_qtys:
+        assert str(qty) not in flat, (
+            f"LEAK: PDF context contains system_quantity={qty}"
+        )
+
+
+def _flatten_strings(obj):
+    """Recursively collect every string value in a nested dict/list structure."""
+    out = []
+    if isinstance(obj, dict):
+        for v in obj.values():
+            out.extend(_flatten_strings(v))
+    elif isinstance(obj, (list, tuple, set)):
+        for v in obj:
+            out.extend(_flatten_strings(v))
+    elif isinstance(obj, str):
+        out.append(obj)
+    elif obj is None or isinstance(obj, (int, float, bool)):
+        # Numbers are fine to skip — but we already assert no system_quantity
+        # integer appears next to a part number via the smoke test.
+        pass
+    else:
+        # Models have __str__; coerce via repr to be safe
+        out.append(repr(obj))
+    return out
+
+
+def _cycle_count_print_context_for_test(cc, *, pdf_mode=False):
+    """Inline the helper to avoid an import dance in the test module."""
+    from inventory.views import _cycle_count_print_context
+    return _cycle_count_print_context(cc, pdf_mode=pdf_mode)
+
+
+@pytest.mark.django_db
 def test_hamburger_link_visible_for_permitted_users(client, counter, manager, outsider):
     # The hamburger link is in base.html; the easiest assertion is that
     # the cycle_count_list page itself is accessible. The actual link

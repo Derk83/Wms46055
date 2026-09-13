@@ -4089,24 +4089,95 @@ def cycle_count_detail(request, pk):
 @any_perm_required("inventory.perform_cycle_count", "inventory.manage_cycle_counts")
 def cycle_count_pdf(request, pk):
     """Render the printable count sheet as a PDF (no current quantities)."""
-    cycle_count = get_object_or_404(CycleCount, pk=pk)
-    items = (
-        cycle_count.items.select_related("item")
-        .order_by("category", "item__name")
-    )
+    from django.conf import settings as django_settings
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
 
-    context = {
-        "cycle_count": cycle_count,
-        "items": items,
-        "generated_at": timezone.now(),
-        "generator": request.user,
-    }
-    html = render(
-        request, "inventory/cycle_count_pdf.html", context
-    ).content.decode("utf-8")
-    pdf_bytes = weasyprint.HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
-    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    context = _cycle_count_print_context(cycle_count, pdf_mode=True)
+    html = render_to_string(
+        "inventory/cycle_count_pdf.html",
+        context,
+        request=request,
+    )
+    pdf = HTML(string=html, base_url=str(django_settings.BASE_DIR)).write_pdf()
+    response = HttpResponse(pdf, content_type="application/pdf")
     response["Content-Disposition"] = (
         f'inline; filename="cycle-count-{cycle_count.pk:05d}.pdf"'
     )
     return response
+
+
+def _cycle_count_print_context(cycle_count, *, pdf_mode=False):
+    """Build the template context for the cycle count print/PDF.
+
+    Splits items into landscape Letter pages of ``rows_per_page`` rows each.
+    Each page knows if it is first/last so the template can render summary
+    strips and the final reconciliation block exactly where they belong.
+    Each row carries a global ``number`` so the counter can keep their place
+    when the sheet spans multiple pages.
+    """
+    items = list(
+        cycle_count.items.select_related("item")
+        .order_by("category", "item__name")
+    )
+    # Twenty operational rows fit safely on a landscape Letter page while
+    # preserving the page header, summary strip, and footer. Same number as
+    # the pick ticket print so the look and feel matches exactly.
+    rows_per_page = 20
+    chunks = [
+        items[index : index + rows_per_page]
+        for index in range(0, len(items), rows_per_page)
+    ] or [[]]
+    total_pages = len(chunks)
+    pages = []
+    cursor = 0
+    for index, rows in enumerate(chunks, start=1):
+        numbered_rows = []
+        for entry in rows:
+            cursor += 1
+            numbered_rows.append({"number": cursor, "entry": entry})
+        pages.append(
+            {
+                "number": index,
+                "rows": numbered_rows,
+                "is_first": index == 1,
+                "is_last": index == total_pages,
+            }
+        )
+    # Per-category totals for the reconciliation block on the last page.
+    category_summaries = []
+    for category, group in _group_items_by_category(items):
+        category_summaries.append(
+            {
+                "name": category,
+                "total": len(group),
+            }
+        )
+    context = {
+        "cycle_count": cycle_count,
+        "pages": pages,
+        "total_pages": total_pages,
+        "category_summaries": category_summaries,
+        "generated_at": timezone.now(),
+        "pdf_mode": pdf_mode,
+    }
+    if pdf_mode:
+        logo_path = (
+            django_settings.BASE_DIR
+            / "inventory"
+            / "static"
+            / "inventory"
+            / "img"
+            / "blackbox-logo.png"
+        )
+        context["logo_uri"] = logo_path.as_uri()
+    return context
+
+
+def _group_items_by_category(items):
+    """Yield ``(category, [items...])`` preserving first-seen order."""
+    seen = {}
+    for item in items:
+        seen.setdefault(item.category, []).append(item)
+    return list(seen.items())
