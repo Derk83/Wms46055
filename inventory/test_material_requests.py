@@ -127,31 +127,36 @@ class MaterialRequestWorkflowTests(TestCase):
 
         delivery_at = datetime(2026, 9, 15, 14, 30, tzinfo=datetime_timezone.utc)
         form = MaterialRequestForm({
-            "requestor_name": "", "building_room": "", "location": "", "notes": "",
+            "requestor_name": "Derek", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
             "delivery_at": "2026-09-15T14:30",
         })
         self.assertTrue(form.is_valid(), form.errors)
         request_obj = create_material_request(
-            creator=self.user, requestor_name="", building_room="", location="", notes="",
+            creator=self.user, requestor_name="Derek", requestor_email="derek@example.com",
+            building_room="", location="Job Site A", notes="",
             delivery_at=delivery_at,
             lines=[{"item": self.item_a, "quantity": 1, "notes": ""}],
         )
         self.assertEqual(request_obj.delivery_at, delivery_at)
-        self.assertEqual(request_obj.pick_ticket.requested_by_name, "")
+        self.assertEqual(request_obj.pick_ticket.requested_by_name, "Derek")
 
     def test_urgent_checkbox_is_persisted_and_defaults_to_not_urgent(self):
         from .forms import MaterialRequestForm
         from .services import create_material_request
 
         default_request = create_material_request(
-            creator=self.user, requestor_name="Normal", building_room="", location="", notes="",
+            creator=self.user, requestor_name="Normal",
+            requestor_email="normal@example.com",
+            building_room="", location="Job Site A", notes="",
             delivery_at=datetime(2026, 9, 15, 14, 30, tzinfo=datetime_timezone.utc),
             lines=[{"item": self.item_a, "quantity": 1, "notes": ""}],
         )
         self.assertFalse(default_request.urgent)
 
         form = MaterialRequestForm({
-            "requestor_name": "Urgent", "building_room": "", "location": "", "notes": "",
+            "requestor_name": "Urgent", "requestor_email": "urgent@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
             "delivery_at": "2026-09-15T14:45", "urgent": "on",
         })
         self.assertTrue(form.is_valid(), form.errors)
@@ -219,7 +224,9 @@ class MaterialRequestAccessAndHostTests(TestCase):
 
     def _post_data(self, qty="2"):
         return {
-            "requestor_name": "Portal User", "building_room": "B1", "location": "Room 2", "notes": "Need it", "delivery_at": "2026-09-16T10:15",
+            "requestor_name": "Portal User", "requestor_email": "portal@example.com",
+            "building_room": "B1", "location": "Room 2", "notes": "Need it",
+            "delivery_at": "2026-09-16T10:15",
             "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "1000",
             "lines-0-item": str(self.item.pk), "lines-0-quantity": qty, "lines-0-notes": "Medium",
         }

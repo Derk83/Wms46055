@@ -82,13 +82,21 @@ class MaterialRequestForm(forms.ModelForm):
             else:
                 kwargs["data"] = copied
         super().__init__(*args, **kwargs)
-        self.fields["requestor_email"].required = False
+        # Requestor Name, Email, and Location are required for every material
+        # request so the warehouse always has a way to confirm or contact the
+        # person who asked for the material and where it should be delivered.
+        self.fields["requestor_name"].required = True
+        self.fields["requestor_name"].error_messages["required"] = "Requestor name is required."
+        self.fields["requestor_email"].required = True
+        self.fields["requestor_email"].error_messages["required"] = "Requestor email is required so the warehouse can send the ready-for-delivery confirmation."
         self.fields["requestor_email"].help_text = (
             "Receives a ready-for-delivery email with secure response buttons."
         )
         self.fields["requestor_email"].widget.attrs.update({
             "autocomplete": "email", "placeholder": "requestor@example.com"
         })
+        self.fields["location"].required = True
+        self.fields["location"].error_messages["required"] = "Delivery location is required so the picker knows where to deliver the request."
 
     def clean_delivery_at(self):
         delivery_at = self.cleaned_data.get("delivery_at")

@@ -62,7 +62,9 @@ class MaterialRequestInventoryPickerTests(TestCase):
         self.client.post(
             reverse("material_request_create"),
             {
-                "requestor_name": "Picker Tester", "building_room": "BLDG", "location": "Dock", "notes": "", "delivery_at": "2026-09-15T10:00",
+                "requestor_name": "Picker Tester", "requestor_email": "picker@example.com",
+                "building_room": "BLDG", "location": "Dock", "notes": "",
+                "delivery_at": "2026-09-15T10:00",
                 "lines-TOTAL_FORMS": "1", "lines-INITIAL_FORMS": "0", "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "1000",
                 "lines-0-item": str(self.active.pk), "lines-0-quantity": "2", "lines-0-notes": "",
             },

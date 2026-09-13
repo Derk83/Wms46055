@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
@@ -16,15 +17,17 @@ class RequestedMaterialRequestChangesTests(TestCase):
 
     def test_delivery_date_and_time_is_required_and_uses_quarter_hour_select(self):
         missing = MaterialRequestForm({
-            "requestor_name": "", "building_room": "", "location": "", "notes": "",
+            "requestor_name": "", "requestor_email": "", "building_room": "", "location": "", "notes": "",
             "delivery_at_0": "", "delivery_at_1": "",
         })
         off_slot = MaterialRequestForm({
-            "requestor_name": "", "building_room": "", "location": "", "notes": "",
+            "requestor_name": "Derek", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
             "delivery_at_0": "2026-09-15", "delivery_at_1": "10:07",
         })
         valid = MaterialRequestForm({
-            "requestor_name": "", "building_room": "", "location": "", "notes": "",
+            "requestor_name": "Derek", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
             "delivery_at_0": "2026-09-15", "delivery_at_1": "10:15",
         })
 
@@ -37,6 +40,66 @@ class RequestedMaterialRequestChangesTests(TestCase):
         self.assertIn('type="date"', html)
         self.assertIn('<option value="10:15">10:15 AM</option>', html)
         self.assertNotIn('value="10:07"', html)
+
+    def test_requestor_name_email_and_location_are_required(self):
+        """Requestor name, requestor email, and location are required so the
+        warehouse always knows who is asking and where to deliver."""
+        # Each individual missing field should produce a required error.
+        missing_name = MaterialRequestForm({
+            "requestor_name": "", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
+            "delivery_at_0": "2026-09-15", "delivery_at_1": "10:15",
+        })
+        self.assertFalse(missing_name.is_valid())
+        self.assertIn("requestor_name", missing_name.errors)
+
+        missing_email = MaterialRequestForm({
+            "requestor_name": "Derek", "requestor_email": "",
+            "building_room": "", "location": "Job Site A", "notes": "",
+            "delivery_at_0": "2026-09-15", "delivery_at_1": "10:15",
+        })
+        self.assertFalse(missing_email.is_valid())
+        self.assertIn("requestor_email", missing_email.errors)
+
+        missing_location = MaterialRequestForm({
+            "requestor_name": "Derek", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "", "notes": "",
+            "delivery_at_0": "2026-09-15", "delivery_at_1": "10:15",
+        })
+        self.assertFalse(missing_location.is_valid())
+        self.assertIn("location", missing_location.errors)
+
+        # All present → valid
+        fully_populated = MaterialRequestForm({
+            "requestor_name": "Derek", "requestor_email": "derek@example.com",
+            "building_room": "", "location": "Job Site A", "notes": "",
+            "delivery_at_0": "2026-09-15", "delivery_at_1": "10:15",
+        })
+        self.assertTrue(fully_populated.is_valid(), fully_populated.errors)
+
+    def test_material_request_form_marks_required_fields_in_template(self):
+        """Regression: the form template must show a 'Required' badge on the
+        labels for requestor_name, requestor_email, and location."""
+        InventoryItem.objects.create(part_number="C-1", name="Test item", category=CategoryChoices.CFCI, quantity_on_hand=1)
+        response = self.client.get(reverse("material_request_create"), secure=True)
+        self.assertEqual(response.status_code, 200)
+        body = response.content.decode("utf-8")
+
+        # Each required field label should be immediately followed by a Required chip.
+        for label_for in ("id_requestor_name", "id_requestor_email", "id_location"):
+            # Find the <label for="...">...</label> and assert it contains the Required chip
+            pattern = rf'<label[^>]*for="{label_for}"[^>]*>.*?</label>'
+            m = re.search(pattern, body, re.DOTALL)
+            self.assertIsNotNone(m, f"Missing label for {label_for}")
+            self.assertIn('class="required-label"', m.group(0),
+                          f"Required label chip missing for {label_for}")
+            self.assertNotIn("optional-label", m.group(0),
+                             f"Optional chip should NOT appear on {label_for}")
+
+        # Notes should remain Optional
+        notes_match = re.search(r'<label[^>]*for="id_notes"[^>]*>.*?</label>', body, re.DOTALL)
+        self.assertIsNotNone(notes_match, "Notes label not found")
+        self.assertIn('class="optional-label"', notes_match.group(0))
 
     def test_material_request_inventory_has_full_screen_picker_and_category_sections(self):
         InventoryItem.objects.create(part_number="O-1", name="OFCI item", category=CategoryChoices.OFCI, quantity_on_hand=1)

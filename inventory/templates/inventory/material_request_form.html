@@ -17,12 +17,16 @@
       {% if mode == 'create' %}<button type="button" class="btn secondary sm" id="clear-request-draft">Start over</button>{% endif %}
     </div>
     {{ form.non_field_errors }}
-    <p class="helptext request-optional-note">Requestor and destination details are optional. A delivery date and time are required.</p>
+    <p class="helptext request-optional-note">Requestor name, requestor email, and delivery location are required. A delivery date and time are also required.</p>
     <div class="form-row request-detail-fields">
       {% for field in form %}
         {% if field.name != 'delivery_at' and field.name != 'urgent' %}
         <div class="form-group">
-          <label for="{{ field.id_for_label }}">{{ field.label }} <span class="optional-label">Optional</span></label>
+          {% if field.name == 'requestor_name' or field.name == 'requestor_email' or field.name == 'location' %}
+            <label for="{{ field.id_for_label }}">{{ field.label }} <span class="required-label">Required</span></label>
+          {% else %}
+            <label for="{{ field.id_for_label }}">{{ field.label }} <span class="optional-label">Optional</span></label>
+          {% endif %}
           {{ field }}{{ field.errors }}
           {% if field.help_text %}<span class="helptext">{{ field.help_text }}</span>{% endif %}
         </div>

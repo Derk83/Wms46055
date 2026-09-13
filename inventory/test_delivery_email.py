@@ -75,11 +75,11 @@ class DeliveryEmailWorkflowTests(TestCase):
                     self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
                 )
 
-    def test_request_form_includes_optional_requester_email(self):
+    def test_request_form_includes_required_requester_email(self):
         from .forms import MaterialRequestForm
 
         self.assertIn("requestor_email", MaterialRequestForm().fields)
-        self.assertFalse(MaterialRequestForm().fields["requestor_email"].required)
+        self.assertTrue(MaterialRequestForm().fields["requestor_email"].required)
 
     def test_detail_does_not_prefill_optional_reschedule_with_existing_slot(self):
         response = self.requester_client.get(
