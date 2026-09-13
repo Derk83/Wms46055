@@ -1,15 +1,59 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
+*.egg-info/
+.venv/
+venv/
+ppe-pick-ticket-venv/
+
+# Databases - never commit these to VCS
+*.sqlite3
+*.sqlite
 *.db
 db.sqlite3
-*.sqlite3
+db.sqlite3-journal
+db.sqlite3-wal
+db.sqlite3-shm
+
+# Database/asset backups - never commit these to VCS
+*.bak
+*.dump
+*.tar.gz
+*.tgz
+
+# Django
+local_settings.py
 staticfiles/
 media/
 .env
 .env.*
+.envrc
 !.env.example
-backups/*.bak
-*.log
+
+# Project-local maintenance outputs
+backups/
+.migration-backups/
+exports/
+imports/
+receiving_docs/
+
+# Test artifacts
 .pytest_cache/
 .coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Verification helpers (used during deploy but not part of runtime)
+.smoke_*.py
+.verify_*.py
+.visual_audit.py
