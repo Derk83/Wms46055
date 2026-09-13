@@ -1,0 +1,129 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{ cycle_count.display_name }} — Cycle Count Sheet</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 0.5in;
+  }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt;
+    color: #000;
+    background: #fff;
+    margin: 0;
+  }
+  h1 {
+    font-size: 18pt;
+    margin: 0 0 4pt 0;
+  }
+  .meta {
+    font-size: 10pt;
+    color: #333;
+    margin-bottom: 16pt;
+  }
+  .meta-row { display: block; margin-bottom: 2pt; }
+  .notes {
+    border: 1px solid #888;
+    padding: 6pt 8pt;
+    margin-bottom: 12pt;
+    font-size: 10pt;
+    white-space: pre-wrap;
+  }
+  .category-header {
+    background: #222;
+    color: #fff;
+    padding: 4pt 8pt;
+    font-weight: 700;
+    margin: 12pt 0 0 0;
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+  }
+  th, td {
+    border: 1px solid #555;
+    padding: 4pt 6pt;
+    vertical-align: top;
+    font-size: 10pt;
+  }
+  th {
+    background: #ddd;
+    text-align: left;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  tr.spacer td { border: 0; height: 4pt; }
+  .col-part { width: 18%; }
+  .col-name { width: 38%; }
+  .col-storage { width: 18%; }
+  .col-count { width: 14%; }
+  .col-note { width: 12%; }
+  .count-box {
+    display: inline-block;
+    border: 1px solid #000;
+    min-width: 60pt;
+    height: 14pt;
+  }
+  .footer {
+    margin-top: 16pt;
+    font-size: 9pt;
+    color: #444;
+    border-top: 1px solid #888;
+    padding-top: 6pt;
+  }
+</style>
+</head>
+<body>
+<h1>Cycle Count Sheet — {{ cycle_count.display_name }}</h1>
+<div class="meta">
+  <span class="meta-row"><strong>Created:</strong> {{ cycle_count.created_at|date:"Y-m-d H:i" }} by {{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }}</span>
+  <span class="meta-row"><strong>Generated:</strong> {{ generated_at|date:"Y-m-d H:i" }} by {{ generator.get_full_name|default:generator.username }}</span>
+  <span class="meta-row"><strong>Total items:</strong> {{ cycle_count.total_items }}</span>
+</div>
+
+{% if cycle_count.notes %}
+<div class="notes"><strong>Notes:</strong> {{ cycle_count.notes }}</div>
+{% endif %}
+
+{% regroup items by category as grouped %}
+{% for group in grouped %}
+  <div class="category-header">{{ group.grouper }} ({{ group.list|length }} item{{ group.list|length|pluralize }})</div>
+  <table>
+    <thead>
+      <tr>
+        <th class="col-part">Part #</th>
+        <th class="col-name">Name</th>
+        <th class="col-storage">Storage</th>
+        <th class="col-count">Counted Qty</th>
+        <th class="col-note">Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for entry in group.list %}
+        <tr>
+          <td>{{ entry.item.part_number }}</td>
+          <td>{{ entry.item.name }}</td>
+          <td>{% if entry.item.storage_location %}{{ entry.item.storage_location }}{% else %}—{% endif %}</td>
+          <td><span class="count-box">&nbsp;</span></td>
+          <td>&nbsp;</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endfor %}
+
+<div class="footer">
+  Count each item by physical verification only. Do not reference the system on-hand quantity when counting.
+  Record the counted quantity in the box, and use the note column for any discrepancy context (damaged, missing, mis-located).
+  Return this sheet to {{ cycle_count.created_by.get_full_name|default:cycle_count.created_by.username }} for reconciliation.
+</div>
+</body>
+</html>

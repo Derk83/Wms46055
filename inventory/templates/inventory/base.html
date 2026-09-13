@@ -45,6 +45,7 @@
       {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
       <a href="{% url 'location_list' %}">Locations</a>
       {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
+      {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
       {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<a href="{% url 'settings' %}">Settings</a>{% endif %}
     {% endif %}
     <div class="mobile-nav-account">

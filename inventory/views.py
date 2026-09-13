@@ -3,6 +3,7 @@ import io
 import json
 import openpyxl
 import re
+import weasyprint
 from datetime import datetime
 from functools import wraps
 
@@ -391,6 +392,8 @@ from .models import (
     ApprovalRequest,
     BIN_LOCATION_CHOICES,
     CategoryChoices,
+    CycleCount,
+    CycleCountItem,
     ItemDocument,
     ItemImage,
     InventoryItem,
@@ -406,7 +409,7 @@ from .models import (
     SECTION_CHOICES,
     STANDALONE_BIN_VALUES,
 )
-from .models import generate_qr_code
+from .models import generate_qr_code, pick_random_items_for_cycle_count
 
 
 # --- Item image / document serving ----------------------------------------
@@ -3811,4 +3814,299 @@ def material_request_events(request):
         cursor = rows[-1].id if len(rows) == 50 else latest
     response = JsonResponse({"cursor": cursor, "events": events})
     response["Cache-Control"] = "no-store"
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Cycle counting
+# ---------------------------------------------------------------------------
+
+
+def _cycle_count_categories():
+    """Distinct category names present on active inventory, sorted."""
+    return sorted(
+        InventoryItem.objects.filter(active=True)
+        .exclude(category__isnull=True)
+        .exclude(category="")
+        .values_list("category", flat=True)
+        .distinct()
+    )
+
+
+def _parse_percent(value):
+    """Coerce a percent value from a form post to an int in [1, 100]."""
+    try:
+        pct = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    if pct < 1 or pct > 100:
+        return None
+    return pct
+
+
+@login_required
+@any_perm_required("inventory.perform_cycle_count", "inventory.manage_cycle_counts")
+def cycle_count_list(request):
+    """Dashboard of all cycle counts (most recent first)."""
+    cycle_counts = CycleCount.objects.select_related("created_by").all()
+    category_filter = request.GET.get("category", "").strip()
+    if category_filter:
+        cycle_counts = cycle_counts.filter(items__category=category_filter).distinct()
+
+    summary = {
+        "total": cycle_counts.count(),
+        "open": cycle_counts.filter(status=CycleCount.Status.OPEN).count(),
+        "in_progress": cycle_counts.filter(status=CycleCount.Status.IN_PROGRESS).count(),
+        "completed": cycle_counts.filter(status=CycleCount.Status.COMPLETED).count(),
+        "cancelled": cycle_counts.filter(status=CycleCount.Status.CANCELLED).count(),
+    }
+
+    context = {
+        "cycle_counts": cycle_counts,
+        "summary": summary,
+        "category_filter": category_filter,
+        "categories": _cycle_count_categories(),
+    }
+    return render(request, "inventory/cycle_count_list.html", context)
+
+
+@login_required
+@any_perm_required("inventory.manage_cycle_counts")
+def cycle_count_create(request):
+    """Create a new cycle count batch."""
+    categories = _cycle_count_categories()
+
+    def _category_rows(posted_percents):
+        return [
+            {
+                "name": c,
+                "total": InventoryItem.objects.filter(category=c, active=True).count(),
+                "checked": bool(str(posted_percents.get(c, "")).strip()),
+                "percent": str(posted_percents.get(c, "") or ""),
+            }
+            for c in categories
+        ]
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        notes = request.POST.get("notes", "").strip()
+        pairs = []
+        seen_categories = set()
+        for category in categories:
+            percent = _parse_percent(request.POST.get(f"percent_{category}", ""))
+            if percent is None:
+                continue
+            if category in seen_categories:
+                continue
+            seen_categories.add(category)
+            pairs.append((category, percent))
+
+        if not pairs:
+            messages.error(
+                request,
+                "Pick at least one category and a percentage between 1 and 100.",
+            )
+            return render(
+                request,
+                "inventory/cycle_count_create.html",
+                {
+                    "categories": _category_rows(
+                        {
+                            c: request.POST.get(f"percent_{c}", "") for c in categories
+                        }
+                    ),
+                    "form_values": {"name": name, "notes": notes},
+                },
+            )
+
+        seed = request.POST.get("seed", "").strip() or None
+        selections = pick_random_items_for_cycle_count(pairs, seed=seed)
+
+        total_items = sum(len(items) for _, items in selections)
+        if total_items == 0:
+            messages.error(
+                request,
+                "No active inventory items match the selected categories.",
+            )
+            return redirect("cycle_count_create")
+
+        with transaction.atomic():
+            cycle_count = CycleCount.objects.create(
+                name=name,
+                notes=notes,
+                created_by=request.user,
+                status=CycleCount.Status.OPEN,
+            )
+            entries = []
+            for category, items in selections:
+                for item in items:
+                    entries.append(
+                        CycleCountItem(
+                            cycle_count=cycle_count,
+                            category=category,
+                            item=item,
+                            system_quantity=item.quantity_on_hand,
+                        )
+                    )
+            CycleCountItem.objects.bulk_create(entries)
+
+        messages.success(
+            request,
+            f"Created {cycle_count.display_name} with {total_items} items across "
+            f"{len(pairs)} categor{'y' if len(pairs) == 1 else 'ies'}.",
+        )
+        return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+    context = {
+        "categories": _category_rows({}),
+        "form_values": {"name": "", "notes": ""},
+    }
+    return render(request, "inventory/cycle_count_create.html", context)
+
+
+@login_required
+@any_perm_required("inventory.perform_cycle_count", "inventory.manage_cycle_counts")
+def cycle_count_detail(request, pk):
+    """Record counts for a cycle count batch."""
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    items = (
+        cycle_count.items.select_related("item", "counted_by")
+        .order_by("category", "item__name")
+    )
+
+    if request.method == "POST":
+        action = request.POST.get("action", "")
+
+        if action == "cancel":
+            if cycle_count.status in (
+                CycleCount.Status.COMPLETED,
+                CycleCount.Status.CANCELLED,
+            ):
+                messages.error(
+                    request, "This cycle count is already finished."
+                )
+                return redirect("cycle_count_detail", pk=cycle_count.pk)
+            cycle_count.status = CycleCount.Status.CANCELLED
+            cycle_count.save(update_fields=["status"])
+            messages.success(request, f"{cycle_count.display_name} cancelled.")
+            return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+        if action == "reopen":
+            cycle_count.status = CycleCount.Status.IN_PROGRESS
+            cycle_count.save(update_fields=["status"])
+            messages.success(request, f"{cycle_count.display_name} reopened.")
+            return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+        if action == "complete":
+            uncounted = cycle_count.items.filter(counted_quantity__isnull=True).count()
+            if uncounted:
+                messages.error(
+                    request,
+                    f"Cannot complete: {uncounted} item{'s' if uncounted != 1 else ''} "
+                    f"still need a count.",
+                )
+                return redirect("cycle_count_detail", pk=cycle_count.pk)
+            cycle_count.status = CycleCount.Status.COMPLETED
+            cycle_count.completed_at = timezone.now()
+            cycle_count.save(update_fields=["status", "completed_at"])
+            messages.success(
+                request, f"{cycle_count.display_name} marked complete."
+            )
+            return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+        if action == "record":
+            now = timezone.now()
+            updated = 0
+            with transaction.atomic():
+                for entry in cycle_count.items.select_for_update():
+                    raw = request.POST.get(f"count_{entry.pk}", "").strip()
+                    if raw == "":
+                        entry.counted_quantity = None
+                        entry.counted_by = None
+                        entry.counted_at = None
+                        entry.note = ""
+                        entry.save(
+                            update_fields=[
+                                "counted_quantity",
+                                "counted_by",
+                                "counted_at",
+                                "note",
+                            ]
+                        )
+                        continue
+                    try:
+                        qty = int(raw)
+                    except ValueError:
+                        messages.error(
+                            request,
+                            f"{entry.item.part_number}: '{raw}' is not a number.",
+                        )
+                        return redirect("cycle_count_detail", pk=cycle_count.pk)
+                    if qty < 0:
+                        messages.error(
+                            request,
+                            f"{entry.item.part_number}: counts cannot be negative.",
+                        )
+                        return redirect("cycle_count_detail", pk=cycle_count.pk)
+                    note = request.POST.get(f"note_{entry.pk}", "").strip()[:240]
+                    entry.counted_quantity = qty
+                    entry.counted_by = request.user
+                    entry.counted_at = now
+                    entry.note = note
+                    entry.save(
+                        update_fields=[
+                            "counted_quantity",
+                            "counted_by",
+                            "counted_at",
+                            "note",
+                        ]
+                    )
+                    updated += 1
+                if cycle_count.status == CycleCount.Status.OPEN:
+                    cycle_count.status = CycleCount.Status.IN_PROGRESS
+                    cycle_count.save(update_fields=["status"])
+
+            messages.success(
+                request,
+                f"Recorded {updated} count{'s' if updated != 1 else ''} on "
+                f"{cycle_count.display_name}.",
+            )
+            return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+        messages.error(request, "Unknown action.")
+        return redirect("cycle_count_detail", pk=cycle_count.pk)
+
+    context = {
+        "cycle_count": cycle_count,
+        "items": items,
+        "uncounted_count": items.filter(counted_quantity__isnull=True).count(),
+        "variance_count": sum(1 for item in items if item.has_variance),
+    }
+    return render(request, "inventory/cycle_count_detail.html", context)
+
+
+@login_required
+@any_perm_required("inventory.perform_cycle_count", "inventory.manage_cycle_counts")
+def cycle_count_pdf(request, pk):
+    """Render the printable count sheet as a PDF (no current quantities)."""
+    cycle_count = get_object_or_404(CycleCount, pk=pk)
+    items = (
+        cycle_count.items.select_related("item")
+        .order_by("category", "item__name")
+    )
+
+    context = {
+        "cycle_count": cycle_count,
+        "items": items,
+        "generated_at": timezone.now(),
+        "generator": request.user,
+    }
+    html = render(
+        request, "inventory/cycle_count_pdf.html", context
+    ).content.decode("utf-8")
+    pdf_bytes = weasyprint.HTML(string=html, base_url=request.build_absolute_uri("/")).write_pdf()
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = (
+        f'inline; filename="cycle-count-{cycle_count.pk:05d}.pdf"'
+    )
     return response

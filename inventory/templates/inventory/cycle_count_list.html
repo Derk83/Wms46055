@@ -1,0 +1,147 @@
+{% extends "inventory/base.html" %}
+{% load static %}
+{% block title %}Cycle Counts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Cycle Counts</h1>
+  <div class="actions">
+    {% if perms.inventory.manage_cycle_counts %}
+    <a class="btn" href="{% url 'cycle_count_create' %}">New Cycle Count</a>
+    {% endif %}
+  </div>
+</div>
+
+<section class="summary-tiles" aria-label="Cycle count summary">
+  <div class="summary-tile">
+    <span class="summary-tile-label">Total</span>
+    <span class="summary-tile-value">{{ summary.total }}</span>
+  </div>
+  <div class="summary-tile">
+    <span class="summary-tile-label">Open</span>
+    <span class="summary-tile-value">{{ summary.open }}</span>
+  </div>
+  <div class="summary-tile">
+    <span class="summary-tile-label">In progress</span>
+    <span class="summary-tile-value">{{ summary.in_progress }}</span>
+  </div>
+  <div class="summary-tile">
+    <span class="summary-tile-label">Completed</span>
+    <span class="summary-tile-value">{{ summary.completed }}</span>
+  </div>
+  <div class="summary-tile">
+    <span class="summary-tile-label">Cancelled</span>
+    <span class="summary-tile-value">{{ summary.cancelled }}</span>
+  </div>
+</section>
+
+<form method="get" class="search-form">
+  <div class="form-row">
+    <div class="form-group">
+      <label for="category">Filter by category</label>
+      <select id="category" name="category">
+        <option value="">All categories</option>
+        {% for c in categories %}
+          <option value="{{ c }}" {% if c == category_filter %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <button class="btn" type="submit">Apply</button>
+    </div>
+  </div>
+</form>
+
+<div class="card">
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th>Counted</th>
+          <th>Variance</th>
+          <th>Created</th>
+          <th>Created by</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cc in cycle_counts %}
+          <tr>
+            <td data-label="Name">{{ cc.display_name }}</td>
+            <td data-label="Status"><span class="status-pill status-{{ cc.status }}">{{ cc.get_status_display }}</span></td>
+            <td data-label="Items">{{ cc.total_items }}</td>
+            <td data-label="Counted">{{ cc.counted_items }} / {{ cc.total_items }}</td>
+            <td data-label="Variance">{{ cc.variance_count }}</td>
+            <td data-label="Created">{{ cc.created_at|date:"Y-m-d H:i" }}</td>
+            <td data-label="Created by">{{ cc.created_by.get_full_name|default:cc.created_by.username }}</td>
+            <td data-label="Actions">
+              <a class="action-chip" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>
+              <a class="action-chip" href="{% url 'cycle_count_pdf' cc.pk %}" target="_blank" rel="noopener">Print PDF</a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8" class="empty-row">No cycle counts yet. {% if perms.inventory.manage_cycle_counts %}Create one to get started.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+.cycle-count-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.summary-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.summary-tile-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.summary-tile-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+.status-pill.status-open {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.status-pill.status-in_progress {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.status-pill.status-completed {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.status-pill.status-cancelled {
+  border-color: var(--muted);
+  color: var(--muted);
+}
+</style>
+{% endblock %}

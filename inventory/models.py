@@ -7,6 +7,8 @@ from barcode.writer import ImageWriter
 import qrcode
 import io
 import base64
+import math
+import random
 import uuid
 
 
@@ -179,6 +181,8 @@ class InventoryItem(models.Model):
             ("manage_users", "Can manage warehouse users"),
             ("manage_groups", "Can create and delete warehouse groups"),
             ("manage_group_permissions", "Can edit warehouse group permissions"),
+            ("perform_cycle_count", "Can perform cycle counts"),
+            ("manage_cycle_counts", "Can create and manage cycle counts"),
         ]
 
     def __str__(self):
@@ -1022,3 +1026,138 @@ class PushDelivery(models.Model):
 
     def __str__(self):
         return f"Push delivery {self.pk} ({self.status})"
+
+
+class CycleCount(models.Model):
+    """A cycle count batch: one or more category/percentage pairs.
+
+    The manager picks a random subset of items from each chosen category and
+    freezes them as ``CycleCountItem`` rows so the same selection can be
+    counted, reviewed, and reconciled later.
+    """
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        IN_PROGRESS = "in_progress", "In progress"
+        COMPLETED = "completed", "Completed"
+        CANCELLED = "cancelled", "Cancelled"
+
+    name = models.CharField(max_length=160, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="cycle_counts_created",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.OPEN,
+    )
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        # Note: cycle-count permissions are declared on InventoryItem.Meta.permissions
+        # so they show up once in the group permissions UI. The views gate on
+        # ``inventory.perform_cycle_count`` / ``inventory.manage_cycle_counts``.
+
+    def __str__(self):
+        label = self.name or f"CC-{self.pk:05d}"
+        return f"{label} ({self.get_status_display()})"
+
+    @property
+    def display_name(self):
+        return self.name or f"CC-{self.pk:05d}"
+
+    @property
+    def total_items(self):
+        return self.items.count()
+
+    @property
+    def counted_items(self):
+        return self.items.filter(counted_quantity__isnull=False).count()
+
+    @property
+    def variance_count(self):
+        return self.items.exclude(
+            counted_quantity__isnull=True,
+        ).exclude(
+            system_quantity=models.F("counted_quantity"),
+        ).count()
+
+
+class CycleCountItem(models.Model):
+    """A single inventory item picked for a cycle count.
+
+    ``system_quantity`` is frozen at creation time so the picker can record
+    what they actually counted without being biased by the live on-hand value.
+    """
+
+    cycle_count = models.ForeignKey(
+        CycleCount,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    category = models.CharField(max_length=120)
+    item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.PROTECT,
+        related_name="cycle_count_entries",
+    )
+    system_quantity = models.IntegerField()
+    counted_quantity = models.IntegerField(null=True, blank=True)
+    counted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name="cycle_count_entries_counted",
+        null=True,
+        blank=True,
+    )
+    counted_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=240, blank=True)
+
+    class Meta:
+        ordering = ["category", "item__name"]
+        indexes = [
+            models.Index(fields=["cycle_count", "category"]),
+        ]
+
+    def __str__(self):
+        return f"{self.item.part_number} ({self.category})"
+
+    @property
+    def variance(self):
+        if self.counted_quantity is None:
+            return None
+        return self.counted_quantity - self.system_quantity
+
+    @property
+    def has_variance(self):
+        v = self.variance
+        return v is not None and v != 0
+
+
+def pick_random_items_for_cycle_count(percent_by_category, seed=None):
+    """Return ``(category, [InventoryItem, ...])`` for each category.
+
+    ``percent_by_category`` is an iterable of ``(category_name, percent_int)``
+    pairs. Percent is clamped to 1–100. Items are picked uniformly at random
+    from active items in the given category. An optional ``seed`` makes the
+    selection reproducible for tests.
+    """
+    rng = random.Random(seed)
+    selections = []
+    for category, percent in percent_by_category:
+        percent = max(1, min(100, int(percent)))
+        items = list(
+            InventoryItem.objects.filter(category=category, active=True).order_by("id")
+        )
+        if not items:
+            selections.append((category, []))
+            continue
+        count = max(1, math.ceil(len(items) * percent / 100))
+        rng.shuffle(items)
+        selections.append((category, items[:count]))
+    return selections

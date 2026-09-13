@@ -1,0 +1,101 @@
+{% extends "inventory/base.html" %}
+{% block title %}New Cycle Count{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>New Cycle Count</h1>
+  <div class="actions">
+    <a class="btn" href="{% url 'cycle_count_list' %}">Back to cycle counts</a>
+  </div>
+</div>
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <div class="form-row">
+    <div class="form-group">
+      <label for="id_name">Batch name (optional)</label>
+      <input id="id_name" name="name" type="text" maxlength="160" placeholder="e.g. October weekly count" value="{{ form_values.name }}">
+      <small>If left blank the system will assign a number like CC-00042.</small>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="id_seed">Random seed (optional)</label>
+      <input id="id_seed" name="seed" type="text" maxlength="64" placeholder="Leave blank for a fresh draw">
+      <small>Set a seed to reproduce the exact same selection later (for audits).</small>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="id_notes">Notes (optional)</label>
+      <textarea id="id_notes" name="notes" rows="3" placeholder="Anything the counters should know">{{ form_values.notes }}</textarea>
+    </div>
+  </div>
+
+  <h2>Pick categories</h2>
+  <p class="muted">Enter a percentage between 1 and 100 for each category you want to count. Leave blank to skip.</p>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Include?</th>
+            <th>Category</th>
+            <th>Active items</th>
+            <th>Percent to count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for cat in categories %}
+            <tr>
+              <td data-label="Include">
+                <input type="checkbox" data-percentage-toggle="percent_{{ cat.name }}" {% if cat.checked %}checked{% endif %}>
+              </td>
+              <td data-label="Category"><strong>{{ cat.name }}</strong></td>
+              <td data-label="Active items">{{ cat.total }}</td>
+              <td data-label="Percent">
+                <input type="number" name="percent_{{ cat.name }}" id="percent_{{ cat.name }}" min="1" max="100" step="1" placeholder="-" value="{{ cat.percent }}" data-percentage-input>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="empty-row">No categories found in active inventory.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <button class="btn" type="submit" data-action="success">Create cycle count</button>
+      <a class="btn" href="{% url 'cycle_count_list' %}">Cancel</a>
+    </div>
+  </div>
+</form>
+
+<style>
+[data-percentage-input] {
+  width: 100px;
+  text-align: right;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.querySelectorAll('[data-percentage-toggle]').forEach(function (box) {
+    var targetId = box.getAttribute('data-percentage-toggle');
+    var input = document.getElementById(targetId);
+    if (!input) return;
+    function sync() {
+      input.disabled = !box.checked;
+      if (!box.checked) input.value = '';
+    }
+    box.addEventListener('change', sync);
+    sync();
+  });
+});
+</script>
+{% endblock %}
