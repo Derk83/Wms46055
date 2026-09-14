@@ -100,7 +100,7 @@ def queue_material_request_push(event):
         .values_list("pk", flat=True)
     )
     if delivery_ids:
-        transaction.on_commit(lambda: deliver_push_deliveries(delivery_ids))
+        transaction.on_commit(lambda: deliver_push_deliveries(delivery_ids), robust=True)
     return created
 
 

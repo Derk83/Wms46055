@@ -32,10 +32,10 @@
       <input id="desktop-global-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search inventory, tickets, or requests" autocomplete="off">
     </form>
     <div class="header-controls">
-      <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app">⇩</button>
+      <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg></button>
       <div class="notification-center" data-notification-center>
         <button class="icon-button notification-toggle" type="button" data-notification-toggle aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications">
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           <span class="notification-count" data-notification-count hidden>0</span>
         </button>
         <section id="notification-panel" class="notification-panel" data-notification-panel hidden aria-label="Notifications">
@@ -44,7 +44,7 @@
           {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
         </section>
       </div>
-      <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+      <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 9 9 0 1 0 20.7 15.1Z"/></svg></button>
       <div class="account-menu">
         <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="account-menu-panel">
           <span class="account-menu-name">{{ user.get_full_name|default:user.username }}</span>
@@ -103,10 +103,10 @@
   {% if request.is_request_portal %}
   <div class="header-controls">
     <span class="user-info">{{ user.get_full_name|default:user.username }}</span>
-    <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app">⇩</button>
+    <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg></button>
     <div class="notification-center" data-notification-center>
       <button class="icon-button notification-toggle" type="button" data-notification-toggle aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications">
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
         <span class="notification-count" data-notification-count hidden>0</span>
       </button>
       <section id="notification-panel" class="notification-panel" data-notification-panel hidden aria-label="Notifications">
@@ -115,7 +115,7 @@
         {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
       </section>
     </div>
-    <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+    <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 9 9 0 1 0 20.7 15.1Z"/></svg></button>
     <form method="post" action="{% url 'logout' %}" data-push-logout>{% csrf_token %}<button class="btn secondary sm" type="submit">Logout</button></form>
   </div>
   {% endif %}

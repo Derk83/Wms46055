@@ -124,6 +124,8 @@ class QolUsabilityBundleTests(TestCase):
         root = Path(__file__).resolve().parent
         script = (root / "static/inventory/js/app.js").read_text()
         css = (root / "static/inventory/css/app.css").read_text()
+        base_template = (root / "templates/inventory/base.html").read_text()
+        push_source = (root / "push.py").read_text()
 
         self.assertIn("sessionStorage.setItem(stateKey", script)
         self.assertIn("navigator.clipboard.writeText", script)
@@ -132,6 +134,10 @@ class QolUsabilityBundleTests(TestCase):
         self.assertIn("window.addEventListener('pageshow'", script)
         self.assertIn("event.persisted", script)
         self.assertIn("form.dataset.submitting", script)
+        self.assertNotIn(">◐</button>", base_template)
+        self.assertNotIn(">⇩</button>", base_template)
+        self.assertGreaterEqual(base_template.count('class="header-icon"'), 6)
+        self.assertIn("transaction.on_commit(lambda: deliver_push_deliveries(delivery_ids), robust=True)", push_source)
         self.assertIn("data-delete-item", script)
         self.assertIn(".inventory-result-summary", css)
         self.assertIn(".mobile-secondary-actions", css)

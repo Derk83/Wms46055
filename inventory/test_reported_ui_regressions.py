@@ -116,7 +116,8 @@ def test_public_access_splash_uses_shared_portal_theme_and_has_visible_sign_in(c
     assert html.index('class="btn btn-secondary access-sign-in"') < html.index('data-theme-toggle')
     css = (Path(__file__).parent / "static" / "inventory" / "css" / "app.css").read_text()
     assert ".site-header--portal .header-controls{margin-left:auto}" in css
-    assert ".site-header--portal #theme-toggle{display:grid;width:40px;height:40px" in css
+    assert ".site-header--portal .icon-button{display:grid;width:40px;height:40px" in css
+    assert ".site-header--portal .header-icon{display:block;width:20px;height:20px" in css
     assert "background:#1d2024;color:#f6f7f8" in css
     assert 'class="portal-mobile-guidance"' in html
     assert "@blackbox.com" in html
