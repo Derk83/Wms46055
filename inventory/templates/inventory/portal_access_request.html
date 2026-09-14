@@ -1,16 +1,19 @@
 {% extends "inventory/portal_access_base.html" %}
 {% block title %}Request Access · Black Box{% endblock %}
 {% block content %}
-<h1>Request access</h1>
-<p class="lead">Submit material requests securely through the RPL warehouse portal.</p>
-<p>Access is limited to employees with an exact <strong>@blackbox.com</strong> email address and requires manager approval.</p>
-<form method="post" novalidate>
+<div class="portal-form-heading"><div><h1>Request access</h1><p>All required fields must be completed.</p></div><span class="portal-secure-badge">Secure request</span></div>
+<p class="portal-mobile-guidance">Use your exact <strong>@blackbox.com</strong> email. Access requires warehouse manager approval.</p>
+<form class="portal-access-form" method="post" novalidate>
   {% csrf_token %}
   {{ form.non_field_errors }}
   {{ form.website }}
-  {% for field in form.visible_fields %}
-    <p>{{ field.label_tag }} {{ field }} {{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</p>
-  {% endfor %}
-  <button class="btn primary" type="submit">Request access</button>
+  <div class="portal-form-grid">
+    {% for field in form.visible_fields %}
+      {% if field.name != "acknowledge" %}<div class="portal-form-field{% if field.name == 'department' %} portal-form-field--wide{% endif %}">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endif %}
+    {% endfor %}
+  </div>
+  <label class="portal-consent" for="{{ form.acknowledge.id_for_label }}">{{ form.acknowledge }}<span>{{ form.acknowledge.label }}</span></label>
+  {{ form.acknowledge.errors }}
+  <div class="portal-form-actions"><small>Access is limited to approved Black Box employees.</small><button class="btn btn-primary" type="submit">Request access</button></div>
 </form>
 {% endblock %}

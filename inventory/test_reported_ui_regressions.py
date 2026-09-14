@@ -103,13 +103,18 @@ def test_linked_ticket_delete_requires_material_request_delete_permissions(clien
 
 
 @pytest.mark.django_db
-def test_public_access_splash_is_light_readable_reduced_and_has_visible_sign_in(client):
+def test_public_access_splash_uses_shared_portal_theme_and_has_visible_sign_in(client):
     response = client.get("/", HTTP_HOST="requests.rplwms.com")
 
     assert response.status_code == 200
     html = response.content.decode()
-    assert '<html lang="en" data-theme="light">' in html
+    assert '<html lang="en" data-theme="dark">' in html
     assert 'class="btn btn-secondary access-sign-in"' in html
+    assert 'class="site-header site-header--portal portal-public-header"' in html
+    assert 'class="portal-access-panel"' in html
+    assert 'data-theme-toggle' in html
+    assert 'class="portal-mobile-guidance"' in html
+    assert "@blackbox.com" in html
     for retained in ("full_name", "position", "email", "contact_number", "department"):
         assert f'name="{retained}"' in html
     for removed in ("project_jobsite", "sponsor", "business_reason"):

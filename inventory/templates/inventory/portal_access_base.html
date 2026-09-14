@@ -1,18 +1,44 @@
-{% load static %}<!doctype html>
-<html lang="en" data-theme="light">
+{% load static %}
+{% load inventory_extras %}
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#0b0c0e">
   <title>{% block title %}Material Request Access · Black Box{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
-  <style>
-    body{background:#f3f5f7}.access-shell{max-width:720px;margin:0 auto;padding:32px 18px}.access-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}.access-brand strong{font-size:20px;letter-spacing:.08em}.access-card{background:#fff;border:1px solid #d9dee3;border-radius:12px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.06)}.access-card h1,.access-card h2{margin-top:0}.access-card form p{display:grid;gap:6px}.access-card input,.access-card textarea{box-sizing:border-box;width:100%}.access-card input[type=checkbox]{width:auto}.lead{color:#505a63}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}@media(max-width:600px){.access-shell{padding:18px 12px}.access-card{padding:20px}}
-  </style>
+  <link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
 </head>
-<body>
-  <main class="access-shell">
-    <header class="access-brand"><strong>BLACK BOX</strong><a class="btn btn-secondary access-sign-in" href="{% url 'login' %}">Already approved? Sign in</a></header>
-    <section class="access-card">{% block content %}{% endblock %}</section>
+<body class="portal-public">
+  <header class="site-header site-header--portal portal-public-header">
+    <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL material requests home">
+      <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="BLACK BOX — RPL Warehouse">
+      <span class="portal-brand-copy"><strong>RPL Warehouse</strong><small>BLACK BOX · Material Requests</small></span>
+    </a>
+    <div class="header-controls">
+      <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+      <a class="btn btn-secondary access-sign-in" href="{% url 'login' %}">Already approved? Sign in</a>
+    </div>
+  </header>
+  <main class="portal-public-main">
+    <section class="portal-access-hero">
+      <div><p class="portal-eyebrow">Warehouse access</p><div class="portal-hero-title">Request materials without slowing down the job.</div></div>
+      <p>Use your Black Box employee information to request secure access to the RPL material-request portal.</p>
+    </section>
+    <section class="portal-access-panel">
+      <aside class="portal-access-guide">
+        <h2>How it works</h2>
+        <p>Your request is reviewed by a warehouse manager before access is activated.</p>
+        <ol>
+          <li><span>1</span><div><strong>Submit your details</strong><small>Use your @blackbox.com email.</small></div></li>
+          <li><span>2</span><div><strong>Verify your email</strong><small>Follow the secure email link.</small></div></li>
+          <li><span>3</span><div><strong>Manager approval</strong><small>You’ll be notified when ready.</small></div></li>
+        </ol>
+      </aside>
+      <section class="access-card">{% block content %}{% endblock %}</section>
+    </section>
   </main>
+  <script src="{% versioned_static 'inventory/js/app.js' %}" defer></script>
 </body>
 </html>

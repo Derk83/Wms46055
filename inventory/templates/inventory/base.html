@@ -19,7 +19,7 @@
   <link rel="apple-touch-icon" href="{% static 'inventory/icons/apple-touch-icon.png' %}">
 </head>
 <body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
-<header class="site-header{% if not request.is_request_portal %} site-header--wms{% endif %}">
+<header class="site-header{% if request.is_request_portal %} site-header--portal{% else %} site-header--wms{% endif %}">
   {% if user.is_authenticated and not request.is_request_portal %}
   <div class="desktop-header-top">
     <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">

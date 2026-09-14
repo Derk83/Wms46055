@@ -40,7 +40,12 @@
       if (label) label.textContent = `${isLight ? 'Dark' : 'Light'} theme`;
     });
   };
-  applyTheme(root.dataset.theme || 'dark');
+  let initialTheme = root.dataset.theme || 'dark';
+  try {
+    initialTheme = localStorage.getItem('bbx-theme')
+      || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : initialTheme);
+  } catch (_) { /* storage and media-query access may be unavailable */ }
+  applyTheme(initialTheme);
   themeButtons.forEach((button) => button.addEventListener('click', () => {
     const next = root.dataset.theme === 'light' ? 'dark' : 'light';
     localStorage.setItem('bbx-theme', next);
