@@ -1,16 +1,5 @@
 {% extends "inventory/base.html" %}
 {% block content %}
-<div class="page-header">
-  <h1>Dashboard</h1>
-  <div class="actions dashboard-header-actions">
-    {% if perms.inventory.add_pickticket %}<a href="{% url 'ticket_create' %}" class="btn">Create Pick Ticket</a>{% endif %}
-    {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}" class="btn btn-secondary">Pick Tickets</a>{% endif %}
-    {% if perms.inventory.add_inventoryitem %}<a href="{% url 'inventory_new' %}" class="btn secondary">Add Inventory Item</a>{% endif %}
-    {% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}" class="btn light">Receiving</a>{% endif %}
-    {% if perms.inventory.view_qr_codes %}<a href="{% url 'qr_codes' %}" class="btn light">QR Codes</a>{% endif %}
-    {% if perms.inventory.export_inventory %}<a href="{% url 'export_inventory_xlsx' %}" class="btn light">Export .xlsx</a>{% endif %}
-  </div>
-</div>
 <nav class="mobile-dashboard-nav" aria-label="Mobile warehouse shortcuts">
   <a href="{% url 'inventory_list' %}"><span aria-hidden="true">⌕</span><strong>Inventory</strong></a>
   {% if perms.inventory.add_pickticket %}<a href="{% url 'ticket_create' %}"><span aria-hidden="true">＋</span><strong>New Ticket</strong></a>{% endif %}

@@ -73,3 +73,9 @@ The permanent correction:
 Because the fingerprinted URLs differ from the old worker's plain cache keys, the first normal navigation after deployment cannot pair current HTML with the stale header stylesheet.
 
 Authenticated production verification exercised Dashboard → Inventory → Locations → Dashboard → normal reload with the active `bbx-shell-v5` worker. Every page retained the 390×68 compact header, 390px document width, content-hashed CSS/JavaScript URLs, and correct bell/hamburger ordering. Cache Storage contained only `bbx-shell-v5`.
+
+## Dashboard cleanup
+
+Removed the entire bordered Dashboard title/action card so the metric cards become the first desktop dashboard content. Removed the `New Pick Ticket` tile from the desktop Quick Actions section to reserve that position for a future feature.
+
+The phone-only `New Ticket` shortcut remains available, along with all six dashboard metrics, the remaining six permission-aware Quick Actions, and all existing activity sections.

@@ -231,6 +231,10 @@ class RequestedLocationAndNavigationTests(TestCase):
         self.assertContains(response, 'class="mobile-dashboard-nav"', html=False)
         self.assertContains(response, 'aria-label="Mobile warehouse shortcuts"', html=False)
         self.assertIn(".dashboard-mobile-secondary", html)
+        self.assertNotContains(response, '<div class="page-header">', html=False)
+        self.assertNotContains(response, 'class="actions dashboard-header-actions"', html=False)
+        self.assertNotContains(response, "New Pick Ticket")
+        self.assertEqual(html.count('class="quick-action-btn'), 6)
 
     def test_mobile_navigation_has_accessible_panel_controls(self):
         response = self.client.get(reverse("dashboard"))

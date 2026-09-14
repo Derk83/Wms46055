@@ -59,15 +59,13 @@ class UIConsistencyTests(TestCase):
             with self.subTest(class_name=class_name):
                 self.assertIn(f"'{class_name}'", script)
 
-    def test_dashboard_has_distinct_pick_ticket_list_button(self):
+    def test_dashboard_omits_legacy_header_actions_but_keeps_ticket_destination(self):
         response = self.client.get(reverse("dashboard"))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(
-            response,
-            f'href="{reverse("ticket_list")}" class="btn btn-secondary"',
-            html=False,
-        )
-        self.assertContains(response, ">Pick Tickets</a>", html=False)
+        self.assertNotContains(response, 'class="actions dashboard-header-actions"', html=False)
+        self.assertNotContains(response, ">Pick Tickets</a>", html=False)
+        self.assertContains(response, f'href="{reverse("ticket_list")}"', html=False)
+        self.assertContains(response, "Open Tickets")
 
     def test_known_wide_tables_use_responsive_containers(self):
         for name in ("ticket_detail.html", "ticket_list.html", "low_stock_list.html", "item_detail.html"):
