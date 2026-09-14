@@ -5,17 +5,16 @@
 {% block content %}
 <section class="pdf-viewer-page">
   <div class="pdf-viewer-chrome no-print">
-    <a class="btn secondary pdf-viewer-back" href="{{ back_url }}">
-      <span aria-hidden="true">←</span> Back to Daily Report
+    <a class="btn pdf-viewer-exit" data-action="primary" data-pdf-viewer-exit href="{{ back_url }}">
+      Exit PDF
     </a>
     <div class="pdf-viewer-meta">
       <strong>Daily Activity Report</strong>
-      <span class="meta">PDF viewer — open in browser so you always have a back button.</span>
+      <span class="meta">Returns to the report screen</span>
     </div>
     <div class="pdf-viewer-actions">
-      <a class="btn secondary sm" href="{{ pdf_url }}" download>⬇ Download</a>
-      <button class="btn secondary sm" type="button" data-pdf-viewer-print>🖨 Print</button>
-      <a class="btn secondary sm" href="{{ pdf_url }}" target="_blank" rel="noopener">↗ Open in new tab</a>
+      <a class="btn secondary sm" href="{{ pdf_url }}" download>Download</a>
+      <button class="btn secondary sm" type="button" data-pdf-viewer-print>Print</button>
     </div>
   </div>
 

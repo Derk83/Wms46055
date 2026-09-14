@@ -19,7 +19,10 @@ from django.core import mail
 from django.core.management import call_command
 from django.utils import timezone
 
-from inventory.management.commands.generate_weekly_report import previous_week_range
+from inventory.management.commands.generate_weekly_report import (
+    REPORT_TIMEZONE,
+    previous_week_range,
+)
 from inventory.models import InventoryItem
 
 
@@ -118,7 +121,7 @@ def test_command_saves_pdf_to_expected_path(tmp_path, settings):
 
     # Compute expected filename from "today" the same way the command does.
     from datetime import date as _date, timedelta as _td
-    today_local = timezone.localdate()
+    today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
     days_since_mon = today_local.weekday()
     last_sunday = today_local - _td(days=days_since_mon) - _td(days=1)
     expected = tmp_path / "auto_reports" / "weekly" / f"weekly-{last_sunday.isoformat()}.pdf"
@@ -188,7 +191,7 @@ def test_command_pdf_omits_audit_events(tmp_path, settings):
     from inventory.management.commands.generate_weekly_report import DateRange
     # Compute the same Mon–Sun the command used.
     from datetime import date as _date, timedelta as _td
-    today_local = timezone.localdate()
+    today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
     days_since_mon = today_local.weekday()
     last_monday = today_local - _td(days=days_since_mon) - _td(days=7)
     last_sunday = last_monday + _td(days=6)
@@ -247,7 +250,7 @@ def test_command_smtp_failure_does_not_abort(tmp_path, settings, manager_groups)
     command must exit 0. fail_silently=True on the EmailMessage."""
     settings.MEDIA_ROOT = tmp_path
     from datetime import date as _date, timedelta as _td
-    today_local = timezone.localdate()
+    today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
     days_since_mon = today_local.weekday()
     last_sunday = today_local - _td(days=days_since_mon) - _td(days=1)
 
@@ -275,7 +278,7 @@ def test_command_no_recipients_no_email(tmp_path, settings, manager_groups):
     assert mail.outbox == []
     # PDF should still be written; compute path dynamically.
     from datetime import date as _date, timedelta as _td
-    today_local = timezone.localdate()
+    today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
     days_since_mon = today_local.weekday()
     last_sunday = today_local - _td(days=days_since_mon) - _td(days=1)
     pdf = tmp_path / "auto_reports" / "weekly" / f"weekly-{last_sunday.isoformat()}.pdf"
@@ -291,7 +294,7 @@ def test_command_pdf_includes_summary_tiles(tmp_path, settings):
     call_command("generate_weekly_report")
 
     from datetime import date as _date, timedelta as _td
-    today_local = timezone.localdate()
+    today_local = timezone.localtime(timezone.now(), REPORT_TIMEZONE).date()
     days_since_mon = today_local.weekday()
     last_monday = today_local - _td(days=days_since_mon) - _td(days=7)
     last_sunday = last_monday + _td(days=6)

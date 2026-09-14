@@ -30,7 +30,7 @@
     <span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
     <span data-mobile-nav-label>Menu</span>
   </button>
-  <nav id="site-nav" class="site-nav" aria-label="Main navigation" data-mobile-nav-panel>
+  <nav id="site-nav" class="site-nav{% if not request.is_request_portal %} site-nav--sectioned{% endif %}" aria-label="Main navigation" data-mobile-nav-panel>
     <div class="mobile-nav-head">
       <div><strong>Menu</strong><small>Warehouse navigation</small></div>
       <button type="button" class="mobile-nav-close" aria-label="Close navigation menu" data-mobile-nav-close>&times;</button>
@@ -41,6 +41,7 @@
       {% if perms.inventory.add_materialrequest and perms.inventory.add_materialrequestline and perms.inventory.view_inventoryitem %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
     {% else %}
       <div class="nav-section">
+        <div class="nav-section-label">Operations</div>
         <a href="{% url 'inventory_list' %}">Inventory</a>
         {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
         {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}

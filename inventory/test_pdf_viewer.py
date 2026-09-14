@@ -44,9 +44,11 @@ class ReportsPdfViewerTests(TestCase):
         response = client.get(reverse("reports_pdf_viewer", args=["daily"]))
         self.assertEqual(response.status_code, 200)
         body = response.content.decode()
-        # Back button is always present so iPad users can escape
-        self.assertIn('class="btn secondary pdf-viewer-back"', body)
-        self.assertIn("Back to Daily Report", body)
+        # Exit is the permanent primary escape action on iPad.
+        self.assertIn('class="btn pdf-viewer-exit"', body)
+        self.assertIn('data-pdf-viewer-exit', body)
+        self.assertIn("Exit PDF", body)
+        self.assertIn("Returns to the report screen", body)
         # Iframe is the PDF and has a sensible title
         self.assertIn('class="pdf-viewer-frame"', body)
         self.assertIn('title="Daily Activity Report PDF"', body)
@@ -55,7 +57,7 @@ class ReportsPdfViewerTests(TestCase):
         # Secondary actions are exposed
         self.assertIn("Download", body)
         self.assertIn("Print", body)
-        self.assertIn("Open in new tab", body)
+        self.assertNotIn("Open in new tab", body)
         # No-print class on the chrome bar so print preview hides it
         self.assertIn("pdf-viewer-chrome no-print", body)
 
