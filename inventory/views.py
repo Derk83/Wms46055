@@ -773,6 +773,7 @@ def global_search(request):
 def inventory_list(request):
     query = request.GET.get("q", "").strip()
     part_number = request.GET.get("part_number", "").strip()
+    fb_part_number = request.GET.get("fb_part_number", "").strip()
     po_number = request.GET.get("po_number", "").strip()
     category = request.GET.get("category", "").strip()
     stock = request.GET.get("stock", "").strip()
@@ -796,6 +797,8 @@ def inventory_list(request):
         )
     if part_number:
         items = items.filter(part_number__icontains=part_number)
+    if fb_part_number:
+        items = items.filter(fb_part_number__icontains=fb_part_number)
     if po_number:
         items = items.filter(
             receivingline__ticket__po_number__icontains=po_number
@@ -815,6 +818,8 @@ def inventory_list(request):
     sort_map = {
         "part": "part_number",
         "part_desc": "-part_number",
+        "fb_part": "fb_part_number",
+        "fb_part_desc": "-fb_part_number",
         "name": "description",
         "category": "category",
         "qty": "quantity_on_hand",
@@ -824,7 +829,7 @@ def inventory_list(request):
         "updated": "-updated_at",
     }
     items = items.distinct().order_by(sort_map.get(sort, "part_number"))
-    filters_active = any([query, part_number, po_number, category, stock])
+    filters_active = any([query, part_number, fb_part_number, po_number, category, stock])
     return render(
         request,
         "inventory/inventory_list.html",
@@ -832,6 +837,7 @@ def inventory_list(request):
             "items": items,
             "query": query,
             "part_number": part_number,
+            "fb_part_number": fb_part_number,
             "po_number": po_number,
             "category": category,
             "category_choices": CategoryChoices.choices,

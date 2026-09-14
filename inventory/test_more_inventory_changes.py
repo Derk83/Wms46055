@@ -64,6 +64,41 @@ class InventoryMoreChangesTests(TestCase):
         self.assertContains(response, "PART-100")
         self.assertNotContains(response, "PART-200")
 
+    def test_inventory_has_dedicated_fb_filter_and_sorting(self):
+        response = self.client.get(
+            reverse("inventory_list"),
+            {"fb_part_number": "9001", "sort": "fb_part_desc"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="fb_part_number"', html=False)
+        self.assertContains(response, 'value="9001"', html=False)
+        self.assertContains(response, "PART-100")
+        self.assertNotContains(response, "PART-200")
+        self.assertTrue(response.context["filters_active"])
+
+        ascending = self.client.get(reverse("inventory_list"), {"sort": "fb_part"})
+        descending = self.client.get(reverse("inventory_list"), {"sort": "fb_part_desc"})
+        self.assertEqual(
+            list(ascending.context["items"].values_list("fb_part_number", flat=True)),
+            ["FB-9001", "FB-9002"],
+        )
+        self.assertEqual(
+            list(descending.context["items"].values_list("fb_part_number", flat=True)),
+            ["FB-9002", "FB-9001"],
+        )
+
+    def test_inventory_table_has_sticky_headers_and_safe_clickable_rows(self):
+        response = self.client.get(reverse("inventory_list"))
+        html = response.content.decode()
+
+        self.assertEqual(response.status_code, 200)
+        item_url = reverse("item_detail", args=[self.item.pk])
+        self.assertIn(f'data-item-url="{item_url}"', html)
+        self.assertIn(".inventory-table thead th { position: sticky; top: 68px;", html)
+        self.assertIn("event.target.closest('a, button, input, select, textarea, label, form')", html)
+        self.assertIn("window.location.assign(this.dataset.itemUrl)", html)
+
     def test_inventory_form_renders_and_saves_fb_part_number(self):
         response = self.client.get(reverse("inventory_edit", args=[self.item.pk]))
         self.assertContains(response, 'name="fb_part_number"', html=False)

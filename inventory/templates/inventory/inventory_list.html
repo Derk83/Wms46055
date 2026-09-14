@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="filter-heading">
     <div>
       <h2>Find Inventory</h2>
-      <p class="helptext">Filter by part, PO, category, stock status, scanner text, or location.</p>
+      <p class="helptext">Filter by part, FB part, PO, category, stock status, scanner text, or location.</p>
     </div>
     {% if filters_active %}<a href="{% url 'inventory_list' %}" class="btn btn-secondary btn-sm">Clear Filters</a>{% endif %}
   </div>
@@ -102,6 +102,10 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="form-group">
       <label for="part_number">Part #</label>
       <input id="part_number" name="part_number" value="{{ part_number }}" placeholder="Exact or partial part #">
+    </div>
+    <div class="form-group">
+      <label for="fb_part_number">FB Part #</label>
+      <input id="fb_part_number" name="fb_part_number" value="{{ fb_part_number }}" placeholder="Exact or partial FB part #">
     </div>
     <div class="form-group">
       <label for="po_number">PO #</label>
@@ -130,6 +134,8 @@ document.addEventListener('DOMContentLoaded', function() {
       <select id="sort" name="sort">
         <option value="part" {% if sort == "part" %}selected{% endif %}>Part # A-Z</option>
         <option value="part_desc" {% if sort == "part_desc" %}selected{% endif %}>Part # Z-A</option>
+        <option value="fb_part" {% if sort == "fb_part" %}selected{% endif %}>FB Part # A-Z</option>
+        <option value="fb_part_desc" {% if sort == "fb_part_desc" %}selected{% endif %}>FB Part # Z-A</option>
         <option value="name" {% if sort == "name" %}selected{% endif %}>Name</option>
         <option value="category" {% if sort == "category" %}selected{% endif %}>Category</option>
         <option value="qty" {% if sort == "qty" %}selected{% endif %}>Qty Low-High</option>
@@ -177,7 +183,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </thead>
       <tbody>
         {% for item in items %}
-        <tr data-item-id="{{ item.id }}">
+        <tr data-item-id="{{ item.id }}" data-item-url="{% url 'item_detail' item.pk %}">
           {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<td data-label="Select">
             <input type="checkbox" value="{{ item.id }}" class="item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">
           </td>{% endif %}
@@ -207,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
   <div class="mobile-inventory-list">
     {% for item in items %}
-      <article class="mobile-inventory-card" data-item-id="{{ item.id }}">
+      <article class="mobile-inventory-card" data-item-id="{{ item.id }}" data-item-url="{% url 'item_detail' item.pk %}">
         <div class="mobile-card-top{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} has-selection{% endif %}">
           {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">{% endif %}
           <div class="mobile-item-main">
@@ -247,6 +253,8 @@ document.addEventListener('DOMContentLoaded', function() {
 .inventory-table { table-layout: fixed; width: 100%; font-size: 14px; }
 .inventory-table th, .inventory-table td { padding: 8px 10px; white-space: normal; overflow-wrap: anywhere; line-height: 1.4; }
 .inventory-table th { font-size: 11px; padding: 8px 10px; }
+.inventory-table thead th { position: sticky; top: 68px; z-index: 3; background: var(--surface-2); box-shadow: 0 1px 0 var(--border); }
+.inventory-table tbody tr[data-item-url], .mobile-inventory-card[data-item-url] { cursor: pointer; }
 .select-col { width: 36px; }
 .part-col { width: 12%; }
 .fb-part-col { width: 12%; }
@@ -323,6 +331,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const selectedItemsInput = document.getElementById('selectedItems');
     const clearBtn = document.getElementById('clearSelection');
     const itemContainers = document.querySelectorAll('[data-item-id]');
+    document.querySelectorAll('[data-item-url]').forEach(container => {
+        container.addEventListener('click', function(event) {
+            if (event.defaultPrevented || event.target.closest('a, button, input, select, textarea, label, form')) return;
+            if (window.getSelection && String(window.getSelection()).trim()) return;
+            window.location.assign(this.dataset.itemUrl);
+        });
+    });
     if (!selectAll || !bulkBar || !selectedCount || !selectedItemsInput || !clearBtn) return;
     const uniqueItemIds = Array.from(new Set(Array.from(checkboxes).map(cb => cb.value).filter(Boolean)));
     function updateSelection() {
