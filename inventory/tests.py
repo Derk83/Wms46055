@@ -76,7 +76,8 @@ class TicketImprovementTests(TestCase):
             "first_name": "Updated",
             "last_name": "User",
             "email": "updated@example.com",
-            "password": "newpw",
+            "password": "NewValidPass!928",
+            "password_confirm": "NewValidPass!928",
         })
 
         self.assertRedirects(response, reverse("user_management"))
@@ -85,7 +86,7 @@ class TicketImprovementTests(TestCase):
         self.assertTrue(self.user.is_staff)
         self.assertTrue(self.user.is_superuser)
         self.assertTrue(self.user.groups.filter(pk=manager.pk).exists())
-        self.assertTrue(self.user.check_password("newpw"))
+        self.assertTrue(self.user.check_password("NewValidPass!928"))
 
     def test_user_edit_page_has_inline_group_crud_controls(self):
         group = Group.objects.create(name="Warehouse Staff")

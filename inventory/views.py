@@ -25,6 +25,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm, PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, models, transaction
 from django.db.models import Count, Q, Sum
 from django import forms
@@ -383,6 +384,19 @@ class WarehouseUserCreationForm(UserCreationForm):
 
 
 class WarehouseUserChangeForm(UserChangeForm):
+    password = forms.CharField(
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        label="New password",
+    )
+    password_confirm = forms.CharField(
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+        label="Confirm new password",
+    )
+
     class Meta(UserChangeForm.Meta):
         model = User
         fields = (
@@ -394,6 +408,20 @@ class WarehouseUserChangeForm(UserChangeForm):
             "is_superuser",
             "is_active",
         )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        password = cleaned_data.get("password") or ""
+        confirmation = cleaned_data.get("password_confirm") or ""
+        if password or confirmation:
+            if password != confirmation:
+                self.add_error("password_confirm", "The two passwords do not match.")
+            elif password:
+                try:
+                    validate_password(password, self.instance)
+                except ValidationError as exc:
+                    self.add_error("password", exc)
+        return cleaned_data
 
 from .models import (
     _LEDGER_WRITE_TOKEN,
@@ -2893,32 +2921,42 @@ def user_create(request):
 def user_edit(request, pk):
     """Edit an existing user with group and permission assignments."""
     user = get_object_or_404(User, pk=pk)
+    if user.is_superuser and not request.user.is_superuser:
+        raise PermissionDenied("Only a superuser may edit another superuser account.")
     editing_self = user.pk == request.user.pk
     protected_status = (user.is_staff, user.is_superuser, user.is_active)
+    previous_login_identifiers = {user.username, user.email}
     all_groups = Group.objects.all().order_by("name")
     grouped_perms = _group_inventory_permissions()
 
     if request.method == "POST":
         form = WarehouseUserChangeForm(request.POST, instance=user)
         if form.is_valid():
-            user = form.save(commit=False)
-            # Disabled self-edit controls are not submitted by browsers. Preserve
-            # them so changing your own password cannot deactivate/lock out you.
-            if editing_self:
-                user.is_staff, user.is_superuser, user.is_active = protected_status
-            password = request.POST.get("password", "")
-            if password:
-                user.set_password(password)
-            user.save()
-            if editing_self and password:
-                update_session_auth_hash(request, user)
-            # Self-edit group controls are disabled, so preserve existing groups.
-            if not editing_self:
-                group_ids = request.POST.getlist("groups")
-                user.groups.set(Group.objects.filter(pk__in=group_ids))
-            # Assign individual permissions
-            perm_ids = request.POST.getlist("permissions")
-            user.user_permissions.set(Permission.objects.filter(pk__in=perm_ids))
+            with transaction.atomic():
+                user = form.save(commit=False)
+                # Disabled self-edit controls are not submitted by browsers. Preserve
+                # them so changing your own password cannot deactivate/lock out you.
+                if editing_self:
+                    user.is_staff, user.is_superuser, user.is_active = protected_status
+                elif not request.user.is_superuser:
+                    user.is_staff, user.is_superuser = protected_status[:2]
+                password = form.cleaned_data.get("password", "")
+                if password:
+                    user.set_password(password)
+                user.save()
+                if editing_self and password:
+                    update_session_auth_hash(request, user)
+                # Self-edit group controls are disabled, so preserve existing groups.
+                if not editing_self:
+                    group_ids = request.POST.getlist("groups")
+                    user.groups.set(Group.objects.filter(pk__in=group_ids))
+                # Assign individual permissions
+                perm_ids = request.POST.getlist("permissions")
+                user.user_permissions.set(Permission.objects.filter(pk__in=perm_ids))
+                if password and _axes_reset_user is not None:
+                    for identifier in previous_login_identifiers | {user.username, user.email}:
+                        if identifier:
+                            _axes_reset_user(username=identifier)
             messages.success(request, f"User '{user.username}' updated successfully.")
             return redirect("user_management")
     else:

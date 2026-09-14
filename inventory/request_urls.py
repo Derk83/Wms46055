@@ -3,6 +3,7 @@ from django.urls import path
 
 from . import views
 from . import onboarding_views
+from .auth_forms import WarehouseAuthenticationForm
 
 # This URLconf is selected only for requests.rplwms.com by HostURLConfMiddleware.
 urlpatterns = [
@@ -23,7 +24,14 @@ urlpatterns = [
     ),
     path("offline/", views.pwa_offline, name="pwa_offline"),
     path("", onboarding_views.portal_access_request, name="dashboard"),
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path(
+        "login/",
+        auth_views.LoginView.as_view(
+            template_name="registration/login.html",
+            authentication_form=WarehouseAuthenticationForm,
+        ),
+        name="login",
+    ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("inventory/", views.inventory_list, name="inventory_list"),
     path("inventory/<int:pk>/", views.item_detail, name="item_detail"),

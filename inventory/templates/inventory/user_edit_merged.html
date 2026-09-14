@@ -44,12 +44,18 @@
                         </div>
                         {% if user_obj %}
                         <div class="mb-4">
-                            <label class="form-label">Password</label>
-                            <p class="text-muted small mb-1">Leave blank to keep current password.</p>
+                            <label for="{{ form.password.id_for_label }}" class="form-label">New password</label>
+                            <p class="text-muted small mb-1">Leave both fields blank to keep the current password.</p>
                             <div style="display:flex; gap:8px; align-items:center;">
-                                <input type="password" name="password" id="id_password" class="form-control" placeholder="New password" style="flex:1;">
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('id_password').value=''" title="Clear">✕</button>
+                                {{ form.password }}
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('id_password').value='';document.getElementById('id_password_confirm').value='';" title="Clear both password fields">✕</button>
                             </div>
+                            {% if form.password.errors %}<div class="text-danger small">{{ form.password.errors }}</div>{% endif %}
+                        </div>
+                        <div class="mb-4">
+                            <label for="{{ form.password_confirm.id_for_label }}" class="form-label">Confirm new password</label>
+                            {{ form.password_confirm }}
+                            {% if form.password_confirm.errors %}<div class="text-danger small">{{ form.password_confirm.errors }}</div>{% endif %}
                         </div>
                         {% else %}
                         <div class="row">
@@ -73,11 +79,11 @@
                             <label class="form-label">Status</label>
                             <div class="status-toggles">
                                 <label class="toggle-label">
-                                    <input type="checkbox" name="is_staff" {% if form.is_staff.value %}checked{% endif %} {% if user_obj == request.user and user_obj %}disabled{% endif %}>
+                                    <input type="checkbox" name="is_staff" {% if form.is_staff.value %}checked{% endif %} {% if not request.user.is_superuser or user_obj == request.user and user_obj %}disabled{% endif %}>
                                     <span>Staff</span>
                                 </label>
                                 <label class="toggle-label">
-                                    <input type="checkbox" name="is_superuser" {% if form.is_superuser.value %}checked{% endif %} {% if user_obj == request.user and user_obj %}disabled{% endif %}>
+                                    <input type="checkbox" name="is_superuser" {% if form.is_superuser.value %}checked{% endif %} {% if not request.user.is_superuser or user_obj == request.user and user_obj %}disabled{% endif %}>
                                     <span>Superuser</span>
                                 </label>
                                 <label class="toggle-label">

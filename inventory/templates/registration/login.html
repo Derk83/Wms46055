@@ -4,7 +4,7 @@
 <div class="card login-card{% if request.is_request_portal %} portal-login-card{% endif %}">
   {% if request.is_request_portal %}<p class="portal-eyebrow">Material Requests</p>{% endif %}
   <h1>Welcome back</h1>
-  <p class="text-muted">Sign in to {% if request.is_request_portal %}submit and track material requests{% else %}RPL Warehouse{% endif %}.</p>
+  <p class="text-muted">Sign in with your username or account email to {% if request.is_request_portal %}submit and track material requests{% else %}RPL Warehouse{% endif %}.</p>
   {% if form.errors %}<div class="messages"><li class="error">The username or password was not recognized.</li></div>{% endif %}
   <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">{{ form.as_p }}<button class="btn btn-primary lg w-100" type="submit">Sign in</button></form>
   {% if request.is_request_portal %}<p class="portal-login-help text-muted">Need an account? <a href="{% url 'portal_access_request' %}">Request access</a></p>{% endif %}
