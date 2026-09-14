@@ -48,6 +48,14 @@ def _template(name):
     return (TEMPLATES / name).read_text()
 
 
+def test_all_inline_template_scripts_carry_the_request_csp_nonce():
+    for path in (ROOT / "templates").rglob("*.html"):
+        source = path.read_text()
+        for tag in re.findall(r"<script\b[^>]*>", source, flags=re.IGNORECASE):
+            if "src=" not in tag.lower():
+                assert 'nonce="{{ request.csp_nonce }}"' in tag, f"{path.name}: {tag}"
+
+
 def test_reachable_normal_screens_have_one_page_heading_and_standard_header():
     for name in STANDARD_SCREENS:
         source = _template(name)

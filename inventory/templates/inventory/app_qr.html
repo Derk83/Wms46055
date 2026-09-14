@@ -190,7 +190,7 @@
   <div class="app-qr-brand">Warehouse<br>Login</div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 function printAppQr() {
   try {
     window.print();

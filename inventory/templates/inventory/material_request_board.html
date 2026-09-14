@@ -41,7 +41,7 @@
 <div id="material-request-live-region" data-material-request-board-poll>
   {% if view_mode == "queue" %}{% include "inventory/_material_request_queue.html" %}{% else %}{% include "inventory/_material_request_columns.html" %}{% endif %}
 </div>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (() => {
   const region = document.querySelector('[data-material-request-board-poll]');
   if (!region) return;

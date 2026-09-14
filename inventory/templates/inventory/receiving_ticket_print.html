@@ -210,7 +210,7 @@
       </div>
     </div>
   </section>
-  <script>
+  <script nonce="{{ request.csp_nonce }}">
     document.title = 'Receiving Ticket {{ ticket.ticket_number }}';
     function openPrintDialog() {
       try {

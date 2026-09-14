@@ -47,7 +47,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 (function() {
   const searchInput = document.getElementById('item-search');
   const resultsContainer = document.getElementById('search-results');

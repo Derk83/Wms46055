@@ -81,7 +81,7 @@
 }
 </style>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
   document.querySelectorAll('[data-percentage-toggle]').forEach(function (box) {
     var targetId = box.getAttribute('data-percentage-toggle');

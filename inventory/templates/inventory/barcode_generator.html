@@ -94,7 +94,7 @@
   <p>No items found. Add items to generate barcodes.</p>
 </div>
 {% endif %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 let barcodeScanner = null;
 let lastBarcodeScan = '';
 function playBarcodeBeep() {

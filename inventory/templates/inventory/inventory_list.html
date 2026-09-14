@@ -20,7 +20,7 @@
   <div id="inventory-camera-reader" style="width:100%; max-width:520px; min-height:320px; border:1px solid var(--border); border-radius:10px; overflow:hidden;"></div>
   <pre id="inventoryScanResult" style="white-space:pre-wrap;background:#f2f4f7;padding:12px;border-radius:10px">Waiting for scan… Click 📷.</pre>
 </div>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
   var startBtn = document.getElementById('startCameraScan');
   var section = document.getElementById('inventory-camera-section');
@@ -314,7 +314,7 @@ tbody tr.selected td { background: rgba(236,31,39,0.16); }
   .mobile-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const selectAll = document.getElementById('selectAll');
     const checkboxes = document.querySelectorAll('.item-checkbox');

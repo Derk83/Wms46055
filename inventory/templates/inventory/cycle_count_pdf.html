@@ -150,7 +150,7 @@ tr{page-break-inside:avoid}
 {% endfor %}
 </main>
 {% if not pdf_mode %}
-<script>
+<script nonce="{{ request.csp_nonce }}">
 let backupStarted = false;
 let generatedAtForPrint = '';
 function computerGeneratedTime() {

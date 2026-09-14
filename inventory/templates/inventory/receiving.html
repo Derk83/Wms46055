@@ -196,7 +196,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function () {
   const camera = document.getElementById('camera-source');
   const source = document.querySelector('#receive-item-form input[name="source"]');

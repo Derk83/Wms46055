@@ -10,7 +10,7 @@
   <form method="post" class="form-stack">{% csrf_token %}<div class="form-group"><label for="barcode_value">UPC / barcode</label><input id="barcode_value" name="barcode_value" value="{{ item.barcode_value|default_if_none:'' }}" inputmode="numeric" autocomplete="off" maxlength="160" required></div><button class="btn btn-primary" type="submit">Save UPC</button></form>
 </div>
 <style>.upc-card{max-width:680px}.upc-card form{margin-top:18px}#upc-reader{width:100%;max-width:520px;min-height:240px;margin:14px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden}</style>
-<script>
+<script nonce="{{ request.csp_nonce }}">
 document.addEventListener('DOMContentLoaded',function(){var button=document.getElementById('start-upc-scan'),input=document.getElementById('barcode_value'),scanner=null;button.addEventListener('click',function(){if(!window.Html5Qrcode){alert('Scanner library could not load. Enter the UPC manually.');return}button.disabled=true;scanner=new Html5Qrcode('upc-reader');scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:150}},function(value){input.value=value;scanner.stop().then(function(){scanner.clear();button.disabled=false;button.textContent='Scan Again';});},function(){}).catch(function(error){button.disabled=false;alert('Camera could not start: '+error);});});});
 </script>
 {% endblock %}
