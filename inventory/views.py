@@ -636,6 +636,58 @@ def dashboard(request):
 
 
 @login_required
+@require_GET
+def global_search(request):
+    """Permission-aware search across the three daily WMS record types."""
+    query = request.GET.get("q", "").strip()[:120]
+    inventory_results = InventoryItem.objects.none()
+    ticket_results = PickTicket.objects.none()
+    request_results = MaterialRequest.objects.none()
+
+    if query:
+        inventory_results = InventoryItem.objects.filter(
+            Q(part_number__icontains=query)
+            | Q(fb_part_number__icontains=query)
+            | Q(model_number__icontains=query)
+            | Q(name__icontains=query)
+            | Q(description__icontains=query)
+            | Q(barcode_value__icontains=query)
+            | Q(building_room__icontains=query)
+            | Q(rack__icontains=query)
+            | Q(section__icontains=query)
+            | Q(bin_location__icontains=query)
+        ).distinct().order_by("part_number")[:10]
+
+        if request.user.has_perm("inventory.view_pickticket"):
+            ticket_results = _visible_pick_tickets(request).filter(
+                Q(ticket_number__icontains=query)
+                | Q(requested_by_name__icontains=query)
+                | Q(picked_by_name__icontains=query)
+                | Q(building_room__icontains=query)
+                | Q(location__icontains=query)
+                | Q(lines__item__part_number__icontains=query)
+                | Q(lines__item__name__icontains=query)
+            ).distinct().order_by("-created_at")[:10]
+
+        if request.user.has_perm("inventory.view_materialrequest"):
+            request_results = _visible_material_requests(request).filter(
+                Q(request_number__icontains=query)
+                | Q(requestor_name__icontains=query)
+                | Q(building_room__icontains=query)
+                | Q(location__icontains=query)
+                | Q(lines__item__part_number__icontains=query)
+                | Q(lines__item__name__icontains=query)
+            ).distinct().order_by("-created_at")[:10]
+
+    return render(request, "inventory/global_search.html", {
+        "query": query,
+        "inventory_results": inventory_results,
+        "ticket_results": ticket_results,
+        "request_results": request_results,
+    })
+
+
+@login_required
 @portal_inventory_access_required
 def inventory_list(request):
     query = request.GET.get("q", "").strip()

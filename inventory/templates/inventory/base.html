@@ -19,61 +19,82 @@
   <link rel="apple-touch-icon" href="{% static 'inventory/icons/apple-touch-icon.png' %}">
 </head>
 <body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
-<header class="site-header">
-  <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">
-    <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse">
-    <span class="brand-primary">RPL Warehouse</span>
-    {% if request.is_request_portal %}<span class="brand-subtitle">Material Requests</span>{% endif %}
-  </a>
-  {% if user.is_authenticated %}
-  <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle>
-    <span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
-    <span data-mobile-nav-label>Menu</span>
-  </button>
-  <nav id="site-nav" class="site-nav{% if not request.is_request_portal %} site-nav--sectioned{% endif %}" aria-label="Main navigation" data-mobile-nav-panel>
-    <div class="mobile-nav-head">
-      <div><strong>Menu</strong><small>Warehouse navigation</small></div>
-      <button type="button" class="mobile-nav-close" aria-label="Close navigation menu" data-mobile-nav-close>&times;</button>
+<header class="site-header{% if not request.is_request_portal %} site-header--wms{% endif %}">
+  {% if user.is_authenticated and not request.is_request_portal %}
+  <div class="desktop-header-top">
+    <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">
+      <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse">
+      <span class="brand-primary">RPL Warehouse</span>
+    </a>
+    <form class="desktop-global-search" method="get" action="{% url 'global_search' %}" role="search">
+      <label class="sr-only" for="desktop-global-search-input">Search warehouse</label>
+      <span aria-hidden="true">⌕</span>
+      <input id="desktop-global-search-input" type="search" name="q" value="{{ request.GET.q|default:'' }}" placeholder="Search inventory, tickets, or requests" autocomplete="off">
+    </form>
+    <div class="header-controls">
+      <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app">⇩</button>
+      <div class="notification-center" data-notification-center>
+        <button class="icon-button notification-toggle" type="button" data-notification-toggle aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="notification-count" data-notification-count hidden>0</span>
+        </button>
+        <section id="notification-panel" class="notification-panel" data-notification-panel hidden aria-label="Notifications">
+          <header><strong>Notifications</strong><button type="button" class="link-button" data-notification-clear>Clear all</button></header>
+          <ul class="notification-list" data-notification-list>{% for message in messages %}<li class="notification-item {{ message.tags }}" data-initial-notification data-popup-message="{{ message }}"><span>{{ message }}</span><time>Now</time></li>{% empty %}<li class="notification-empty" data-notification-empty>No notifications yet.</li>{% endfor %}</ul>
+          {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
+        </section>
+      </div>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+      <div class="account-menu">
+        <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="account-menu-panel">
+          <span class="account-menu-name">{{ user.get_full_name|default:user.username }}</span>
+          <span class="account-avatar" aria-hidden="true">{{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}</span>
+          <span class="account-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div id="account-menu-panel" class="account-menu-panel" data-account-menu hidden>
+          <strong>{{ user.get_full_name|default:user.username }}</strong>
+          <a href="{% url 'change_password' %}">Change password</a>
+          <form method="post" action="{% url 'logout' %}"{% if perms.inventory.view_materialrequest %} data-push-logout{% endif %}>{% csrf_token %}<button type="submit">Logout</button></form>
+        </div>
+      </div>
     </div>
+  </div>
+  <nav class="desktop-priority-nav" aria-label="Primary warehouse navigation">
+    <a href="{% url 'inventory_list' %}">Inventory</a>
+    {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
+    {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Requests</a>{% endif %}
+    {% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}">Receiving</a>{% elif perms.inventory.view_receiving_log %}<a href="{% url 'receiving_log' %}">Receiving</a>{% endif %}
+    <div class="header-more">
+      <button class="header-more-toggle" type="button" data-header-more-toggle aria-expanded="false" aria-controls="header-more-menu">More <span aria-hidden="true">▾</span></button>
+      <div id="header-more-menu" class="header-more-menu" data-header-more-menu hidden>
+        {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}<section><strong>Insights</strong>{% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}{% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}</section>{% endif %}
+        <section><strong>Tools</strong><a href="{% url 'location_list' %}">Locations</a>{% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}{% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}{% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}</section>
+        {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<section><strong>Admin</strong><a href="{% url 'settings' %}">Settings</a></section>{% endif %}
+      </div>
+    </div>
+  </nav>
+  <a class="brand mobile-header-brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse"><span class="brand-primary">RPL Warehouse</span></a>
+  {% else %}
+  <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse"><span class="brand-primary">RPL Warehouse</span>{% if request.is_request_portal %}<span class="brand-subtitle">Material Requests</span>{% endif %}</a>
+  {% endif %}
+  {% if user.is_authenticated %}
+  <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle><span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span><span data-mobile-nav-label>Menu</span></button>
+  <nav id="site-nav" class="site-nav{% if not request.is_request_portal %} site-nav--sectioned{% endif %}" aria-label="Main navigation" data-mobile-nav-panel>
+    <div class="mobile-nav-head"><div><strong>Menu</strong><small>Warehouse navigation</small></div><button type="button" class="mobile-nav-close" aria-label="Close navigation menu" data-mobile-nav-close>&times;</button></div>
     {% if request.is_request_portal %}
       {% if perms.inventory.view_materialrequest and perms.inventory.access_material_request_portal %}<a href="{% url 'material_request_board' %}">Request Board</a>{% endif %}
       {% if perms.inventory.view_inventoryitem %}<a href="{% url 'inventory_list' %}">Inventory</a>{% endif %}
       {% if perms.inventory.add_materialrequest and perms.inventory.add_materialrequestline and perms.inventory.view_inventoryitem %}<a href="{% url 'material_request_create' %}">New Request</a>{% endif %}
     {% else %}
-      <div class="nav-section">
-        <div class="nav-section-label">Operations</div>
-        <a href="{% url 'inventory_list' %}">Inventory</a>
-        {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}
-        {% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}
-        {% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}">Receiving</a>{% elif perms.inventory.view_receiving_log %}<a href="{% url 'receiving_log' %}">Receiving</a>{% endif %}
-      </div>
-      {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}
-      <div class="nav-section">
-        <div class="nav-section-label">Insights</div>
-        {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}
-        {% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}
-      </div>
-      {% endif %}
-      <div class="nav-section">
-        <div class="nav-section-label">Tools</div>
-        <a href="{% url 'location_list' %}">Locations</a>
-        {% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}
-        {% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}
-        {% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}
-      </div>
-      {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}
-      <div class="nav-section">
-        <div class="nav-section-label">Admin</div>
-        <a href="{% url 'settings' %}">Settings</a>
-      </div>
-      {% endif %}
+      <div class="nav-section"><div class="nav-section-label">Operations</div><a href="{% url 'inventory_list' %}">Inventory</a>{% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}">Tickets</a>{% endif %}{% if perms.inventory.view_materialrequest %}<a href="{% url 'material_request_board' %}">Material Requests</a>{% endif %}{% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}">Receiving</a>{% elif perms.inventory.view_receiving_log %}<a href="{% url 'receiving_log' %}">Receiving</a>{% endif %}</div>
+      {% if perms.inventory.view_inventorytransaction or user.is_superuser or user|has_manager_group %}<div class="nav-section"><div class="nav-section-label">Insights</div>{% if perms.inventory.view_inventorytransaction %}<a href="{% url 'transaction_history' %}">Transactions</a>{% endif %}{% if user.is_superuser or user|has_manager_group %}<a href="{% url 'reports_index' %}">Reports</a>{% endif %}</div>{% endif %}
+      <div class="nav-section"><div class="nav-section-label">Tools</div><a href="{% url 'location_list' %}">Locations</a>{% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}{% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}{% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}</div>
+      {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<div class="nav-section"><div class="nav-section-label">Admin</div><a href="{% url 'settings' %}">Settings</a></div>{% endif %}
     {% endif %}
-    <div class="mobile-nav-account">
-      <span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span>
-      <form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form>
-    </div>
+    <div class="mobile-nav-account"><span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span><form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form></div>
   </nav>
   <button type="button" class="nav-backdrop" aria-label="Close navigation menu" tabindex="-1" data-mobile-nav-backdrop></button>
+  {% if request.is_request_portal %}
   <div class="header-controls">
     <span class="user-info">{{ user.get_full_name|default:user.username }}</span>
     <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app">⇩</button>
@@ -84,26 +105,20 @@
       </button>
       <section id="notification-panel" class="notification-panel" data-notification-panel hidden aria-label="Notifications">
         <header><strong>Notifications</strong><button type="button" class="link-button" data-notification-clear>Clear all</button></header>
-        <ul class="notification-list" data-notification-list>
-          {% for message in messages %}<li class="notification-item {{ message.tags }}" data-initial-notification data-popup-message="{{ message }}"><span>{{ message }}</span><time>Now</time></li>{% empty %}<li class="notification-empty" data-notification-empty>No notifications yet.</li>{% endfor %}
-        </ul>
-        {% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}
-        <footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>
-        {% endif %}
+        <ul class="notification-list" data-notification-list>{% for message in messages %}<li class="notification-item {{ message.tags }}" data-initial-notification data-popup-message="{{ message }}"><span>{{ message }}</span><time>Now</time></li>{% empty %}<li class="notification-empty" data-notification-empty>No notifications yet.</li>{% endfor %}</ul>
+        {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
       </section>
     </div>
     <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
-    <form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary sm" type="submit">Logout</button></form>
+    <form method="post" action="{% url 'logout' %}" data-push-logout>{% csrf_token %}<button class="btn secondary sm" type="submit">Logout</button></form>
   </div>
   {% endif %}
+  {% endif %}
 </header>
-<main>
-  {% block content %}{% endblock %}
-</main>
+<main>{% block content %}{% endblock %}</main>
 <div id="toast-region" class="toast-region no-print" aria-live="polite" aria-atomic="true"></div>
 <script src="{% static 'inventory/js/app.js' %}" defer></script>
 <script src="{% static 'inventory/js/pwa.js' %}" defer></script>
 {% if user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% static 'inventory/js/push.js' %}" defer></script>{% endif %}
 {% block content_tail %}{% endblock %}
-</body>
-</html>
+</body></html>

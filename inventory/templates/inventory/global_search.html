@@ -1,0 +1,28 @@
+{% extends "inventory/base.html" %}
+{% block title %}Search · RPL Warehouse{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div><h1>Warehouse Search</h1><div class="meta">Inventory, pick tickets, and material requests in one place.</div></div>
+</section>
+<form class="card search-form" method="get" action="{% url 'global_search' %}" role="search">
+  <div class="form-group global-search-field"><label for="warehouse-search">Search warehouse</label><input id="warehouse-search" type="search" name="q" value="{{ query }}" placeholder="Part number, item, ticket, request, person, or location" autofocus></div>
+  <button class="btn btn-primary" type="submit">Search</button>
+</form>
+{% if query %}
+<div class="global-search-summary" role="status">Results for “{{ query }}”</div>
+<div class="global-search-results">
+  <section class="card">
+    <div class="card-header"><h2>Inventory</h2><a class="btn sm light" href="{% url 'inventory_list' %}?q={{ query|urlencode }}">View all inventory results</a></div>
+    {% if inventory_results %}<div class="global-result-list">{% for item in inventory_results %}<a class="global-result" href="{% url 'item_detail' item.pk %}"><span><strong>{{ item.part_number }}</strong><small>{{ item.name }}</small></span><span class="global-result-meta">Qty {{ item.quantity_on_hand }} · {{ item.storage_location|default:"No location" }}</span></a>{% endfor %}</div>{% else %}<div class="empty-state small">No inventory matches.</div>{% endif %}
+  </section>
+  {% if perms.inventory.view_pickticket %}<section class="card">
+    <div class="card-header"><h2>Pick Tickets</h2><a class="btn sm light" href="{% url 'ticket_list' %}?q={{ query|urlencode }}">View all ticket results</a></div>
+    {% if ticket_results %}<div class="global-result-list">{% for ticket in ticket_results %}<a class="global-result" href="{% url 'ticket_detail' ticket.pk %}"><span><strong>{{ ticket.ticket_number }}</strong><small>{{ ticket.requested_by_name }} · {{ ticket.building_room }}</small></span><span class="badge status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></a>{% endfor %}</div>{% else %}<div class="empty-state small">No pick tickets match.</div>{% endif %}
+  </section>{% endif %}
+  {% if perms.inventory.view_materialrequest %}<section class="card">
+    <div class="card-header"><h2>Material Requests</h2><a class="btn sm light" href="{% url 'material_request_board' %}?q={{ query|urlencode }}">View request board</a></div>
+    {% if request_results %}<div class="global-result-list">{% for material_request in request_results %}<a class="global-result" href="{% url 'material_request_detail' material_request.pk %}"><span><strong>{{ material_request.request_number }}</strong><small>{{ material_request.requestor_name }} · {{ material_request.building_room }}</small></span><span class="badge status-{{ material_request.pick_ticket.status|lower }}">{{ material_request.pick_ticket.get_status_display }}</span></a>{% endfor %}</div>{% else %}<div class="empty-state small">No material requests match.</div>{% endif %}
+  </section>{% endif %}
+</div>
+{% else %}<section class="card empty-state"><h2>Search the warehouse</h2><p>Enter a part number, item description, ticket number, request number, person, or location.</p></section>{% endif %}
+{% endblock %}
