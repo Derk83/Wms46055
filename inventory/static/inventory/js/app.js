@@ -52,6 +52,10 @@
     applyTheme(next);
   }));
 
+  document.addEventListener('click', event => {
+    if (event.target.closest('[data-print-page]')) window.print();
+  });
+
   // Every standard WMS action uses one predictable semantic color. Explicit
   // data-action values win; otherwise legacy markup is classified by intent.
   const SEMANTIC_BUTTON_CLASSES = [

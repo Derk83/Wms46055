@@ -1,4 +1,4 @@
-{% load static %}
+{% load static inventory_extras %}
 <!doctype html>
 <html lang="en">
 <head>
@@ -26,7 +26,7 @@
       .print-toolbar{display:none!important}
       .qr-print-page{margin:0;box-shadow:none}
     }
-    @media(max-width:760px){
+    @media screen and (max-width:760px){
       .qr-print-page{width:100%;height:auto;min-height:calc(100vh - 68px);margin:0;padding:12px;grid-template-columns:1fr;grid-template-rows:none}
       .location-label{min-height:330px}
       .page-count{display:none}
@@ -36,7 +36,7 @@
 <body>
   <div class="print-toolbar no-print">
     <a href="{% url 'location_list' %}">Back to Locations</a>
-    <button type="button" onclick="window.print()">Print QR Labels</button>
+    <button type="button" data-print-page>Print QR Labels</button>
   </div>
   {% for page in pages %}
   <section class="qr-print-page" aria-label="Location QR label page {{ page.number }} of {{ page.total }}">
@@ -51,5 +51,6 @@
     <span class="page-count">Page {{ page.number }} of {{ page.total }}</span>
   </section>
   {% endfor %}
+  <script src="{% versioned_static 'inventory/js/app.js' %}" defer></script>
 </body>
 </html>

@@ -1,6 +1,8 @@
 from datetime import datetime
 import re
 
+from pathlib import Path
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import Resolver404, resolve, reverse
@@ -185,6 +187,15 @@ class RequestedLocationAndNavigationTests(TestCase):
         self.assertEqual(html.count('class="location-label"'), 6)
         self.assertEqual(html.count("SCAN ME"), 6)
         self.assertEqual(html.count("BIN LOCATION"), 6)
+        self.assertIn("@media screen and (max-width:760px)", html)
+        self.assertNotIn("@media(max-width:760px)", html)
+        self.assertIn("data-print-page", html)
+        self.assertNotIn('onclick="window.print()"', html)
+        self.assertIn("inventory/js/app", html)
+        app_js = (
+            Path(__file__).parent / "static" / "inventory" / "js" / "app.js"
+        ).read_text()
+        self.assertIn("event.target.closest('[data-print-page]')", app_js)
         for bin_number in range(1, 7):
             self.assertIn(f"A-01-{bin_number:02d}", html)
         self.assertLess(html.index("A-01-01"), html.index("A-01-06"))
