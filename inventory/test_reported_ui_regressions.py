@@ -113,6 +113,8 @@ def test_public_access_splash_uses_shared_portal_theme_and_has_visible_sign_in(c
     assert 'class="site-header site-header--portal portal-public-header"' in html
     assert 'class="portal-access-panel"' in html
     assert 'data-theme-toggle' in html
+    assert '<svg class="header-icon"' in html
+    assert ">◐</button>" not in html
     assert html.index('class="btn btn-secondary access-sign-in"') < html.index('data-theme-toggle')
     css = (Path(__file__).parent / "static" / "inventory" / "css" / "app.css").read_text()
     assert ".site-header--portal .header-controls{margin-left:auto}" in css
