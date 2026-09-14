@@ -71,3 +71,5 @@ The permanent correction:
 - Treats runtime cache writes as best-effort so Cache Storage failures cannot discard a successful online response.
 
 Because the fingerprinted URLs differ from the old worker's plain cache keys, the first normal navigation after deployment cannot pair current HTML with the stale header stylesheet.
+
+Authenticated production verification exercised Dashboard → Inventory → Locations → Dashboard → normal reload with the active `bbx-shell-v5` worker. Every page retained the 390×68 compact header, 390px document width, content-hashed CSS/JavaScript URLs, and correct bell/hamburger ordering. Cache Storage contained only `bbx-shell-v5`.
