@@ -242,19 +242,19 @@ document.addEventListener('DOMContentLoaded', function() {
           {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">{% endif %}
           <div class="mobile-item-main">
             <a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a>
-            <span class="name-link">{{ item.description|default:item.name }}</span>
+            <span class="name-link" data-column="name">{{ item.description|default:item.name }}</span>
           </div>
-          <div class="mobile-qty {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">
+          <div class="mobile-qty {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}" data-column="qty">
             <span>Qty</span>
             <strong>{{ item.quantity_on_hand }}</strong>
           </div>
         </div>
         <div class="mobile-meta-grid">
-          <div data-label="FB Part #"><span>FB Part #</span><strong>{{ item.fb_part_number|default:"—" }}</strong></div>
-          <div data-label="Bin"><span>Bin</span><strong>{{ item.storage_location|default:"—" }}</strong></div>
+          <div data-label="FB Part #" data-column="fb"><span>FB Part #</span><strong>{{ item.fb_part_number|default:"—" }}</strong></div>
+          <div data-label="Bin" data-column="bin"><span>Bin</span><strong>{{ item.storage_location|default:"—" }}</strong></div>
           <div data-label="Category"><span>Category</span><strong>{{ item.category|default:"—" }}</strong></div>
         </div>
-        {% if not request.is_request_portal %}<div class="mobile-actions inventory-actions inventory-action-group">
+        {% if not request.is_request_portal %}<div class="mobile-actions inventory-actions inventory-action-group" data-column="actions">
           {% if perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary">Receive Stock</a>{% elif perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip primary">Edit</a>{% endif %}
           {% if perms.inventory.change_inventoryitem and perms.inventory.receive_stock or perms.inventory.view_inventorytransaction or perms.inventory.manage_item_barcodes or perms.inventory.delete_inventoryitem %}
           <details class="mobile-secondary-actions"><summary class="action-chip">More actions</summary><div>

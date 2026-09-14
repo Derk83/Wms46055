@@ -47,6 +47,30 @@ class QolUsabilityBundleTests(TestCase):
         self.assertContains(response, "Missing Location")
         self.assertNotContains(response, "FB-QOL-001")
 
+    def test_missing_location_includes_incomplete_location_tuple(self):
+        partial = InventoryItem.objects.create(
+            part_number="QOL-PARTIAL-LOCATION",
+            name="Incomplete location",
+            rack="A",
+        )
+
+        response = self.client.get(
+            reverse("inventory_list"), {"data_quality": "missing_location"}
+        )
+        item_ids = set(response.context["items"].values_list("pk", flat=True))
+
+        self.assertIn(partial.pk, item_ids)
+        self.assertIn(self.missing.pk, item_ids)
+        self.assertNotIn(self.complete.pk, item_ids)
+
+    def test_mobile_cards_expose_column_preference_hooks(self):
+        response = self.client.get(reverse("inventory_list"))
+
+        self.assertContains(response, 'class="name-link" data-column="name"')
+        self.assertContains(response, 'data-label="FB Part #" data-column="fb"')
+        self.assertContains(response, 'data-label="Bin" data-column="bin"')
+        self.assertContains(response, 'inventory-action-group" data-column="actions"')
+
     def test_rows_per_page_paginates_and_preserves_query(self):
         response = self.client.get(
             reverse("inventory_list"),

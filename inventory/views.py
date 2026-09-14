@@ -832,7 +832,7 @@ def inventory_list(request):
     elif data_quality == "missing_model":
         items = items.filter(Q(model_number="") | Q(model_number__isnull=True))
     elif data_quality == "missing_location":
-        items = items.filter(building_room="", rack="", section="", bin_location="")
+        items = items.filter(building_room="", bin_location="")
     elif data_quality == "inactive":
         items = items.filter(active=False)
     elif data_quality:
