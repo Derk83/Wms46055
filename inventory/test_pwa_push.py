@@ -48,6 +48,7 @@ class PWAInstallabilityTests(TestCase):
             self.assertNotIn("/api/", source)
             self.assertIn("request.mode === 'navigate'", source)
             self.assertIn("/offline/", source)
+            self.assertIn("const CACHE_VERSION = 'bbx-shell-v4';", source)
         self.assertEqual(self.client.head("/service-worker.js", HTTP_HOST="bbx.rplwms.com").status_code, 200)
         self.assertEqual(self.client.head("/manifest.webmanifest", HTTP_HOST="bbx.rplwms.com").status_code, 200)
 

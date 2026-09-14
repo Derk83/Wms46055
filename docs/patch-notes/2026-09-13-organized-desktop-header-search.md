@@ -55,3 +55,5 @@ After reviewing the production header at a 390px phone viewport, the compact hea
 The corrected real Django render was verified at 390×844 in both closed-header and open-drawer states. Theme switching was exercised successfully from inside the drawer.
 
 Production verification confirmed the same 390px layout after deployment, with the bell before the far-right hamburger, a fully opened 320px drawer, theme control inside the drawer, matching live static hashes, and no browser-console errors.
+
+The PWA shell cache was advanced from `bbx-shell-v3` to `bbx-shell-v4` so installed phones purge cached pre-fix CSS and JavaScript instead of continuing to display the former header.

@@ -1,7 +1,7 @@
 {% load static %}
 'use strict';
 
-const CACHE_VERSION = 'bbx-shell-v3';
+const CACHE_VERSION = 'bbx-shell-v4';
 const OFFLINE_URL = '/offline/';
 const SHELL_ASSETS = [
   OFFLINE_URL,
