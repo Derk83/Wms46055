@@ -73,7 +73,7 @@ class MaterialRequestWorkflowTests(TestCase):
         self.assertFalse(PickTicket.objects.filter(pk=ticket_pk).exists())
         self.assertFalse(self.MaterialRequest.objects.exists())
 
-    def test_linked_pick_ticket_cannot_be_edited_or_deleted_outside_request_workflow(self):
+    def test_linked_pick_ticket_edit_stays_canonical_but_delete_is_available(self):
         from .services import create_material_request
 
         request_obj = create_material_request(
@@ -83,6 +83,8 @@ class MaterialRequestWorkflowTests(TestCase):
         self.user.user_permissions.add(
             Permission.objects.get(codename="change_pickticket"),
             Permission.objects.get(codename="delete_pickticket"),
+            Permission.objects.get(codename="delete_materialrequest"),
+            Permission.objects.get(codename="delete_materialrequestline"),
         )
         client = Client()
         client.force_login(self.user)
@@ -93,11 +95,18 @@ class MaterialRequestWorkflowTests(TestCase):
             reverse("material_request_edit", args=[request_obj.pk]),
             fetch_redirect_response=False,
         )
-        self.assertRedirects(
-            delete,
-            reverse("material_request_detail", args=[request_obj.pk]),
-            fetch_redirect_response=False,
+        self.assertEqual(delete.status_code, 200)
+        self.assertContains(delete, request_obj.request_number)
+
+        deleted = client.post(
+            reverse("ticket_delete", args=[request_obj.pick_ticket_id]),
+            HTTP_HOST="bbx.rplwms.com",
         )
+        self.assertRedirects(deleted, reverse("ticket_list"), fetch_redirect_response=False)
+        self.assertFalse(self.MaterialRequest.objects.filter(pk=request_obj.pk).exists())
+        self.assertFalse(PickTicket.objects.filter(pk=request_obj.pick_ticket_id).exists())
+        self.item_a.refresh_from_db()
+        self.assertEqual(self.item_a.quantity_on_hand, 20)
 
     def test_duplicate_items_have_form_and_database_validation(self):
         from .forms import MaterialRequestLineFormSet

@@ -7,6 +7,9 @@
     <strong>Warning:</strong> This action cannot be undone.
   </div>
   <p>Are you sure you want to delete ticket <strong>{{ ticket.ticket_number }}</strong>?</p>
+  {% if linked_request %}
+  <p><strong>Linked material request:</strong> {{ linked_request.request_number }} will also be deleted so the records remain consistent.</p>
+  {% endif %}
   <div style="background: var(--bg); padding: 16px; border-radius: var(--radius-md); margin: 16px 0;">
     <h3 style="margin: 0 0 12px; font-size: 14px;">Ticket Details:</h3>
     <dl style="margin: 0; display: grid; grid-template-columns: 120px 1fr; gap: 4px 12px;">

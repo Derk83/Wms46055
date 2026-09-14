@@ -235,8 +235,8 @@ class RequestedLocationAndNavigationTests(TestCase):
         self.assertNotContains(response, '<div class="page-header">', html=False)
         self.assertNotContains(response, 'class="actions dashboard-header-actions"', html=False)
         self.assertNotContains(response, "New Pick Ticket")
-        # Phase 4 keeps only create/resume workflows in Quick Actions.
-        self.assertEqual(html.count('class="quick-action-btn'), 2)
+        # Restore the full permission-aware operational Quick Actions set.
+        self.assertEqual(html.count('class="quick-action-btn'), 7)
 
     def test_mobile_navigation_has_accessible_panel_controls(self):
         response = self.client.get(reverse("dashboard"))

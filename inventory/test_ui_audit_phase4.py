@@ -128,12 +128,13 @@ def test_report_navigation_and_compatibility_url_open_daily_activity_directly(cl
     assert f'href="{reverse("reports_index")}">Reports</a>' not in dashboard
 
 
-def test_dashboard_quick_actions_only_contains_create_or_resume_workflows():
+def test_dashboard_quick_actions_restores_full_operational_set():
     source = _template("_dashboard_quick_actions.html")
-    assert "Add Item" in source
-    assert "Resume Work" in source
-    for duplicate in ("Transaction History", "Print Labels", "Phone Scanner", "Bulk Adjust", "Receive Stock"):
-        assert duplicate not in source
+    for action in (
+        "Add Item", "Resume Work", "Receive Stock", "Bulk Adjust",
+        "Transaction History", "Print Labels", "Phone Scanner",
+    ):
+        assert action in source
 
 
 @pytest.mark.django_db

@@ -275,10 +275,10 @@
   line-height: 1.1;
 }
 .stat small { font-size: 12px; color: var(--muted); font-weight: 400; }
-.stat.primary strong { color: var(--primary); }
+.stat.primary strong { color: var(--link); }
 .stat.warn strong { color: var(--warn); }
 .stat.danger strong { color: var(--danger); }
-.stat.accent strong { color: var(--accent); }
+.stat.accent strong { color: var(--link); }
 .stat.ok strong { color: var(--ok); }
 .card-header {
   display: flex;
@@ -342,10 +342,10 @@
 .empty-state.small { padding: 24px 16px; }
 .empty-state.small svg { width: 36px; height: 36px; margin-bottom: 8px; }
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-.status-draft { background: #f0f2f1; color: var(--muted); }
-.status-picked { background: #fef3e8; color: #b87a1a; }
-.status-received { background: #e8f5ec; color: var(--ok); }
-.status-closed { background: #f0f2f1; color: var(--muted); }
+.status-draft { background:color-mix(in srgb,var(--muted) 14%,transparent); color:var(--muted); }
+.status-picked { background:color-mix(in srgb,var(--warn) 14%,transparent); color:var(--warn); }
+.status-received { background:color-mix(in srgb,var(--ok) 14%,transparent); color:var(--ok); }
+.status-closed { background:color-mix(in srgb,var(--muted) 14%,transparent); color:var(--muted); }
 @media (max-width: 768px) {
   .stat strong { font-size: 24px; }
   .quick-action-btn { min-width: 120px; padding: 16px 12px; }

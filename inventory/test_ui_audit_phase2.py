@@ -61,11 +61,12 @@ def test_repeated_record_links_are_one_per_rendered_viewport_or_card():
 
 
 @pytest.mark.django_db
-def test_linked_ticket_uses_material_request_as_canonical_edit_surface(client):
+def test_linked_ticket_uses_material_request_as_canonical_edit_surface_with_ticket_delete(client):
     actor = _actor(
         "linked-editor",
         "view_pickticket", "change_pickticket", "delete_pickticket", "print_pickticket",
         "view_materialrequest", "change_materialrequest", "change_materialrequestline",
+        "delete_materialrequest", "delete_materialrequestline",
         "view_inventoryitem",
     )
     ticket = PickTicket.objects.create(created_by=actor)
@@ -73,7 +74,7 @@ def test_linked_ticket_uses_material_request_as_canonical_edit_surface(client):
 
     body = _body(client, actor, reverse("ticket_detail", args=[ticket.pk]))
     assert reverse("ticket_edit", args=[ticket.pk]) not in body
-    assert reverse("ticket_delete", args=[ticket.pk]) not in body
+    assert reverse("ticket_delete", args=[ticket.pk]) in body
     assert f'href="{reverse("material_request_detail", args=[material_request.pk])}"' in body
     assert "Open Material Request" in body
     assert f'href="{reverse("material_request_edit", args=[material_request.pk])}"' in body

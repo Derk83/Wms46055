@@ -254,11 +254,11 @@
   background: var(--surface-2);
 }
 .tab-link.active {
-  color: var(--accent);
+  color: var(--link);
   border-bottom-color: var(--accent);
 }
 .tab-link.active svg {
-  color: var(--accent);
+  color: var(--link);
 }
 
 /* Section: General / Security — flat list of rows */
@@ -427,6 +427,13 @@
   color: #22d3ee;
   border-color: color-mix(in srgb, #06b6d4 35%, transparent);
 }
+:root[data-theme="light"] .group-tag-logistics-manager { color: #8a5a00; }
+:root[data-theme="light"] .group-tag-logistics-specialist { color: #1d4ed8; }
+:root[data-theme="light"] .group-tag-procurement-specialist { color: #7e22ce; }
+:root[data-theme="light"] .group-tag-procurement-manager { color: #be185d; }
+:root[data-theme="light"] .group-tag-material-requester { color: #187747; }
+:root[data-theme="light"] .group-tag-material-requests { color: #59616d; }
+:root[data-theme="light"] .group-tag-viewer { color: #0e7490; }
 .group-tag-more {
   background: var(--surface-2);
   color: var(--muted);
@@ -491,8 +498,11 @@
 }
 .badge.primary {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
+  color: var(--link-hover);
   border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+}
+:root[data-theme="light"] .badge.primary {
+  color: #9f1019;
 }
 .badge.secondary {
   background: var(--surface-2);

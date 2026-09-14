@@ -1367,24 +1367,53 @@ def ticket_print_pdf(request, pk):
 @login_required
 @any_perm_required("inventory.delete_pickticket")
 def ticket_delete(request, pk):
-    ticket = get_object_or_404(
-        _visible_pick_tickets(request, PickTicket.objects.prefetch_related("lines__item")),
-        pk=pk,
+    queryset = _visible_pick_tickets(
+        request, PickTicket.objects.prefetch_related("lines__item")
     )
-    linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
-    if linked_request:
-        messages.error(
-            request,
-            f"{ticket.ticket_number} is managed by material request {linked_request.request_number}. Delete the request instead.",
-        )
-        return redirect("material_request_detail", pk=linked_request.pk)
+    linked_delete_perms = (
+        "inventory.delete_materialrequest",
+        "inventory.delete_materialrequestline",
+    )
+
     if request.method == "POST":
-        ticket_number = ticket.ticket_number
-        # Deleting the ticket will cascade to lines, which will reverse inventory via their delete() methods
-        ticket.delete()
-        messages.success(request, f"Deleted pick ticket {ticket_number} and restored inventory.")
+        with transaction.atomic():
+            ticket = get_object_or_404(queryset.select_for_update(), pk=pk)
+            linked_request = (
+                MaterialRequest.objects.select_for_update()
+                .filter(pick_ticket=ticket)
+                .first()
+            )
+            if linked_request and not request.user.has_perms(linked_delete_perms):
+                raise PermissionDenied
+
+            ticket_number = ticket.ticket_number
+            if linked_request:
+                from .services import delete_material_request
+
+                request_number = linked_request.request_number
+                delete_material_request(linked_request, actor=request.user)
+                messages.success(
+                    request,
+                    f"Deleted pick ticket {ticket_number}, linked material request {request_number}, and restored inventory.",
+                )
+            else:
+                # The ticket lock keeps link detection and stock restoration atomic.
+                ticket.delete()
+                messages.success(
+                    request,
+                    f"Deleted pick ticket {ticket_number} and restored inventory.",
+                )
         return redirect("ticket_list")
-    return render(request, "inventory/ticket_confirm_delete.html", {"ticket": ticket})
+
+    ticket = get_object_or_404(queryset, pk=pk)
+    linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
+    if linked_request and not request.user.has_perms(linked_delete_perms):
+        raise PermissionDenied
+    return render(
+        request,
+        "inventory/ticket_confirm_delete.html",
+        {"ticket": ticket, "linked_request": linked_request},
+    )
 
 
 @login_required

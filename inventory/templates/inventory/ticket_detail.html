@@ -53,9 +53,15 @@
   </div>
   {% endif %}
 
-  {% if perms.inventory.delete_pickticket and not linked_request %}
+  {% if linked_request %}
+    {% if perms.inventory.delete_pickticket and perms.inventory.delete_materialrequest and perms.inventory.delete_materialrequestline %}
+    <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+      <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
+    </div>
+    {% endif %}
+  {% elif perms.inventory.delete_pickticket %}
   <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
-    <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}" onclick="return confirm('Delete this ticket? This will restore picked quantities to inventory.')">Delete Ticket</a>
+    <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
   </div>
   {% endif %}
 </div>

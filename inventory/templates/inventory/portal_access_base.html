@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -11,7 +11,7 @@
 </head>
 <body>
   <main class="access-shell">
-    <header class="access-brand"><strong>BLACK BOX</strong><a href="{% url 'login' %}">Already approved? Sign in</a></header>
+    <header class="access-brand"><strong>BLACK BOX</strong><a class="btn btn-secondary access-sign-in" href="{% url 'login' %}">Already approved? Sign in</a></header>
     <section class="access-card">{% block content %}{% endblock %}</section>
   </main>
 </body>

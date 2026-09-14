@@ -30,9 +30,7 @@ class PortalAccessRequestForm(forms.ModelForm):
         model = PortalAccessRequest
         fields = [
             "full_name", "position", "email", "contact_number", "department",
-            "project_jobsite", "sponsor", "business_reason",
         ]
-        widgets = {"business_reason": forms.Textarea(attrs={"rows": 4})}
 
     def validate_unique(self):
         # Duplicate handling is intentionally centralized in the transactional

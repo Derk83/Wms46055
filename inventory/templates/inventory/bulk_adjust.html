@@ -128,7 +128,7 @@
 }
 .item-info .part-badge {
   font-size: 12px;
-  color: var(--primary);
+  color: var(--link);
   font-weight: 600;
 }
 .item-delta {
@@ -138,8 +138,8 @@
   border-radius: var(--radius-sm);
   background: var(--bg);
 }
-.item-delta.positive { color: #166534; }
-.item-delta.negative { color: #991b1b; }
+.item-delta.positive { color:var(--ok); }
+.item-delta.negative { color:var(--danger); }
 .item-notes {
   font-size: 12px;
   color: var(--text-muted);
@@ -149,8 +149,9 @@
   display: flex;
   justify-content: space-between;
   padding: 12px 16px;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background:color-mix(in srgb,var(--btn-info) 10%,var(--surface-2));
+  border:1px solid color-mix(in srgb,var(--btn-info) 35%,var(--border));
+  color:var(--ink);
   border-radius: var(--radius-md);
   margin-top: 12px;
   font-size: 14px;
