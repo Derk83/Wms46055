@@ -225,7 +225,8 @@ class RequestedLocationAndNavigationTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertLess(html.index('id="dashboard-quick-actions"'), html.index('id="dashboard-detail-sections"'))
-        self.assertEqual(html.count('class="stat dashboard-stat-link'), 6)
+        self.assertEqual(html.count('class="stat dashboard-stat-link'), 7)
+        self.assertContains(response, "Access requests")
         self.assertContains(response, f'href="{reverse("inventory_list")}"', html=False)
         self.assertContains(response, f'href="{reverse("ticket_list")}"', html=False)
         self.assertContains(response, 'class="mobile-dashboard-nav"', html=False)

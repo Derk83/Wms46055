@@ -1,0 +1,8 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+Your approved account is still waiting for password setup. Use this new one-time link:
+{{ setup_url }}
+
+This link expires and replaces any older setup link.

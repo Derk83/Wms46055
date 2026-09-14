@@ -1,3 +1,8 @@
+from django.db import transaction
+from django.http import HttpResponseForbidden
+from django.utils import timezone
+
+
 class ProxySSLHeaderMiddleware:
     """Ensure Django sees HTTPS when behind Nginx Proxy Manager."""
 
@@ -25,3 +30,58 @@ class HostURLConfMiddleware:
         if request.is_request_portal:
             request.urlconf = "inventory.request_urls"
         return self.get_response(request)
+
+
+class PortalAccessExpiryMiddleware:
+    """Synchronously revoke expired temporary onboarding accounts."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        user = request.user
+        if user.is_authenticated and self._disable_if_expired(user.pk):
+            user.is_active = False
+            return HttpResponseForbidden("This temporary portal access has expired.")
+        return self.get_response(request)
+
+    @staticmethod
+    def _disable_if_expired(user_id):
+        from .models import PortalAccessAuditEvent, PortalAccessRequest, PortalAccessToken
+
+        now = timezone.now()
+        with transaction.atomic():
+            access_request = (
+                PortalAccessRequest.objects.select_for_update()
+                .select_related("user")
+                .filter(user_id=user_id)
+                .first()
+            )
+            if access_request is None:
+                # Legacy/local accounts are not governed by onboarding expiry.
+                return False
+            if access_request.status != PortalAccessRequest.Status.ACTIVE:
+                # Fail closed when another concurrent request already expired or
+                # otherwise revoked this linked onboarding account after Django
+                # cached the authenticated user for the current request.
+                return True
+            if (
+                access_request.access_expires_at is None
+                or access_request.access_expires_at > now
+            ):
+                return False
+            if access_request.user.is_active:
+                access_request.user.is_active = False
+                access_request.user.save(update_fields=["is_active"])
+            access_request.status = PortalAccessRequest.Status.EXPIRED
+            access_request.save(update_fields=["status", "updated_at"])
+            PortalAccessToken.objects.filter(
+                request=access_request,
+                used_at__isnull=True,
+                revoked_at__isnull=True,
+            ).update(revoked_at=now)
+            PortalAccessAuditEvent.objects.create(
+                request=access_request,
+                event_type="account_expired",
+            )
+            return True

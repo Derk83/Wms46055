@@ -1,0 +1,8 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+Verify your corporate email before your request can enter manager review:
+{{ verification_url }}
+
+This is a one-time, expiring link. If you did not request access, ignore this message.

@@ -1,8 +1,11 @@
 from django.urls import path
 
 from . import views
+from . import onboarding_views
 
 urlpatterns = [
+    path("settings/portal-access/", onboarding_views.portal_access_queue, name="portal_access_queue"),
+    path("settings/portal-access/<int:pk>/", onboarding_views.portal_access_detail, name="portal_access_detail"),
     path("material-requests/email-response/", views.material_request_email_delivery_response, name="material_request_email_delivery_response"),
     path('manifest.webmanifest', views.pwa_manifest, name='pwa_manifest'),
     path('service-worker.js', views.pwa_service_worker, name='pwa_service_worker'),

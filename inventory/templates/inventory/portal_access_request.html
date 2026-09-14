@@ -1,0 +1,16 @@
+{% extends "inventory/portal_access_base.html" %}
+{% block title %}Request Access · Black Box{% endblock %}
+{% block content %}
+<h1>Request access</h1>
+<p class="lead">Submit material requests securely through the RPL warehouse portal.</p>
+<p>Access is limited to employees with an exact <strong>@blackbox.com</strong> email address and requires manager approval.</p>
+<form method="post" novalidate>
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  {{ form.website }}
+  {% for field in form.visible_fields %}
+    <p>{{ field.label_tag }} {{ field }} {{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</p>
+  {% endfor %}
+  <button class="btn primary" type="submit">Request access</button>
+</form>
+{% endblock %}

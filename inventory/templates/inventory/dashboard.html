@@ -9,6 +9,7 @@
 </nav>
 <!-- Key Metrics Row -->
 <div class="stats-grid dashboard-section" aria-label="Dashboard shortcuts">
+  {% if perms.inventory.review_portalaccessrequest %}<a href="{% url 'portal_access_queue' %}" class="stat dashboard-stat-link warn"><span>Access requests</span><strong>{{ pending_portal_access_count }}</strong><small>Review verified applicants →</small></a>{% endif %}
   <a href="{% url 'inventory_list' %}" class="stat dashboard-stat-link primary">
     <span>Total Active Items</span>
     <strong>{{ total_active_items }} / {{ total_items }}</strong>

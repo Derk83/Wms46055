@@ -72,6 +72,21 @@ DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "RPL Warehouse <noreply@rpl
 REQUEST_PORTAL_BASE_URL = os.getenv(
     "REQUEST_PORTAL_BASE_URL", "https://requests.rplwms.com"
 )
+PORTAL_VERIFY_TOKEN_HOURS = int(os.getenv("PORTAL_VERIFY_TOKEN_HOURS", "24"))
+PORTAL_MORE_INFO_TOKEN_HOURS = int(os.getenv("PORTAL_MORE_INFO_TOKEN_HOURS", "72"))
+PORTAL_SETUP_TOKEN_HOURS = int(os.getenv("PORTAL_SETUP_TOKEN_HOURS", "48"))
+PORTAL_UNVERIFIED_TTL_HOURS = int(os.getenv("PORTAL_UNVERIFIED_TTL_HOURS", "48"))
+PORTAL_SETUP_REMINDER_HOURS = int(os.getenv("PORTAL_SETUP_REMINDER_HOURS", "24"))
+PORTAL_RETENTION_DAYS = int(os.getenv("PORTAL_RETENTION_DAYS", "180"))
+PORTAL_RATE_LIMIT = int(os.getenv("PORTAL_RATE_LIMIT", "5"))
+PORTAL_RATE_WINDOW_MINUTES = int(os.getenv("PORTAL_RATE_WINDOW_MINUTES", "15"))
+PORTAL_TRUSTED_PROXY_IPS = [
+    value.strip()
+    for value in os.getenv(
+        "PORTAL_TRUSTED_PROXY_IPS", "127.0.0.1,::1,192.168.0.227"
+    ).split(",")
+    if value.strip()
+]
 
 CSRF_TRUSTED_ORIGINS = [
     'https://bbx.rplwms.com',
@@ -90,7 +105,7 @@ SECURE_HSTS_SECONDS = 3600
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_HOST = False
 USE_X_FORWARDED_PORT = True
 
 
@@ -149,6 +164,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'inventory.middleware.PortalAccessExpiryMiddleware',
     'axes.middleware.AxesMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

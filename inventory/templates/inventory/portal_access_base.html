@@ -1,0 +1,18 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Material Request Access · Black Box{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
+  <style>
+    body{background:#f3f5f7}.access-shell{max-width:720px;margin:0 auto;padding:32px 18px}.access-brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}.access-brand strong{font-size:20px;letter-spacing:.08em}.access-card{background:#fff;border:1px solid #d9dee3;border-radius:12px;padding:28px;box-shadow:0 8px 28px rgba(0,0,0,.06)}.access-card h1,.access-card h2{margin-top:0}.access-card form p{display:grid;gap:6px}.access-card input,.access-card textarea{box-sizing:border-box;width:100%}.access-card input[type=checkbox]{width:auto}.lead{color:#505a63}.actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap}@media(max-width:600px){.access-shell{padding:18px 12px}.access-card{padding:20px}}
+  </style>
+</head>
+<body>
+  <main class="access-shell">
+    <header class="access-brand"><strong>BLACK BOX</strong><a href="{% url 'login' %}">Already approved? Sign in</a></header>
+    <section class="access-card">{% block content %}{% endblock %}</section>
+  </main>
+</body>
+</html>

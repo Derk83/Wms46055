@@ -1,0 +1,14 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+{{ message }}
+{% if notes %}
+Manager note: {{ notes }}
+{% endif %}
+{% if response_url %}
+Use this secure one-time link to update your request:
+{{ response_url }}
+
+This link expires and can be used only once.
+{% endif %}

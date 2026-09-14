@@ -413,6 +413,7 @@ from .models import (
     MaterialRequestEvent,
     PickTicket,
     PickTicketLine,
+    PortalAccessRequest,
     RACK_CHOICES,
     ReceivingDocument,
     ReceivingLine,
@@ -661,6 +662,10 @@ def dashboard(request):
     # Items needing attention
     zero_stock_items = items.filter(quantity_on_hand=0).count()
     below_reorder = items.filter(low_stock_threshold__gt=0, quantity_on_hand__lte=models.F("low_stock_threshold")).count()
+    pending_portal_access_count = (
+        PortalAccessRequest.objects.filter(status=PortalAccessRequest.Status.PENDING_REVIEW).count()
+        if request.user.has_perm("inventory.review_portalaccessrequest") else 0
+    )
     
     return render(
         request,
@@ -682,6 +687,7 @@ def dashboard(request):
             "zero_stock_items": zero_stock_items,
             "below_reorder": below_reorder,
             "thirty_days_ago": thirty_days_ago,
+            "pending_portal_access_count": pending_portal_access_count,
         },
     )
 
@@ -3733,8 +3739,20 @@ def material_request_create(request):
     from .services import create_material_request
 
     instance = MaterialRequest(creator=request.user)
+    bind_verified_email = (
+        getattr(request, "is_request_portal", False)
+        and PortalAccessRequest.objects.filter(
+            user=request.user,
+            status=PortalAccessRequest.Status.ACTIVE,
+        ).exists()
+    )
     if request.method == "POST":
-        form = MaterialRequestForm(request.POST, instance=instance)
+        form = MaterialRequestForm(
+            request.POST,
+            instance=instance,
+            user=request.user,
+            bind_requestor_email=bind_verified_email,
+        )
         formset = MaterialRequestLineFormSet(request.POST, instance=instance)
         if form.is_valid() and formset.is_valid():
             try:
@@ -3753,7 +3771,12 @@ def material_request_create(request):
                 return redirect(f"{reverse('material_request_detail', kwargs={'pk': material_request.pk})}?created=1")
     else:
         display_name = request.user.get_full_name() or request.user.username
-        form = MaterialRequestForm(instance=instance, initial={"requestor_name": display_name})
+        form = MaterialRequestForm(
+            instance=instance,
+            initial={"requestor_name": display_name},
+            user=request.user,
+            bind_requestor_email=bind_verified_email,
+        )
         formset = MaterialRequestLineFormSet(instance=instance)
     inventory_items = InventoryItem.objects.filter(active=True).order_by("category", "name", "part_number")
     return render(request, "inventory/material_request_form.html", {
@@ -3940,8 +3963,20 @@ def material_request_edit(request, pk):
         _visible_material_requests(request, MaterialRequest.objects.prefetch_related("lines")),
         pk=pk,
     )
+    bind_verified_email = (
+        getattr(request, "is_request_portal", False)
+        and PortalAccessRequest.objects.filter(
+            user=request.user,
+            status=PortalAccessRequest.Status.ACTIVE,
+        ).exists()
+    )
     if request.method == "POST":
-        form = MaterialRequestForm(request.POST, instance=material_request)
+        form = MaterialRequestForm(
+            request.POST,
+            instance=material_request,
+            user=request.user,
+            bind_requestor_email=bind_verified_email,
+        )
         formset = MaterialRequestLineFormSet(request.POST, instance=material_request)
         if form.is_valid() and formset.is_valid():
             try:
@@ -3960,7 +3995,11 @@ def material_request_edit(request, pk):
                 messages.success(request, f"{material_request.request_number} and its pick ticket were synchronized.")
                 return redirect("material_request_detail", pk=material_request.pk)
     else:
-        form = MaterialRequestForm(instance=material_request)
+        form = MaterialRequestForm(
+            instance=material_request,
+            user=request.user,
+            bind_requestor_email=bind_verified_email,
+        )
         formset = MaterialRequestLineFormSet(instance=material_request)
     inventory_items = InventoryItem.objects.filter(active=True).order_by("category", "name", "part_number")
     return render(request, "inventory/material_request_form.html", {

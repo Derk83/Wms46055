@@ -1,0 +1,5 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+Your access request or setup link expired. Visit {{ request_portal_url }}/access/request/ to begin again if access is still needed.

@@ -1,0 +1,11 @@
+{% extends "inventory/base.html" %}
+{% block content %}
+<div class="page-header"><div><h1>Portal access requests</h1><p class="text-muted mb-0">Verified Black Box applicants awaiting controlled review.</p></div></div>
+<form method="get" class="card filter-bar">
+  <label>Status <select name="status">{% for value,label in statuses %}<option value="{{ value }}"{% if value == status_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label>Search <input name="q" value="{{ query }}" placeholder="Name, email, position, project"></label>
+  <button class="btn" type="submit">Filter</button>
+</form>
+<section class="card"><div class="table-responsive"><table><thead><tr><th>Applicant</th><th>Email</th><th>Position</th><th>Department</th><th>Project / jobsite</th><th>Status</th><th>Submitted</th></tr></thead><tbody>{% for item in access_requests %}<tr><td><a href="{% url 'portal_access_detail' item.pk %}">{{ item.full_name|default:"(private data removed)" }}</a></td><td>{{ item.email }}</td><td>{{ item.position|default:"—" }}</td><td>{{ item.department|default:"—" }}</td><td>{{ item.project_jobsite|default:"—" }}</td><td>{{ item.get_status_display }}</td><td>{{ item.created_at }}</td></tr>{% empty %}<tr><td colspan="7">No matching access requests.</td></tr>{% endfor %}</tbody></table></div></section>
+<style>.filter-bar{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap}.filter-bar label{display:grid;gap:6px;flex:1 1 220px}.filter-bar .btn{margin-bottom:1px}</style>
+{% endblock %}

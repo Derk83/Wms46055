@@ -1,0 +1,8 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+A manager approved your request. Create your local password to activate the account:
+{{ setup_url }}
+
+This one-time link expires. Your account is inactive until setup succeeds. Microsoft SSO is not used.

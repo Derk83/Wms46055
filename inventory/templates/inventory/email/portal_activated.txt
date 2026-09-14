@@ -1,0 +1,5 @@
+RPL MATERIAL REQUEST PORTAL — BLACK BOX
+
+Hello {{ access_request.full_name }},
+
+Your local Material Request account is activated. Sign in using {{ access_request.email }} at {{ request_portal_url }}/login/.

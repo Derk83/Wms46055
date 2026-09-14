@@ -2,9 +2,14 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from . import views
+from . import onboarding_views
 
 # This URLconf is selected only for requests.rplwms.com by HostURLConfMiddleware.
 urlpatterns = [
+    path("access/request/", onboarding_views.portal_access_request, name="portal_access_request"),
+    path("access/verify/<str:token>/", onboarding_views.portal_access_verify, name="portal_access_verify"),
+    path("access/more-info/<str:token>/", onboarding_views.portal_access_more_info, name="portal_access_more_info"),
+    path("access/setup/<str:token>/", onboarding_views.portal_access_setup, name="portal_access_setup"),
     path("material-requests/email-response/", views.material_request_email_delivery_response, name="material_request_email_delivery_response"),
     path("manifest.webmanifest", views.pwa_manifest, name="pwa_manifest"),
     path("service-worker.js", views.pwa_service_worker, name="pwa_service_worker"),
@@ -17,7 +22,7 @@ urlpatterns = [
         name="request_material_request_confirm_ready",
     ),
     path("offline/", views.pwa_offline, name="pwa_offline"),
-    path("", views.material_request_board, name="dashboard"),
+    path("", onboarding_views.portal_access_request, name="dashboard"),
     path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("inventory/", views.inventory_list, name="inventory_list"),

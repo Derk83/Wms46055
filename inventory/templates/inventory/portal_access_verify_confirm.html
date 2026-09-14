@@ -1,0 +1,7 @@
+{% extends "inventory/portal_access_base.html" %}
+{% block title %}Confirm Email · Black Box{% endblock %}
+{% block content %}
+<h1>Confirm your email</h1>
+<p class="lead">Continue to verify <strong>{{ email }}</strong> and place your request in the manager review queue.</p>
+<form method="post">{% csrf_token %}<button class="btn primary" type="submit">Verify email</button></form>
+{% endblock %}

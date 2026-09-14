@@ -1,0 +1,8 @@
+{% extends "inventory/portal_access_base.html" %}
+{% block title %}Update Access Request · Black Box{% endblock %}
+{% block content %}
+<h1>Additional information</h1>
+<p class="lead">Update the requested information below and return your application to manager review.</p>
+{% if manager_notes %}<p><strong>Manager notes:</strong> {{ manager_notes|linebreaksbr }}</p>{% endif %}
+<form method="post" novalidate>{% csrf_token %}{{ form.as_p }}<button class="btn primary" type="submit">Submit update</button></form>
+{% endblock %}

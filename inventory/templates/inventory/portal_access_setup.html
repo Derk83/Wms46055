@@ -1,0 +1,1 @@
+{% extends "inventory/portal_access_base.html" %}{% block content %}<h2>Create your password</h2><p>Your account remains inactive until this form succeeds.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn primary" type="submit">Activate account</button></form>{% endblock %}

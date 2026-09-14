@@ -75,6 +75,87 @@ class ManagedGroupRole(models.Model):
         return f"{self.role_key}: {self.group.name}"
 
 
+class PortalAccessRequest(models.Model):
+    """Privacy-limited application for a local material-request account."""
+
+    class Status(models.TextChoices):
+        UNVERIFIED = "unverified", "Awaiting email verification"
+        PENDING_REVIEW = "pending_review", "Pending manager review"
+        MORE_INFO = "more_info", "More information requested"
+        APPROVED_SETUP = "approved_setup", "Approved; awaiting password setup"
+        ACTIVE = "active", "Active"
+        DENIED = "denied", "Denied"
+        EXPIRED = "expired", "Expired"
+
+    email = models.EmailField(unique=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    full_name = models.CharField(max_length=150)
+    position = models.CharField(max_length=150)
+    contact_number = models.CharField(max_length=40)
+    department = models.CharField(max_length=150, blank=True)
+    project_jobsite = models.CharField(max_length=200, blank=True)
+    sponsor = models.CharField(max_length=150, blank=True)
+    business_reason = models.TextField(blank=True)
+    status = models.CharField(max_length=24, choices=Status.choices, default=Status.UNVERIFIED, db_index=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="reviewed_portal_access_requests")
+    review_notes = models.TextField(blank=True)
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="portal_access_request")
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    access_expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        permissions = [("review_portalaccessrequest", "Can review portal access requests")]
+
+    def __str__(self):
+        return f"{self.email} ({self.get_status_display()})"
+
+
+class PortalAccessToken(models.Model):
+    class Purpose(models.TextChoices):
+        VERIFY_EMAIL = "verify_email", "Verify email"
+        MORE_INFO = "more_info", "Provide more information"
+        SET_PASSWORD = "set_password", "Set password"
+
+    request = models.ForeignKey(PortalAccessRequest, on_delete=models.CASCADE, related_name="tokens")
+    purpose = models.CharField(max_length=20, choices=Purpose.choices)
+    digest = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField(db_index=True)
+    used_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["purpose", "digest"])]
+
+
+class PortalAccessAuditEvent(models.Model):
+    request = models.ForeignKey(PortalAccessRequest, null=True, blank=True, on_delete=models.SET_NULL, related_name="audit_events")
+    event_type = models.CharField(max_length=48, db_index=True)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    detail = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]
+
+
+class PortalAccessThrottle(models.Model):
+    """Database-backed fixed-window counter; keys are irreversibly digested."""
+
+    action = models.CharField(max_length=32)
+    key_digest = models.CharField(max_length=64)
+    window_started_at = models.DateTimeField()
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["action", "key_digest"], name="unique_portal_throttle_key")]
+
+
 def upload_to_item_images(instance, filename):
     """Generate upload path for item images."""
     return f"item_images/{instance.item.part_number}/{filename}"

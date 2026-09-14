@@ -10,6 +10,7 @@ from .models import (
     InventoryItem,
     MaterialRequest,
     MaterialRequestLine,
+    PortalAccessRequest,
     PickTicket,
     PickTicketLine,
     RACK_CHOICES,
@@ -17,6 +18,73 @@ from .models import (
     ReceivingTicket,
     SECTION_CHOICES,
 )
+
+
+class PortalAccessRequestForm(forms.ModelForm):
+    website = forms.CharField(required=False, widget=forms.HiddenInput, label="Leave blank")
+    acknowledge = forms.BooleanField(
+        label="I confirm this information is accurate and may be used to review my access request."
+    )
+
+    class Meta:
+        model = PortalAccessRequest
+        fields = [
+            "full_name", "position", "email", "contact_number", "department",
+            "project_jobsite", "sponsor", "business_reason",
+        ]
+        widgets = {"business_reason": forms.Textarea(attrs={"rows": 4})}
+
+    def validate_unique(self):
+        # Duplicate handling is intentionally centralized in the transactional
+        # service so the public form never reveals account/request existence.
+        return None
+
+    def clean_email(self):
+        from .onboarding import normalize_corporate_email
+
+        try:
+            return normalize_corporate_email(self.cleaned_data["email"])
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+
+    def clean_website(self):
+        if self.cleaned_data.get("website"):
+            raise forms.ValidationError("Unable to process this request.")
+        return ""
+
+
+class PortalAccessMoreInfoForm(forms.ModelForm):
+    class Meta:
+        model = PortalAccessRequest
+        fields = [
+            "full_name", "position", "contact_number", "department",
+            "project_jobsite", "sponsor", "business_reason",
+        ]
+        widgets = {"business_reason": forms.Textarea(attrs={"rows": 4})}
+
+
+class PortalAccessReviewForm(forms.Form):
+    action = forms.ChoiceField(choices=(
+        ("approve", "Approve"), ("deny", "Deny"),
+        ("more_info", "Request more information"),
+        ("resend_setup", "Resend setup link"),
+        ("revoke_setup", "Revoke setup link"),
+    ))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 4}))
+    access_expires_on = forms.DateField(
+        required=False, widget=forms.DateInput(attrs={"type": "date"})
+    )
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("action") in {"deny", "more_info"} and not (
+            cleaned.get("notes") or ""
+        ).strip():
+            self.add_error("notes", "Manager notes are required for this action.")
+        expires_on = cleaned.get("access_expires_on")
+        if expires_on and expires_on < timezone.localdate():
+            self.add_error("access_expires_on", "Access expiration cannot be in the past.")
+        return cleaned
 
 
 class GroupRenameForm(forms.ModelForm):
@@ -69,6 +137,8 @@ class MaterialRequestForm(forms.ModelForm):
         widgets = {"notes": forms.Textarea(attrs={"rows": 3})}
 
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
+        bind_requestor_email = kwargs.pop("bind_requestor_email", False)
         data = args[0] if args else kwargs.get("data")
         if data is not None and data.get("delivery_at") and not data.get("delivery_at_0"):
             copied = data.copy()
@@ -95,6 +165,11 @@ class MaterialRequestForm(forms.ModelForm):
         self.fields["requestor_email"].widget.attrs.update({
             "autocomplete": "email", "placeholder": "requestor@example.com"
         })
+        if user is not None and bind_requestor_email:
+            bound_email = (user.email or user.get_username()).strip().casefold()
+            self.fields["requestor_email"].disabled = True
+            self.fields["requestor_email"].initial = bound_email
+            self.initial["requestor_email"] = bound_email
         self.fields["location"].required = True
         self.fields["location"].error_messages["required"] = "Delivery location is required so the picker knows where to deliver the request."
 
