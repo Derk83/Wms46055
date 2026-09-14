@@ -57,3 +57,17 @@ The corrected real Django render was verified at 390×844 in both closed-header 
 Production verification confirmed the same 390px layout after deployment, with the bell before the far-right hamburger, a fully opened 320px drawer, theme control inside the drawer, matching live static hashes, and no browser-console errors.
 
 The PWA shell cache was advanced from `bbx-shell-v3` to `bbx-shell-v4` so installed phones purge cached pre-fix CSS and JavaScript instead of continuing to display the former header.
+
+### Navigation cache correction
+
+A user-provided phone screenshot exposed mixed-version rendering after normal navigation: new header HTML was paired with stale cached CSS, causing desktop and mobile header elements to overlap. Hard refresh appeared correct because it bypassed the active service-worker cache.
+
+The permanent correction:
+
+- Advances the shell cache to `bbx-shell-v5`.
+- Adds automatic SHA-256 content fingerprints to critical CSS and JavaScript URLs in both page HTML and the service-worker shell.
+- Forces fresh shell fetches during worker installation.
+- Uses network-first loading for same-origin static assets while retaining cached offline fallback.
+- Treats runtime cache writes as best-effort so Cache Storage failures cannot discard a successful online response.
+
+Because the fingerprinted URLs differ from the old worker's plain cache keys, the first normal navigation after deployment cannot pair current HTML with the stale header stylesheet.

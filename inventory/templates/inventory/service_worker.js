@@ -1,21 +1,31 @@
-{% load static %}
+{% load static inventory_extras %}
 'use strict';
 
-const CACHE_VERSION = 'bbx-shell-v4';
+const CACHE_VERSION = 'bbx-shell-v5';
 const OFFLINE_URL = '/offline/';
 const SHELL_ASSETS = [
   OFFLINE_URL,
-  '{% static "inventory/css/app.css" %}',
-  '{% static "inventory/js/app.js" %}',
-  '{% static "inventory/js/pwa.js" %}',
-  '{% static "inventory/js/push.js" %}',
+  '{% versioned_static "inventory/css/app.css" %}',
+  '{% versioned_static "inventory/js/app.js" %}',
+  '{% versioned_static "inventory/js/pwa.js" %}',
+  '{% versioned_static "inventory/js/push.js" %}',
   '{% static "inventory/img/blackbox-logo.png" %}',
   '{% static "inventory/icons/icon-192.png" %}',
   '{% static "inventory/icons/icon-512.png" %}'
 ];
 
+const populateShellCache = async () => {
+  const cache = await caches.open(CACHE_VERSION);
+  await Promise.all(SHELL_ASSETS.map(async (asset) => {
+    const request = new Request(asset, {cache: 'reload'});
+    const response = await fetch(request);
+    if (!response.ok) throw new Error(`Unable to cache ${asset}: ${response.status}`);
+    await cache.put(asset, response);
+  }));
+};
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_VERSION).then((cache) => cache.addAll(SHELL_ASSETS)));
+  event.waitUntil(populateShellCache());
   self.skipWaiting();
 });
 
@@ -41,13 +51,14 @@ self.addEventListener('fetch', (event) => {
 
   if (url.origin === self.location.origin && url.pathname.startsWith('/static/')) {
     event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_VERSION).then((cache) => cache.put(request, copy));
-        }
-        return response;
-      }))
+      fetch(request, {cache: 'no-store'}).then((response) => {
+        if (!response.ok) throw new Error(`Static fetch failed: ${response.status}`);
+        const copy = response.clone();
+        return caches.open(CACHE_VERSION)
+          .then((cache) => cache.put(request, copy))
+          .catch(() => undefined)
+          .then(() => response);
+      }).catch(() => caches.match(request))
     );
   }
 });

@@ -48,7 +48,14 @@ class PWAInstallabilityTests(TestCase):
             self.assertNotIn("/api/", source)
             self.assertIn("request.mode === 'navigate'", source)
             self.assertIn("/offline/", source)
-            self.assertIn("const CACHE_VERSION = 'bbx-shell-v4';", source)
+            self.assertIn("const CACHE_VERSION = 'bbx-shell-v5';", source)
+            self.assertIn("new Request(asset, {cache: 'reload'})", source)
+            self.assertIn("fetch(request, {cache: 'no-store'})", source)
+            self.assertIn("catch(() => caches.match(request))", source)
+            self.assertIn("catch(() => undefined)\n          .then(() => response)", source)
+            self.assertNotIn("cached || fetch(request)", source)
+            self.assertRegex(source, r"/static/inventory/css/app\.css\?v=[0-9a-f]{12}")
+            self.assertRegex(source, r"/static/inventory/js/app\.js\?v=[0-9a-f]{12}")
         self.assertEqual(self.client.head("/service-worker.js", HTTP_HOST="bbx.rplwms.com").status_code, 200)
         self.assertEqual(self.client.head("/manifest.webmanifest", HTTP_HOST="bbx.rplwms.com").status_code, 200)
 
@@ -68,6 +75,9 @@ class PWAInstallabilityTests(TestCase):
         self.assertContains(response, 'href="/manifest.webmanifest"', html=False)
         self.assertContains(response, 'data-pwa-install', html=False)
         self.assertContains(response, "inventory/js/pwa.js")
+        source = response.content.decode()
+        self.assertRegex(source, r"/static/inventory/css/app\.css\?v=[0-9a-f]{12}")
+        self.assertRegex(source, r"/static/inventory/js/app\.js\?v=[0-9a-f]{12}")
 
     def test_mutating_inventory_routes_remain_server_only(self):
         client = Client(HTTP_HOST="bbx.rplwms.com")
