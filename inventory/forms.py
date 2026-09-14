@@ -8,11 +8,13 @@ from .models import (
     BIN_LOCATION_CHOICES,
     CategoryChoices,
     InventoryItem,
+    MaterialBackorder,
     MaterialRequest,
     MaterialRequestLine,
     PortalAccessRequest,
     PickTicket,
     PickTicketLine,
+    ProcurementRequisition,
     RACK_CHOICES,
     ReceivingLine,
     ReceivingTicket,
@@ -193,11 +195,16 @@ class MaterialRequestForm(forms.ModelForm):
 class MaterialRequestLineForm(forms.ModelForm):
     class Meta:
         model = MaterialRequestLine
-        fields = ["item", "quantity", "notes"]
+        fields = ["item", "quantity", "notes", "shortage_action"]
         widgets = {
             "item": forms.Select(attrs={"class": "request-item-select"}),
             "quantity": forms.NumberInput(attrs={"min": 1, "inputmode": "numeric"}),
             "notes": forms.Textarea(attrs={"rows": 1}),
+            "shortage_action": forms.Select(attrs={"class": "shortage-action-select"}),
+        }
+        labels = {"shortage_action": "If this item is short"}
+        help_texts = {
+            "shortage_action": "Required only when the requested quantity exceeds available stock."
         }
 
     def __init__(self, *args, **kwargs):
@@ -221,6 +228,57 @@ class MaterialRequestLineForm(forms.ModelForm):
         self.fields["item"].queryset = InventoryItem.objects.filter(available).order_by(
             "part_number"
         )
+        self.fields["shortage_action"].widget.attrs["aria-label"] = (
+            f"Shortage decision for {line_label}"
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        item = cleaned.get("item")
+        quantity = cleaned.get("quantity")
+        if not item or not quantity or cleaned.get("DELETE"):
+            return cleaned
+        available = max(0, item.quantity_on_hand)
+        if self.instance and self.instance.pk:
+            available += self.instance.allocated_quantity
+        if quantity > available and not cleaned.get("shortage_action"):
+            self.add_error(
+                "shortage_action",
+                f"Only {available} available. Choose what should happen to the remaining {quantity - available}.",
+            )
+        return cleaned
+
+
+class BackorderFulfillmentForm(forms.Form):
+    quantity = forms.IntegerField(min_value=1, widget=forms.NumberInput(attrs={"min": 1}))
+
+    def __init__(self, *args, backorder=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.backorder = backorder
+        if backorder is not None:
+            maximum = min(backorder.remaining_quantity, max(0, backorder.line.item.quantity_on_hand))
+            self.fields["quantity"].max_value = maximum
+            self.fields["quantity"].initial = maximum
+            self.fields["quantity"].widget.attrs["max"] = maximum
+
+
+class ProcurementRequisitionForm(forms.ModelForm):
+    class Meta:
+        model = ProcurementRequisition
+        fields = [
+            "status", "vendor", "po_number", "ordered_quantity",
+            "received_quantity", "expected_delivery_at", "notes",
+        ]
+        widgets = {
+            "expected_delivery_at": forms.DateTimeInput(
+                attrs={"type": "datetime-local"}, format="%Y-%m-%dT%H:%M"
+            ),
+            "notes": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["expected_delivery_at"].input_formats = ["%Y-%m-%dT%H:%M"]
 
 
 class BaseMaterialRequestLineFormSet(BaseInlineFormSet):

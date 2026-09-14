@@ -337,7 +337,12 @@ class InventoryItem(models.Model):
     ):
         with transaction.atomic():
             locked = InventoryItem.objects.select_for_update().get(pk=self.pk)
-            locked.quantity_on_hand += delta
+            new_quantity = locked.quantity_on_hand + delta
+            if transaction_type == InventoryTransaction.TransactionType.PICK and new_quantity < 0:
+                raise ValidationError(
+                    f"Insufficient stock for {locked.part_number}: {locked.quantity_on_hand} available."
+                )
+            locked.quantity_on_hand = new_quantity
             locked.save(update_fields=["quantity_on_hand", "updated_at"])
             self.quantity_on_hand = locked.quantity_on_hand
             ledger_entry = InventoryTransaction(
@@ -428,15 +433,16 @@ class PickTicketLine(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-        super().save(*args, **kwargs)
-        if is_new:
-            self.item.adjust_quantity(
-                -self.quantity,
-                InventoryTransaction.TransactionType.PICK,
-                user=self.ticket.created_by,
-                pick_ticket=self.ticket,
-                notes=f"Picked on {self.ticket.ticket_number}",
-            )
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+            if is_new:
+                self.item.adjust_quantity(
+                    -self.quantity,
+                    InventoryTransaction.TransactionType.PICK,
+                    user=self.ticket.created_by,
+                    pick_ticket=self.ticket,
+                    notes=f"Picked on {self.ticket.ticket_number}",
+                )
 
     def delete(self, *args, **kwargs):
         """Delete the line and restore stock without overwriting concurrent changes.
@@ -1016,11 +1022,20 @@ class MaterialRequest(models.Model):
 
 
 class MaterialRequestLine(models.Model):
+    class ShortageAction(models.TextChoices):
+        AVAILABLE_ONLY = "available_only", "Fulfill available quantity only"
+        BACKORDER = "backorder", "Backorder the remaining quantity"
+        PROCUREMENT = "procurement", "Send the remaining quantity to Procurement"
+
     material_request = models.ForeignKey(
         MaterialRequest, related_name="lines", on_delete=models.CASCADE
     )
     item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
+    allocated_quantity = models.PositiveIntegerField(default=0)
+    shortage_action = models.CharField(
+        max_length=24, choices=ShortageAction.choices, blank=True, default=""
+    )
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -1033,10 +1048,144 @@ class MaterialRequestLine(models.Model):
             models.CheckConstraint(
                 condition=models.Q(quantity__gt=0), name="material_request_quantity_positive"
             ),
+            models.CheckConstraint(
+                condition=models.Q(allocated_quantity__lte=models.F("quantity")),
+                name="material_request_allocation_not_over_requested",
+            ),
         ]
 
     def __str__(self):
         return f"{self.material_request.request_number}: {self.item.name} x {self.quantity}"
+
+    @property
+    def shortage_quantity(self):
+        return max(0, self.quantity - self.allocated_quantity)
+
+
+class MaterialBackorder(models.Model):
+    class Status(models.TextChoices):
+        OPEN = "OPEN", "Open"
+        PARTIAL = "PARTIAL", "Partially fulfilled"
+        READY = "READY", "Ready to fulfill"
+        FULFILLED = "FULFILLED", "Fulfilled"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    backorder_number = models.CharField(max_length=20, unique=True, blank=True)
+    line = models.OneToOneField(
+        MaterialRequestLine, related_name="backorder", on_delete=models.CASCADE
+    )
+    quantity = models.PositiveIntegerField()
+    fulfilled_quantity = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        permissions = [
+            ("manage_backorders", "Can manage and fulfill material backorders"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0), name="backorder_quantity_positive"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(fulfilled_quantity__lte=models.F("quantity")),
+                name="backorder_fulfilled_not_over_quantity",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk or self.backorder_number:
+            return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
+        self.backorder_number = f"BO-{self.pk:06d}"
+        MaterialBackorder.objects.filter(pk=self.pk).update(
+            backorder_number=self.backorder_number
+        )
+
+    @property
+    def remaining_quantity(self):
+        return max(0, self.quantity - self.fulfilled_quantity)
+
+    def __str__(self):
+        return self.backorder_number or "New backorder"
+
+
+class ProcurementRequisition(models.Model):
+    class Status(models.TextChoices):
+        NEW = "NEW", "New"
+        REVIEW = "REVIEW", "Under review"
+        ORDERED = "ORDERED", "Ordered"
+        PARTIAL = "PARTIAL", "Partially received"
+        RECEIVED = "RECEIVED", "Received"
+        CLOSED = "CLOSED", "Closed"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    requisition_number = models.CharField(max_length=20, unique=True, blank=True)
+    backorder = models.OneToOneField(
+        MaterialBackorder, related_name="procurement_requisition", on_delete=models.CASCADE
+    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NEW)
+    vendor = models.CharField(max_length=160, blank=True)
+    po_number = models.CharField(max_length=80, blank=True)
+    ordered_quantity = models.PositiveIntegerField(default=0)
+    received_quantity = models.PositiveIntegerField(default=0)
+    expected_delivery_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="procurement_requisitions", on_delete=models.PROTECT
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, related_name="updated_procurement_requisitions",
+        null=True, blank=True, on_delete=models.PROTECT,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["status", "-created_at"]
+        permissions = [
+            ("manage_procurement_requisitions", "Can manage procurement requisitions"),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(received_quantity__lte=models.F("ordered_quantity")),
+                name="procurement_received_not_over_ordered",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk or self.requisition_number:
+            return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
+        self.requisition_number = f"PRQ-{self.pk:06d}"
+        ProcurementRequisition.objects.filter(pk=self.pk).update(
+            requisition_number=self.requisition_number
+        )
+
+    def __str__(self):
+        return self.requisition_number or "New procurement requisition"
+
+
+class BackorderFulfillment(models.Model):
+    backorder = models.ForeignKey(
+        MaterialBackorder, related_name="fulfillments", on_delete=models.CASCADE
+    )
+    pick_ticket = models.OneToOneField(
+        PickTicket, related_name="backorder_fulfillment", on_delete=models.PROTECT
+    )
+    quantity = models.PositiveIntegerField()
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+
+    def __str__(self):
+        return f"{self.backorder.backorder_number}: {self.quantity}"
 
 
 class MaterialRequestEvent(models.Model):

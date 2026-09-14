@@ -6,11 +6,14 @@
     {% if linked_request %}
       {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' linked_request.pk %}">Open Material Request</a>{% endif %}
       {% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn btn-warning" href="{% url 'material_request_edit' linked_request.pk %}">Edit Material Request</a>{% endif %}
+    {% elif supplemental_fulfillment %}
+      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' supplemental_fulfillment.backorder.line.material_request.pk %}">Open Material Request</a>{% endif %}
     {% elif perms.inventory.change_pickticket %}<a class="btn btn-warning" href="{% url 'ticket_edit' ticket.pk %}">Edit Pick Ticket</a>{% endif %}
     {% if perms.inventory.print_pickticket %}<a class="btn btn-info" href="{% url 'ticket_print' ticket.pk %}" target="_blank" rel="noopener">Print Ticket</a>{% endif %}
     {% if perms.inventory.add_pickticket %}<a class="btn btn-primary" href="{% url 'ticket_create' %}">New Pick Ticket</a>{% endif %}
   </div>
 </div>
+{% if supplemental_fulfillment %}<div class="alert info"><strong>Supplemental backorder fulfillment:</strong> This ticket fulfills {{ supplemental_fulfillment.quantity }} for {{ supplemental_fulfillment.backorder.backorder_number }} and its lines cannot be edited or deleted.</div>{% endif %}
 <div class="card">
   <div class="grid">
     <p><strong>Status:</strong><br><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></p>
@@ -59,7 +62,7 @@
       <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
     </div>
     {% endif %}
-  {% elif perms.inventory.delete_pickticket %}
+  {% elif not supplemental_fulfillment and perms.inventory.delete_pickticket %}
   <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
     <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
   </div>

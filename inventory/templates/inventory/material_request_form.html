@@ -56,10 +56,11 @@
     {{ formset.management_form }}{{ formset.non_form_errors }}
     <div class="request-lines" id="request-lines-body">
           {% for line_form in formset %}
-          <div class="request-line" data-line-index="{{ forloop.counter0 }}">
+          <div class="request-line" data-line-index="{{ forloop.counter0 }}" data-original-item="{{ line_form.instance.item_id|default:'' }}" data-current-allocation="{{ line_form.instance.allocated_quantity|default:0 }}">
             <div class="request-line-field request-line-item"><label for="{{ line_form.item.id_for_label }}">Item</label>{{ line_form.id }}{{ line_form.item }}{{ line_form.item.errors }}</div>
             <div class="request-line-field request-line-quantity"><label for="{{ line_form.quantity.id_for_label }}">Quantity</label>{{ line_form.quantity }}{{ line_form.quantity.errors }}</div>
             <div class="request-line-field request-line-notes"><label for="{{ line_form.notes.id_for_label }}">Line notes</label>{{ line_form.notes }}{{ line_form.notes.errors }}</div>
+            <div class="request-line-field request-line-shortage" data-shortage-decision><label for="{{ line_form.shortage_action.id_for_label }}">If this item is short</label>{{ line_form.shortage_action }}{{ line_form.shortage_action.errors }}<small>Available stock will be allocated; choose what happens to the remainder.</small></div>
             <div class="request-line-remove"><span class="delete-field">{{ line_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></div>
           </div>
           {% endfor %}
@@ -69,6 +70,7 @@
         <div class="request-line-field request-line-item"><label for="{{ formset.empty_form.item.id_for_label }}">Item</label>{{ formset.empty_form.id }}{{ formset.empty_form.item }}{{ formset.empty_form.item.errors }}</div>
         <div class="request-line-field request-line-quantity"><label for="{{ formset.empty_form.quantity.id_for_label }}">Quantity</label>{{ formset.empty_form.quantity }}{{ formset.empty_form.quantity.errors }}</div>
         <div class="request-line-field request-line-notes"><label for="{{ formset.empty_form.notes.id_for_label }}">Line notes</label>{{ formset.empty_form.notes }}{{ formset.empty_form.notes.errors }}</div>
+        <div class="request-line-field request-line-shortage" data-shortage-decision hidden><label for="{{ formset.empty_form.shortage_action.id_for_label }}">If this item is short</label>{{ formset.empty_form.shortage_action }}{{ formset.empty_form.shortage_action.errors }}<small>Available stock will be allocated; choose what happens to the remainder.</small></div>
         <div class="request-line-remove"><span class="delete-field">{{ formset.empty_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></div>
       </div>
     </template>
@@ -91,7 +93,7 @@
       <p class="helptext">Select an item and it is added to your request immediately. Your form is saved in this browser while you work.</p>
       <div class="inventory-picker-list" id="inventory-picker-list">
         {% for item in inventory_items %}
-        <article class="inventory-picker-item" data-item-id="{{ item.pk }}" data-category="{{ item.category }}" data-search="{{ item.part_number|lower }} {{ item.fb_part_number|lower }} {{ item.model_number|lower }} {{ item.name|lower }} {{ item.description|lower }} {{ item.category|lower }} {{ item.building_room|lower }} {{ item.rack|lower }} {{ item.section|lower }} {{ item.bin_location|lower }}">
+        <article class="inventory-picker-item" data-item-id="{{ item.pk }}" data-stock="{{ item.quantity_on_hand }}" data-category="{{ item.category }}" data-search="{{ item.part_number|lower }} {{ item.fb_part_number|lower }} {{ item.model_number|lower }} {{ item.name|lower }} {{ item.description|lower }} {{ item.category|lower }} {{ item.building_room|lower }} {{ item.rack|lower }} {{ item.section|lower }} {{ item.bin_location|lower }}">
           <div class="inventory-item-main">
             <strong>{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</strong>
             <span>{{ item.name }}</span>

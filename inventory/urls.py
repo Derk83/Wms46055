@@ -112,6 +112,10 @@ urlpatterns = [
     path("material-requests/<int:pk>/edit/", views.material_request_edit, name="material_request_edit"),
     path("material-requests/<int:pk>/delete/", views.material_request_delete, name="material_request_delete"),
     path("material-requests/<int:pk>/assign/", views.material_request_assign, name="material_request_assign"),
+    path("backorders/", views.backorder_list, name="backorder_list"),
+    path("backorders/<int:pk>/fulfill/", views.backorder_fulfill, name="backorder_fulfill"),
+    path("procurement/", views.procurement_requisition_list, name="procurement_requisition_list"),
+    path("procurement/<int:pk>/", views.procurement_requisition_detail, name="procurement_requisition_detail"),
     path("api/material-request-events/", views.material_request_events, name="material_request_events"),
     # Cycle counting
     path("cycle-counts/", views.cycle_count_list, name="cycle_count_list"),

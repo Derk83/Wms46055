@@ -20,6 +20,30 @@
   const draftKey = `bbx-material-request-draft-v1:${location.pathname}`;
   let saveTimer;
 
+  function stockForItem(itemId) {
+    const card = pickerList?.querySelector(`.inventory-picker-item[data-item-id="${CSS.escape(String(itemId))}"]`);
+    return Math.max(0, Number.parseInt(card?.dataset.stock || "0", 10));
+  }
+
+  function updateShortageDecision(row) {
+    const item = row.querySelector('select[name$="-item"]');
+    const quantity = row.querySelector('input[name$="-quantity"]');
+    const decision = row.querySelector("[data-shortage-decision]");
+    const action = row.querySelector('select[name$="-shortage_action"]');
+    if (!decision || !action) return;
+    const restoredAllocation = item?.value === row.dataset.originalItem
+      ? Number.parseInt(row.dataset.currentAllocation || "0", 10)
+      : 0;
+    const available = stockForItem(item?.value) + restoredAllocation;
+    const isShort = Boolean(item?.value) && Number.parseInt(quantity?.value || "0", 10) > available;
+    decision.hidden = !isShort;
+    if (!isShort) action.value = "";
+  }
+
+  function updateAllShortageDecisions() {
+    activeRows().forEach(updateShortageDecision);
+  }
+
   function activeRows() {
     return [...body.querySelectorAll(".request-line")].filter((row) => {
       const deleted = row.querySelector('input[name$="-DELETE"]');
@@ -193,8 +217,16 @@
     noResults.hidden = visible !== 0;
   });
 
-  form.addEventListener("input", scheduleSave);
-  form.addEventListener("change", scheduleSave);
+  form.addEventListener("input", (event) => {
+    const row = event.target.closest(".request-line");
+    if (row) updateShortageDecision(row);
+    scheduleSave();
+  });
+  form.addEventListener("change", (event) => {
+    const row = event.target.closest(".request-line");
+    if (row) updateShortageDecision(row);
+    scheduleSave();
+  });
   form.addEventListener("submit", () => {
     // Keep the recovery draft until the server confirms creation. The detail-page
     // redirect removes it after a successful save.
@@ -205,4 +237,5 @@
   });
 
   restoreDraft();
+  updateAllShortageDecisions();
 })();

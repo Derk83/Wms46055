@@ -144,11 +144,11 @@ html,body{max-width:100%}body{overflow-x:hidden}main,.page-header,.card,.row,.ro
 /* Phase 3 responsive records and material request line editor. */
 .request-lines{display:grid;gap:12px;width:100%;max-width:100%;margin-bottom:12px}
 .request-line[hidden]{display:none}
-.request-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,140px) 44px;grid-template-areas:"item quantity remove" "notes notes notes";gap:10px 12px;min-width:0;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2)}
-.request-line-field{min-width:0}.request-line-field label{margin:0 0 5px;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}.request-line-item{grid-area:item}.request-line-quantity{grid-area:quantity}.request-line-notes{grid-area:notes}.request-line-remove{display:flex;grid-area:remove;align-items:flex-end;justify-content:flex-end}.request-line-item select{min-width:0;max-width:100%}.request-line-quantity input{min-width:0}.request-line-notes textarea{display:block;min-height:68px}.remove-request-line{min-width:40px;min-height:40px}
+.request-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(100px,140px) 44px;grid-template-areas:"item quantity remove" "notes notes notes" "shortage shortage shortage";gap:10px 12px;min-width:0;padding:13px;border:1px solid var(--border);border-radius:11px;background:var(--surface-2)}
+.request-line-field{min-width:0}.request-line-field label{margin:0 0 5px;color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}.request-line-item{grid-area:item}.request-line-quantity{grid-area:quantity}.request-line-notes{grid-area:notes}.request-line-shortage{grid-area:shortage;padding:10px 12px;border-left:4px solid var(--warn);border-radius:8px;background:var(--surface)}.request-line-shortage[hidden]{display:none}.request-line-shortage small{display:block;margin-top:5px;color:var(--muted)}.request-line-remove{display:flex;grid-area:remove;align-items:flex-end;justify-content:flex-end}.request-line-item select{min-width:0;max-width:100%}.request-line-quantity input{min-width:0}.request-line-notes textarea{display:block;min-height:68px}.remove-request-line{min-width:40px;min-height:40px}
 .item-history-scroller:focus-visible{outline:none;border-radius:11px;box-shadow:var(--focus)}
 @media(max-width:600px){
-  .request-line{grid-template-columns:minmax(0,1fr) 44px;grid-template-areas:"item item" "quantity remove" "notes notes";padding:12px}
+  .request-line{grid-template-columns:minmax(0,1fr) 44px;grid-template-areas:"item item" "quantity remove" "notes notes" "shortage shortage";padding:12px}
   .request-line-remove{align-items:end}
   input[type="checkbox"],input[type="radio"]{min-width:40px;min-height:40px}
   .btn-sm,.btn.sm,.icon-button{min-height:40px}

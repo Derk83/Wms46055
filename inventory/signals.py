@@ -27,3 +27,38 @@ def provision_material_requests_group(sender, **kwargs):
         codename__in={"view_pickticket", "print_pickticket"},
     )
     group.permissions.remove(*unsafe_ticket_permissions)
+
+
+@receiver(post_migrate, dispatch_uid="inventory.provision_shortage_workflow_permissions")
+def provision_shortage_workflow_permissions(sender, **kwargs):
+    if sender.label != "inventory":
+        return
+    permission_map = {
+        "Logistics Specialist": {
+            "view_materialbackorder", "view_backorderfulfillment", "manage_backorders",
+        },
+        "Logistics Manager": {
+            "view_materialbackorder", "view_backorderfulfillment", "manage_backorders",
+            "view_procurementrequisition",
+        },
+        "Sr. Logistics Manager": {
+            "view_materialbackorder", "view_backorderfulfillment", "manage_backorders",
+            "view_procurementrequisition", "manage_procurement_requisitions",
+        },
+        "Procurement Specialist": {
+            "view_materialbackorder", "view_backorderfulfillment", "manage_backorders",
+            "view_procurementrequisition", "manage_procurement_requisitions",
+        },
+        "Procurement Manager": {
+            "view_materialbackorder", "view_backorderfulfillment", "manage_backorders",
+            "view_procurementrequisition", "manage_procurement_requisitions",
+        },
+    }
+    for group_name, codenames in permission_map.items():
+        group = Group.objects.filter(name=group_name).first()
+        if group is None:
+            continue
+        permissions = Permission.objects.filter(
+            content_type__app_label="inventory", codename__in=codenames
+        )
+        group.permissions.add(*permissions)

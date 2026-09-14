@@ -5,12 +5,15 @@ from django.db import transaction
 from django.utils import timezone
 
 from .models import (
+    BackorderFulfillment,
     InventoryItem,
+    MaterialBackorder,
     MaterialRequest,
     MaterialRequestEvent,
     MaterialRequestLine,
     PickTicket,
     PickTicketLine,
+    ProcurementRequisition,
 )
 
 
@@ -25,10 +28,39 @@ def _normalized_lines(lines):
         if item.pk in seen:
             raise ValidationError("Duplicate items are not allowed in a material request.")
         seen.add(item.pk)
-        normalized.append({"item_id": item.pk, "quantity": int(quantity), "notes": row.get("notes", "")})
+        shortage_action = row.get("shortage_action", "") or ""
+        if shortage_action and shortage_action not in MaterialRequestLine.ShortageAction.values:
+            raise ValidationError("Choose a valid shortage action.")
+        normalized.append({
+            "item_id": item.pk,
+            "quantity": int(quantity),
+            "notes": row.get("notes", ""),
+            "shortage_action": shortage_action,
+        })
     if not normalized:
         raise ValidationError("At least one material request line is required.")
     return normalized
+
+
+def _lock_request_shortage_records(material_request):
+    """Lock the request shortage graph in the canonical lifecycle order."""
+    backorders = list(
+        MaterialBackorder.objects.select_for_update()
+        .filter(line__material_request=material_request)
+        .order_by("pk")
+    )
+    backorder_ids = [backorder.pk for backorder in backorders]
+    requisitions = list(
+        ProcurementRequisition.objects.select_for_update()
+        .filter(backorder_id__in=backorder_ids)
+        .order_by("pk")
+    )
+    fulfillments = list(
+        BackorderFulfillment.objects.select_for_update()
+        .filter(backorder_id__in=backorder_ids)
+        .order_by("pk")
+    )
+    return backorders, requisitions, fulfillments
 
 
 def _display_change(value):
@@ -116,6 +148,12 @@ def _material_request_change_summary(material_request, new_values, rows):
             new_notes = new_line.get("notes") or ""
             if old_notes != new_notes:
                 changes.append(f"{part} line notes: {_display_change(old_notes)} → {_display_change(new_notes)}")
+            old_action = old_line.shortage_action or ""
+            new_action = new_line.get("shortage_action") or ""
+            if old_action != new_action:
+                old_label = dict(MaterialRequestLine.ShortageAction.choices).get(old_action, "No shortage")
+                new_label = dict(MaterialRequestLine.ShortageAction.choices).get(new_action, "No shortage")
+                changes.append(f"{part} shortage decision: {old_label} → {new_label}")
 
     if material_request.delivery_acceptance_confirmed_at and changes:
         changes.append("Delivery readiness: Confirmed → Awaiting confirmation")
@@ -132,13 +170,36 @@ def _create_lines(material_request, ticket, rows):
     }
     for row in rows:
         item = items[row["item_id"]]
-        MaterialRequestLine.objects.create(
+        requested = row["quantity"]
+        allocated = min(requested, max(0, item.quantity_on_hand))
+        shortage = requested - allocated
+        action = row.get("shortage_action", "") if shortage else ""
+        if shortage and not action:
+            raise ValidationError(
+                f"Only {allocated} of {item.part_number} is available. Choose what should happen to the remaining {shortage}."
+            )
+        line = MaterialRequestLine.objects.create(
             material_request=material_request,
             item=item,
-            quantity=row["quantity"],
+            quantity=requested,
+            allocated_quantity=allocated,
+            shortage_action=action,
             notes=row["notes"],
         )
-        PickTicketLine.objects.create(ticket=ticket, item=item, quantity=row["quantity"])
+        if allocated:
+            PickTicketLine.objects.create(ticket=ticket, item=item, quantity=allocated)
+            item.refresh_from_db(fields=["quantity_on_hand"])
+        if shortage and action in {
+            MaterialRequestLine.ShortageAction.BACKORDER,
+            MaterialRequestLine.ShortageAction.PROCUREMENT,
+        }:
+            backorder = MaterialBackorder.objects.create(line=line, quantity=shortage)
+            if action == MaterialRequestLine.ShortageAction.PROCUREMENT:
+                ProcurementRequisition.objects.create(
+                    backorder=backorder,
+                    ordered_quantity=shortage,
+                    created_by=material_request.creator,
+                )
 
 
 @transaction.atomic
@@ -341,6 +402,11 @@ def update_material_request(
     material_request = MaterialRequest.objects.select_for_update().select_related("pick_ticket").get(
         pk=material_request.pk
     )
+    _, requisitions, fulfillments = _lock_request_shortage_records(material_request)
+    if fulfillments or requisitions:
+        raise ValidationError(
+            "This request cannot be edited after backorder fulfillment or procurement processing has begun."
+        )
     change_summary = _material_request_change_summary(
         material_request,
         {
@@ -393,10 +459,123 @@ def update_material_request(
 
 
 @transaction.atomic
+def fulfill_material_backorder(backorder, *, quantity, actor):
+    """Fulfill an open shortage through a supplemental, ledger-backed pick ticket."""
+    quantity = int(quantity)
+    if quantity <= 0:
+        raise ValidationError("Fulfillment quantity must be positive.")
+    backorder_pk = backorder.pk
+    request_id = MaterialBackorder.objects.filter(pk=backorder_pk).values_list(
+        "line__material_request_id", flat=True
+    ).first()
+    if request_id is None:
+        raise ValidationError("This backorder no longer exists.")
+    request = MaterialRequest.objects.select_for_update().get(pk=request_id)
+    backorders, _, _ = _lock_request_shortage_records(request)
+    backorder = next(
+        (candidate for candidate in backorders if candidate.pk == backorder_pk), None
+    )
+    if backorder is None:
+        raise ValidationError("This backorder no longer exists.")
+    if backorder.status in {MaterialBackorder.Status.FULFILLED, MaterialBackorder.Status.CANCELLED}:
+        raise ValidationError("This backorder is no longer open.")
+    remaining = backorder.quantity - backorder.fulfilled_quantity
+    if quantity > remaining:
+        raise ValidationError(f"Only {remaining} remains on this backorder.")
+    item = InventoryItem.objects.select_for_update().get(pk=backorder.line.item_id)
+    if quantity > item.quantity_on_hand:
+        raise ValidationError(
+            f"Only {item.quantity_on_hand} of {item.part_number} is available."
+        )
+    ticket = PickTicket.objects.create(
+        status=PickTicket.Status.OPEN,
+        picked_by_name="",
+        received_by_name="",
+        requested_by_name=request.requestor_name,
+        building_room=request.building_room,
+        location=request.location,
+        notes=f"Backorder fulfillment for {backorder.backorder_number} / {request.request_number}",
+        created_by=actor,
+    )
+    PickTicketLine.objects.create(ticket=ticket, item=item, quantity=quantity)
+    BackorderFulfillment.objects.create(
+        backorder=backorder, pick_ticket=ticket, quantity=quantity, created_by=actor
+    )
+    backorder.fulfilled_quantity += quantity
+    if backorder.fulfilled_quantity == backorder.quantity:
+        backorder.status = MaterialBackorder.Status.FULFILLED
+        backorder.fulfilled_at = timezone.now()
+    else:
+        backorder.status = MaterialBackorder.Status.PARTIAL
+    backorder.save(update_fields=[
+        "fulfilled_quantity", "status", "fulfilled_at", "updated_at"
+    ])
+    event = MaterialRequestEvent.objects.create(
+        material_request=request,
+        event_type=MaterialRequestEvent.EventType.UPDATED,
+        actor=actor,
+        change_summary=(
+            f"{backorder.backorder_number} fulfilled by {quantity} through {ticket.ticket_number}; "
+            f"{backorder.remaining_quantity} remaining"
+        ),
+    )
+    from .push import queue_material_request_push
+
+    queue_material_request_push(event)
+    return backorder, ticket
+
+
+@transaction.atomic
+def update_procurement_requisition(requisition, *, actor, **values):
+    requisition_pk = requisition.pk
+    request_id = ProcurementRequisition.objects.filter(pk=requisition_pk).values_list(
+        "backorder__line__material_request_id", flat=True
+    ).first()
+    if request_id is None:
+        raise ValidationError("This procurement requisition no longer exists.")
+    request = MaterialRequest.objects.select_for_update().get(pk=request_id)
+    _, requisitions, _ = _lock_request_shortage_records(request)
+    requisition = next(
+        (candidate for candidate in requisitions if candidate.pk == requisition_pk), None
+    )
+    if requisition is None:
+        raise ValidationError("This procurement requisition no longer exists.")
+    allowed = {
+        "status", "vendor", "po_number", "ordered_quantity",
+        "received_quantity", "expected_delivery_at", "notes",
+    }
+    for field, value in values.items():
+        if field in allowed:
+            setattr(requisition, field, value)
+    if requisition.received_quantity > requisition.ordered_quantity:
+        raise ValidationError("Received quantity cannot exceed ordered quantity.")
+    requisition.updated_by = actor
+    requisition.save()
+    event = MaterialRequestEvent.objects.create(
+        material_request=requisition.backorder.line.material_request,
+        event_type=MaterialRequestEvent.EventType.UPDATED,
+        actor=actor,
+        change_summary=(
+            f"{requisition.requisition_number} updated: {requisition.get_status_display()}; "
+            f"PO {requisition.po_number or 'not assigned'}"
+        ),
+    )
+    from .push import queue_material_request_push
+
+    queue_material_request_push(event)
+    return requisition
+
+
+@transaction.atomic
 def delete_material_request(material_request, *, actor=None):
     material_request = MaterialRequest.objects.select_for_update().select_related("pick_ticket").get(
         pk=material_request.pk
     )
+    _, requisitions, fulfillments = _lock_request_shortage_records(material_request)
+    if fulfillments or requisitions:
+        raise ValidationError(
+            "This request cannot be deleted after backorder fulfillment or procurement processing has begun."
+        )
     ticket = PickTicket.objects.select_for_update().get(pk=material_request.pick_ticket_id)
     event = MaterialRequestEvent.objects.create(
         material_request=material_request,

@@ -345,6 +345,7 @@ from .forms import (
     BulkAdjustForm,
     InventoryBulkEditForm,
     BulkReceivingForm,
+    BackorderFulfillmentForm,
     InventoryItemForm,
     GroupRenameForm,
     DeliveryResponseForm,
@@ -353,6 +354,7 @@ from .forms import (
     PickTicketForm,
     PickTicketLineForm,
     PickTicketLineFormSet,
+    ProcurementRequisitionForm,
     ReceivingForm,
     ReceivingLineFormSet,
     ReceivingTicketForm,
@@ -433,11 +435,14 @@ from .models import (
     ItemImage,
     InventoryItem,
     InventoryTransaction,
+    BackorderFulfillment,
+    MaterialBackorder,
     MaterialRequest,
     MaterialRequestEvent,
     PickTicket,
     PickTicketLine,
     PortalAccessRequest,
+    ProcurementRequisition,
     RACK_CHOICES,
     ReceivingDocument,
     ReceivingLine,
@@ -1282,13 +1287,18 @@ def ticket_create(request):
         form = PickTicketForm(request.POST)
         formset = PickTicketLineFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
-            ticket = form.save(commit=False)
-            ticket.created_by = request.user
-            ticket.save()
-            formset.instance = ticket
-            _rebuild_pick_ticket_lines(ticket, formset)
-            messages.success(request, f"Created pick ticket {ticket.ticket_number}.")
-            return redirect("ticket_print", pk=ticket.pk)
+            try:
+                with transaction.atomic():
+                    ticket = form.save(commit=False)
+                    ticket.created_by = request.user
+                    ticket.save()
+                    formset.instance = ticket
+                    _rebuild_pick_ticket_lines(ticket, formset)
+            except ValidationError as exc:
+                form.add_error(None, "; ".join(exc.messages))
+            else:
+                messages.success(request, f"Created pick ticket {ticket.ticket_number}.")
+                return redirect("ticket_print", pk=ticket.pk)
     else:
         form = PickTicketForm()
         formset = PickTicketLineFormSet()
@@ -1296,16 +1306,41 @@ def ticket_create(request):
 
 
 def _rebuild_pick_ticket_lines(ticket, formset):
-    """Replace pick-ticket lines, letting model delete/save hooks rebalance inventory."""
-    for line in list(ticket.lines.all()):
-        line.delete()
+    """Atomically replace lines after locking and validating aggregate stock demand."""
+    rows = []
+    requested_by_item = {}
     for form in formset:
         if not form.cleaned_data or form.cleaned_data.get("DELETE"):
             continue
         item = form.cleaned_data.get("item")
         quantity = form.cleaned_data.get("quantity")
         if item and quantity:
-            PickTicketLine.objects.create(ticket=ticket, item=item, quantity=quantity)
+            rows.append((item.pk, quantity))
+            requested_by_item[item.pk] = requested_by_item.get(item.pk, 0) + quantity
+
+    existing_lines = list(ticket.lines.select_related("item").all())
+    restored_by_item = {}
+    for line in existing_lines:
+        restored_by_item[line.item_id] = restored_by_item.get(line.item_id, 0) + line.quantity
+    item_ids = sorted(set(requested_by_item) | set(restored_by_item))
+    locked_items = {
+        item.pk: item
+        for item in InventoryItem.objects.select_for_update().filter(pk__in=item_ids).order_by("pk")
+    }
+    for item_id, requested in requested_by_item.items():
+        item = locked_items[item_id]
+        effective_available = item.quantity_on_hand + restored_by_item.get(item_id, 0)
+        if requested > effective_available:
+            raise ValidationError(
+                f"Only {effective_available} of {item.part_number} is available; {requested} was requested."
+            )
+
+    for line in existing_lines:
+        line.delete()
+    for item_id, quantity in rows:
+        PickTicketLine.objects.create(
+            ticket=ticket, item=locked_items[item_id], quantity=quantity
+        )
 
 
 @login_required
@@ -1322,14 +1357,30 @@ def ticket_edit(request, pk):
             f"{ticket.ticket_number} is managed by material request {linked_request.request_number}. Edit the request instead.",
         )
         return redirect("material_request_edit", pk=linked_request.pk)
+    supplemental_fulfillment = BackorderFulfillment.objects.select_related(
+        "backorder"
+    ).filter(pick_ticket=ticket).first()
+    if supplemental_fulfillment:
+        messages.error(
+            request,
+            f"{ticket.ticket_number} is an immutable fulfillment for "
+            f"{supplemental_fulfillment.backorder.backorder_number}.",
+        )
+        return redirect("ticket_detail", pk=ticket.pk)
     if request.method == "POST":
         form = PickTicketForm(request.POST, instance=ticket)
         formset = PickTicketLineFormSet(request.POST, instance=ticket)
         if form.is_valid() and formset.is_valid():
-            form.save()
-            _rebuild_pick_ticket_lines(ticket, formset)
-            messages.success(request, f"Updated pick ticket {ticket.ticket_number}.")
-            return redirect("ticket_list")
+            try:
+                with transaction.atomic():
+                    locked_ticket = PickTicket.objects.select_for_update().get(pk=ticket.pk)
+                    form.save()
+                    _rebuild_pick_ticket_lines(locked_ticket, formset)
+            except ValidationError as exc:
+                form.add_error(None, "; ".join(exc.messages))
+            else:
+                messages.success(request, f"Updated pick ticket {ticket.ticket_number}.")
+                return redirect("ticket_list")
     else:
         form = PickTicketForm(instance=ticket)
         formset = PickTicketLineFormSet(instance=ticket)
@@ -1355,12 +1406,16 @@ def ticket_detail(request, pk):
         url_name="ticket_detail",
     )
     linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
+    supplemental_fulfillment = BackorderFulfillment.objects.select_related(
+        "backorder__line__material_request"
+    ).filter(pick_ticket=ticket).first()
     return render(
         request,
         "inventory/ticket_detail.html",
         {
             "ticket": ticket,
             "linked_request": linked_request,
+            "supplemental_fulfillment": supplemental_fulfillment,
             "status_choices": PickTicket.Status.choices,
         },
     )
@@ -1475,6 +1530,16 @@ def ticket_delete(request, pk):
     if request.method == "POST":
         with transaction.atomic():
             ticket = get_object_or_404(queryset.select_for_update(), pk=pk)
+            supplemental_fulfillment = BackorderFulfillment.objects.select_for_update().select_related(
+                "backorder"
+            ).filter(pick_ticket=ticket).first()
+            if supplemental_fulfillment:
+                messages.error(
+                    request,
+                    f"{ticket.ticket_number} is an immutable fulfillment for "
+                    f"{supplemental_fulfillment.backorder.backorder_number} and cannot be deleted.",
+                )
+                return redirect("ticket_detail", pk=ticket.pk)
             linked_request = (
                 MaterialRequest.objects.select_for_update()
                 .filter(pick_ticket=ticket)
@@ -1503,6 +1568,16 @@ def ticket_delete(request, pk):
         return redirect("ticket_list")
 
     ticket = get_object_or_404(queryset, pk=pk)
+    supplemental_fulfillment = BackorderFulfillment.objects.select_related(
+        "backorder"
+    ).filter(pick_ticket=ticket).first()
+    if supplemental_fulfillment:
+        messages.error(
+            request,
+            f"{ticket.ticket_number} is an immutable fulfillment for "
+            f"{supplemental_fulfillment.backorder.backorder_number} and cannot be deleted.",
+        )
+        return redirect("ticket_detail", pk=ticket.pk)
     linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
     if linked_request and not request.user.has_perms(linked_delete_perms):
         raise PermissionDenied
@@ -3614,6 +3689,7 @@ def _request_lines_from_formset(formset):
             "item": form.cleaned_data["item"],
             "quantity": form.cleaned_data["quantity"],
             "notes": form.cleaned_data.get("notes", ""),
+            "shortage_action": form.cleaned_data.get("shortage_action", ""),
         }
         for form in formset.forms
         if form.cleaned_data and not form.cleaned_data.get("DELETE")
@@ -3818,6 +3894,8 @@ def material_request_create(request):
                     lines=_request_lines_from_formset(formset),
                     **form.cleaned_data,
                 )
+            except ValidationError as exc:
+                form.add_error(None, "; ".join(exc.messages))
             except IntegrityError:
                 form.add_error(
                     "delivery_at",
@@ -4043,6 +4121,8 @@ def material_request_edit(request, pk):
                     actor=request.user,
                     **form.cleaned_data,
                 )
+            except ValidationError as exc:
+                form.add_error(None, "; ".join(exc.messages))
             except IntegrityError:
                 form.add_error(
                     "delivery_at",
@@ -4081,10 +4161,108 @@ def material_request_delete(request, pk):
     material_request = get_object_or_404(_visible_material_requests(request), pk=pk)
     if request.method == "POST":
         number = material_request.request_number
-        delete_material_request(material_request, actor=request.user)
+        try:
+            delete_material_request(material_request, actor=request.user)
+        except ValidationError as exc:
+            messages.error(request, "; ".join(exc.messages))
+            return redirect("material_request_detail", pk=pk)
         messages.success(request, f"{number} and its linked pick ticket were deleted; inventory was restored.")
         return redirect("material_request_board")
     return render(request, "inventory/material_request_confirm_delete.html", {"material_request": material_request})
+
+
+@login_required
+@any_perm_required("inventory.view_materialbackorder", "inventory.manage_backorders")
+def backorder_list(request):
+    rows = MaterialBackorder.objects.select_related(
+        "line__item", "line__material_request", "line__material_request__pick_ticket"
+    ).prefetch_related("fulfillments__pick_ticket")
+    status = request.GET.get("status", "").upper()
+    if status in MaterialBackorder.Status.values:
+        rows = rows.filter(status=status)
+    for row in rows:
+        row.available_quantity = max(0, row.line.item.quantity_on_hand)
+        row.eligible_quantity = min(row.remaining_quantity, row.available_quantity)
+    return render(request, "inventory/backorder_list.html", {
+        "backorders": rows,
+        "selected_status": status,
+        "status_choices": MaterialBackorder.Status.choices,
+    })
+
+
+@login_required
+@all_perms_required(
+    "inventory.manage_backorders", "inventory.add_pickticket", "inventory.add_pickticketline"
+)
+def backorder_fulfill(request, pk):
+    from .services import fulfill_material_backorder
+
+    backorder = get_object_or_404(
+        MaterialBackorder.objects.select_related("line__item", "line__material_request"), pk=pk
+    )
+    form = BackorderFulfillmentForm(
+        request.POST or None, backorder=backorder
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            backorder, ticket = fulfill_material_backorder(
+                backorder, quantity=form.cleaned_data["quantity"], actor=request.user
+            )
+        except ValidationError as exc:
+            form.add_error(None, "; ".join(exc.messages))
+        else:
+            messages.success(
+                request,
+                f"{backorder.backorder_number} fulfilled through {ticket.ticket_number}.",
+            )
+            return redirect("backorder_list")
+    return render(request, "inventory/backorder_fulfill.html", {
+        "backorder": backorder, "form": form,
+    })
+
+
+@login_required
+@any_perm_required(
+    "inventory.view_procurementrequisition", "inventory.manage_procurement_requisitions"
+)
+def procurement_requisition_list(request):
+    rows = ProcurementRequisition.objects.select_related(
+        "backorder__line__item", "backorder__line__material_request", "created_by", "updated_by"
+    )
+    status = request.GET.get("status", "").upper()
+    if status in ProcurementRequisition.Status.values:
+        rows = rows.filter(status=status)
+    return render(request, "inventory/procurement_requisition_list.html", {
+        "requisitions": rows,
+        "selected_status": status,
+        "status_choices": ProcurementRequisition.Status.choices,
+    })
+
+
+@login_required
+@all_perms_required("inventory.manage_procurement_requisitions")
+def procurement_requisition_detail(request, pk):
+    from .services import update_procurement_requisition
+
+    requisition = get_object_or_404(
+        ProcurementRequisition.objects.select_related(
+            "backorder__line__item", "backorder__line__material_request"
+        ), pk=pk,
+    )
+    form = ProcurementRequisitionForm(request.POST or None, instance=requisition)
+    if request.method == "POST" and form.is_valid():
+        try:
+            requisition = update_procurement_requisition(
+                requisition, actor=request.user, **form.cleaned_data
+            )
+        except ValidationError as exc:
+            form.add_error(None, "; ".join(exc.messages))
+        else:
+            messages.success(request, f"{requisition.requisition_number} updated.")
+            return redirect("procurement_requisition_detail", pk=requisition.pk)
+    return render(request, "inventory/procurement_requisition_detail.html", {
+        "requisition": requisition, "form": form,
+    })
 
 
 @login_required
