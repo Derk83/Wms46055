@@ -417,6 +417,7 @@ from .models import (
     ReceivingDocument,
     ReceivingLine,
     ReceivingTicket,
+    RecentWork,
     SECTION_CHOICES,
     STANDALONE_BIN_VALUES,
 )
@@ -523,6 +524,56 @@ def _visible_pick_tickets(request, queryset=None):
     return queryset.filter(
         Q(material_request__isnull=True) | Q(material_request__creator=request.user)
     )
+
+
+def _remember_recent_work(request, *, kind, object_id, label, url_name):
+    """Upsert a successful detail visit and cap each user's history at 20."""
+    url = request.build_absolute_uri(reverse(url_name, args=[object_id]))
+    recent, _ = RecentWork.objects.update_or_create(
+        user=request.user,
+        kind=kind,
+        object_id=object_id,
+        defaults={"label": label, "url": url},
+    )
+    stale_ids = list(
+        RecentWork.objects.filter(user=request.user)
+        .exclude(pk=recent.pk)
+        .order_by("-viewed_at", "-pk")
+        .values_list("pk", flat=True)[19:]
+    )
+    if stale_ids:
+        RecentWork.objects.filter(pk__in=stale_ids).delete()
+
+
+@login_required
+def recently_viewed(request):
+    """Show recent records that remain visible to the signed-in user."""
+    visible = []
+    stale_ids = []
+    for entry in RecentWork.objects.filter(user=request.user)[:20]:
+        if entry.kind == RecentWork.Kind.INVENTORY_ITEM:
+            allowed = InventoryItem.objects.filter(pk=entry.object_id).exists()
+        elif entry.kind == RecentWork.Kind.PICK_TICKET:
+            allowed = request.user.has_perm("inventory.view_pickticket") and _visible_pick_tickets(
+                request
+            ).filter(pk=entry.object_id).exists()
+        elif entry.kind == RecentWork.Kind.MATERIAL_REQUEST:
+            allowed = request.user.has_perm("inventory.view_materialrequest") and _visible_material_requests(
+                request
+            ).filter(pk=entry.object_id).exists()
+        elif entry.kind == RecentWork.Kind.RECEIVING_TICKET:
+            allowed = request.user.has_perm("inventory.print_receivingticket") and ReceivingTicket.objects.filter(
+                pk=entry.object_id
+            ).exists()
+        else:
+            allowed = False
+        if allowed:
+            visible.append(entry)
+        else:
+            stale_ids.append(entry.pk)
+    if stale_ids:
+        RecentWork.objects.filter(user=request.user, pk__in=stale_ids).delete()
+    return render(request, "inventory/recently_viewed.html", {"recent_work": visible})
 
 
 def _stale_warehouse_notification_redirect(request, model, pk):
@@ -1197,6 +1248,13 @@ def ticket_detail(request, pk):
         if stale_redirect is not None:
             return stale_redirect
         raise Http404
+    _remember_recent_work(
+        request,
+        kind=RecentWork.Kind.PICK_TICKET,
+        object_id=ticket.pk,
+        label=f"Pick Ticket {ticket.ticket_number}",
+        url_name="ticket_detail",
+    )
     return render(request, "inventory/ticket_detail.html", {"ticket": ticket, "status_choices": PickTicket.Status.choices})
 
 
@@ -1463,6 +1521,13 @@ def item_detail(request, pk):
         request,
         item.transactions.select_related("created_by", "pick_ticket"),
     ).order_by("-created_at")[:10]
+    _remember_recent_work(
+        request,
+        kind=RecentWork.Kind.INVENTORY_ITEM,
+        object_id=item.pk,
+        label=f"{item.part_number} — {item.name}",
+        url_name="item_detail",
+    )
     return render(request, "inventory/item_detail.html", {"item": item, "transactions": transactions})
 
 
@@ -2187,6 +2252,13 @@ def receiving_ticket_print(request, pk):
     ticket = get_object_or_404(
         ReceivingTicket.objects.select_related("created_by").prefetch_related("lines__item"),
         pk=pk
+    )
+    _remember_recent_work(
+        request,
+        kind=RecentWork.Kind.RECEIVING_TICKET,
+        object_id=ticket.pk,
+        label=f"Receiving Ticket {ticket.ticket_number}",
+        url_name="receiving_ticket_print",
     )
     return render(request, "inventory/receiving_ticket_print.html", {"ticket": ticket})
 
@@ -3709,6 +3781,13 @@ def material_request_detail(request, pk):
         if stale_redirect is not None:
             return stale_redirect
         raise Http404
+    _remember_recent_work(
+        request,
+        kind=RecentWork.Kind.MATERIAL_REQUEST,
+        object_id=material_request.pk,
+        label=f"Material Request {material_request.request_number}",
+        url_name="material_request_detail",
+    )
     response_form = DeliveryResponseForm(material_request=material_request)
     return render(request, "inventory/material_request_detail.html", {
         "material_request": material_request,

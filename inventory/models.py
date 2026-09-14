@@ -795,6 +795,40 @@ class ItemDocument(models.Model):
         return f"{self.original_filename} for {self.item.part_number}"
 
 
+class RecentWork(models.Model):
+    """A user's latest successfully opened warehouse records."""
+
+    class Kind(models.TextChoices):
+        INVENTORY_ITEM = "inventory_item", "Inventory Item"
+        PICK_TICKET = "pick_ticket", "Pick Ticket"
+        MATERIAL_REQUEST = "material_request", "Material Request"
+        RECEIVING_TICKET = "receiving_ticket", "Receiving Ticket"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="recent_work",
+        on_delete=models.CASCADE,
+    )
+    kind = models.CharField(max_length=32, choices=Kind.choices)
+    object_id = models.PositiveBigIntegerField()
+    label = models.CharField(max_length=255)
+    url = models.CharField(max_length=500)
+    viewed_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-viewed_at", "-pk"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "kind", "object_id"],
+                name="unique_recent_work_per_user_object",
+            )
+        ]
+        indexes = [models.Index(fields=["user", "-viewed_at"])]
+
+    def __str__(self):
+        return f"{self.user}: {self.label}"
+
+
 class MaterialRequest(models.Model):
     """A customer request fulfilled by its automatically linked pick ticket."""
 

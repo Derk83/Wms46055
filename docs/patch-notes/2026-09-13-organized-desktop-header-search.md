@@ -81,3 +81,9 @@ Removed the entire bordered Dashboard title/action card so the metric cards beco
 The phone-only `New Ticket` shortcut remains available, along with all six dashboard metrics, the remaining six permission-aware Quick Actions, and all existing activity sections.
 
 Authenticated production verification confirmed the title/action card and `New Pick Ticket` tile are absent at desktop width, all six metrics and six remaining Quick Actions are present, the phone `New Ticket` shortcut remains available, and no overflow or browser-console errors were introduced.
+
+## Recently Viewed / Resume Work
+
+Added persistent per-user recent-work history for inventory items, pick tickets, material requests, and receiving tickets. Successful detail visits are deduplicated, ordered by latest access, and capped at 20 records per user.
+
+The dashboard Quick Actions position formerly occupied by `New Pick Ticket` now contains `Resume Work`, opening a permission-filtered Recently Viewed page. Missing records and records the user can no longer access are removed from their history automatically.

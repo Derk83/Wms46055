@@ -1,0 +1,28 @@
+{% extends "inventory/base.html" %}
+{% block content %}
+<div class="page-header">
+  <div><h1>Recently Viewed</h1><p class="text-muted mb-0">Open a recent record and continue where you left off.</p></div>
+  <a href="{% url 'dashboard' %}" class="btn light">Back to Dashboard</a>
+</div>
+<section class="card">
+  {% if recent_work %}
+  <div class="recent-work-list">
+    {% for entry in recent_work %}
+    <a href="{{ entry.url }}" class="recent-work-row">
+      <span><strong>{{ entry.label }}</strong><small>{{ entry.get_kind_display }}</small></span>
+      <span><time datetime="{{ entry.viewed_at|date:'c' }}">{{ entry.viewed_at|timesince }} ago</time><b aria-hidden="true">→</b></span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <h2>No recent work yet</h2>
+    <p>Inventory items, tickets, material requests, and receiving tickets will appear here after you open them.</p>
+    <a href="{% url 'inventory_list' %}" class="btn">Browse Inventory</a>
+  </div>
+  {% endif %}
+</section>
+<style>
+.recent-work-list{display:grid;gap:2px}.recent-work-row{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:64px;padding:12px 14px;border-bottom:1px solid var(--border);color:var(--ink);text-decoration:none}.recent-work-row:last-child{border-bottom:0}.recent-work-row:hover{background:var(--surface-2);color:var(--ink)}.recent-work-row>span{display:flex;align-items:center;gap:12px;min-width:0}.recent-work-row>span:first-child{align-items:flex-start;flex-direction:column;gap:1px}.recent-work-row strong{overflow-wrap:anywhere}.recent-work-row small,.recent-work-row time{color:var(--muted);font-size:12px}.recent-work-row b{color:var(--accent);font-size:20px}@media(max-width:600px){.recent-work-row{align-items:flex-start}.recent-work-row>span:last-child{align-items:flex-end;flex-direction:column;gap:2px}.page-header{align-items:flex-start;flex-direction:column}}
+</style>
+{% endblock %}

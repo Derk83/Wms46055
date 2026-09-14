@@ -17,6 +17,7 @@ urlpatterns = [
     ),
     path("", views.dashboard, name="dashboard"),
     path("search/", views.global_search, name="global_search"),
+    path("recently-viewed/", views.recently_viewed, name="recently_viewed"),
     path("inventory/", views.inventory_list, name="inventory_list"),
     path("inventory/new/", views.inventory_edit, name="inventory_new"),
     path("inventory/<int:pk>/edit/", views.inventory_edit, name="inventory_edit"),
