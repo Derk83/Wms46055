@@ -2,11 +2,11 @@
 {% block title %}Transaction History - Warehouse{% endblock %}
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <h2>Transaction History</h2>
-        <a href="{% url 'export_transactions_csv' %}" class="btn btn-outline-secondary btn-sm">
+    <div class="page-header">
+        <h1>Transaction History</h1>
+        <div class="actions"><a href="{% url 'export_transactions_csv' %}" class="btn btn-info btn-sm">
             <i class="bi bi-download me-1"></i> Export CSV
-        </a>
+        </a></div>
     </div>
     <!-- Filters -->
     <div class="card mb-4">
@@ -52,7 +52,7 @@
                 </div>
                 <div class="col-12 d-flex gap-2">
                     <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                    <a href="{% url 'transaction_history' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
+                    <a href="{% url 'transaction_history' %}" class="btn btn-secondary btn-sm">Clear</a>
                 </div>
             </form>
         </div>

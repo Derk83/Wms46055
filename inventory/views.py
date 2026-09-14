@@ -56,9 +56,6 @@ def _authorized_or_redirect(test_func, login_url=None):
 
 superuser_required = _authorized_or_redirect(lambda u: u.is_superuser)
 staff_or_superuser_required = _authorized_or_redirect(lambda u: u.is_staff or u.is_superuser)
-approval_reviewer_required = _authorized_or_redirect(
-    lambda u: u.is_superuser or u.has_perm("inventory.change_approvalrequest")
-)
 lead_or_higher = _authorized_or_redirect(
     lambda u: u.is_superuser or u.has_perm("inventory.manage_storage_locations")
 )
@@ -400,7 +397,6 @@ class WarehouseUserChangeForm(UserChangeForm):
 
 from .models import (
     _LEDGER_WRITE_TOKEN,
-    ApprovalRequest,
     BIN_LOCATION_CHOICES,
     CategoryChoices,
     CycleCount,
@@ -1132,9 +1128,9 @@ def inventory_edit(request, pk=None):
     if request.method == "POST":
         form = InventoryItemForm(request.POST, instance=item)
         if form.is_valid():
-            form.save()
+            saved_item = form.save()
             messages.success(request, "Inventory item saved.")
-            return redirect("inventory_list")
+            return redirect("item_detail", pk=saved_item.pk)
     else:
         form = InventoryItemForm(instance=item)
     return render(request, "inventory/inventory_form.html", {"form": form, "item": item})
@@ -1149,7 +1145,7 @@ def receive_stock(request, pk):
         notes = request.POST.get("notes", "")
         InventoryTransaction.record_receipt(item=item, quantity=quantity, user=request.user, notes=notes)
         messages.success(request, f"Received {quantity} into {item.name}.")
-        return redirect("inventory_list")
+        return redirect("item_detail", pk=item.pk)
     return render(request, "inventory/receive_stock.html", {"item": item})
 
 
@@ -1261,7 +1257,16 @@ def ticket_detail(request, pk):
         label=f"Pick Ticket {ticket.ticket_number}",
         url_name="ticket_detail",
     )
-    return render(request, "inventory/ticket_detail.html", {"ticket": ticket, "status_choices": PickTicket.Status.choices})
+    linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
+    return render(
+        request,
+        "inventory/ticket_detail.html",
+        {
+            "ticket": ticket,
+            "linked_request": linked_request,
+            "status_choices": PickTicket.Status.choices,
+        },
+    )
 
 
 @login_required
@@ -1978,10 +1983,18 @@ def process_bulk_receiving(spreadsheet_file, user, default_notes=""):
 
 
 @login_required
-@any_perm_required("inventory.view_qr_codes")
+@any_perm_required(
+    "inventory.view_qr_codes",
+    "inventory.manage_item_barcodes",
+    "inventory.view_app_qr_code",
+)
 def qr_codes(request):
-    """Generate QR codes for all rack/bin locations (A-D × 1-20 × 1-6)."""
+    """Consolidated, permission-filtered label and QR tool surface."""
     from django.db.models import Count
+    location_qrs = []
+    if not request.user.has_perm("inventory.view_qr_codes"):
+        return render(request, "inventory/qr_codes.html", {"location_qrs": location_qrs})
+
     racks = [value for value, _label in RACK_CHOICES]
     sections = [value for value, _label in SECTION_CHOICES]
     bins = [value for value, _label in BIN_LOCATION_CHOICES]
@@ -1997,7 +2010,6 @@ def qr_codes(request):
         .annotate(cnt=Count("id"))
     }
 
-    location_qrs = []
     for rack in racks:
         for section in sections:
             for bin_loc in bins:
@@ -2044,91 +2056,6 @@ def app_qr_code(request):
         "qr_b64": qr_b64,
     })
 
-
-
-@any_perm_required("inventory.delete_receivingticket")
-def receiving_ticket_delete(request, pk):
-    ticket = get_object_or_404(ReceivingTicket.objects.prefetch_related("lines__item"), pk=pk)
-    if request.method == "POST":
-        ticket_number = ticket.ticket_number
-        ticket.delete()
-        messages.success(request, f"Deleted receiving ticket {ticket_number} and reversed received inventory.")
-        return redirect("receiving_log")
-    return render(request, "inventory/receiving_ticket_confirm_delete.html", {"ticket": ticket})
-
-
-@login_required
-@any_perm_required("inventory.export_inventory")
-def export_inventory_xlsx(request):
-    """Export current inventory to .xlsx file."""
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Inventory"
-
-    # Headers
-    headers = [
-        "Part #", "FB Part #", "Model #", "Name", "Shipper", "Category", "Description", "Qty", "Unit",
-        "BLDG/Room #", "Rack", "Section", "Bin Location", "Low Stock Threshold",
-        "Barcode Value", "QR Code Value", "Active", "Updated At",
-    ]
-    ws.append(headers)
-
-    from openpyxl.styles import Font
-    header_font = Font(bold=True)
-    for cell in ws[1]:
-        cell.font = header_font
-
-    items = InventoryItem.objects.all().order_by("category", "part_number")
-    for item in items:
-        ws.append([
-            item.part_number,
-            item.fb_part_number,
-            item.model_number,
-            item.description or item.name,
-            item.shipper,
-            item.category,
-            item.description,
-            item.quantity_on_hand,
-            item.unit,
-            item.building_room,
-            item.rack,
-            item.section,
-            item.bin_location,
-            item.low_stock_threshold,
-            item.barcode_value or "",
-            item.qr_code_value or "",
-            "Yes" if item.active else "No",
-            item.updated_at.isoformat() if item.updated_at else "",
-        ])
-
-    from openpyxl.worksheet.datavalidation import DataValidation
-    rack_validation = DataValidation(type="list", formula1='"' + ','.join(value for value, _ in RACK_CHOICES) + '"', allow_blank=True)
-    section_validation = DataValidation(type="list", formula1='"' + ','.join(value for value, _ in SECTION_CHOICES) + '"', allow_blank=True)
-    bin_validation = DataValidation(type="list", formula1='"' + ','.join(value for value, _ in BIN_LOCATION_CHOICES) + '"', allow_blank=True)
-    ws.add_data_validation(rack_validation)
-    ws.add_data_validation(section_validation)
-    ws.add_data_validation(bin_validation)
-    rack_validation.add("K2:K1000")
-    section_validation.add("L2:L1000")
-    bin_validation.add("M2:M1000")
-
-    for col in ws.columns:
-        max_length = 0
-        column = col[0].column_letter
-        for cell in col:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except Exception:
-                pass
-        ws.column_dimensions[column].width = min(max_length + 2, 50)
-
-    response = HttpResponse(
-        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    response["Content-Disposition"] = 'attachment; filename="dl_warehouse_inventory_export.xlsx"'
-    wb.save(response)
-    return response
 
 
 @any_perm_required("inventory.change_receivingticket")
@@ -2374,68 +2301,72 @@ def bulk_adjust(request):
                 quantity_delta = form.cleaned_data.get("quantity_delta")
                 notes = form.cleaned_data.get("notes")
 
-                # If new item, create or get it
+                # Resolve existing items now, but defer new-item creation until
+                # the operator commits the batch so Clear/abandon is side-effect free.
                 if not item:
                     if not part_number or not name:
                         messages.error(request, "Part # and Name are required for new items.")
-                        return redirect("bulk_adjust")
-                    item, created = InventoryItem.objects.get_or_create(
-                        part_number=part_number,
-                        defaults={"name": name, "description": name, "shipper": shipper, "quantity_on_hand": 0, "active": True}
-                    )
-                    if not created:
-                        changed_fields = []
-                        if item.name != name:
-                            item.name = name
-                            changed_fields.append("name")
-                        if name and item.description != name:
-                            item.description = name
-                            changed_fields.append("description")
-                        if shipper and item.shipper != shipper:
-                            item.shipper = shipper
-                            changed_fields.append("shipper")
-                        if changed_fields:
-                            changed_fields.append("updated_at")
-                            item.save(update_fields=changed_fields)
+                        return redirect("batch_adjust")
+                    item = InventoryItem.objects.filter(part_number__iexact=part_number).first()
 
                 lines.append({
-                    "item_id": item.pk,
-                    "item_name": item.name,
-                    "part_number": item.part_number,
+                    "item_id": item.pk if item else None,
+                    "item_name": item.name if item else name,
+                    "part_number": item.part_number if item else part_number,
                     "quantity_delta": quantity_delta,
                     "notes": notes,
                 })
                 request.session["bulk_adjust_lines"] = lines
-                messages.success(request, f"Added {item.name} (delta: {quantity_delta:+d})")
-                return redirect("bulk_adjust")
+                messages.success(request, f"Added {item.name if item else name} (delta: {quantity_delta:+d})")
+                return redirect("batch_adjust")
 
         elif action == "commit":
             if not lines:
                 messages.error(request, "No adjustment lines to commit.")
-                return redirect("bulk_adjust")
+                return redirect("batch_adjust")
 
             with transaction.atomic():
                 for line in lines:
-                    item = InventoryItem.objects.get(pk=line["item_id"])
+                    if line.get("item_id"):
+                        item = InventoryItem.objects.get(pk=line["item_id"])
+                    else:
+                        item, created = InventoryItem.objects.get_or_create(
+                            part_number=line["part_number"],
+                            defaults={
+                                "name": line["item_name"],
+                                "description": line["item_name"],
+                                "shipper": "",
+                                "quantity_on_hand": 0,
+                                "active": True,
+                            },
+                        )
+                        if not created:
+                            changed_fields = []
+                            if item.name != line["item_name"]:
+                                item.name = line["item_name"]
+                                changed_fields.append("name")
+                            if line["item_name"] and item.description != line["item_name"]:
+                                item.description = line["item_name"]
+                                changed_fields.append("description")
+                            if changed_fields:
+                                changed_fields.append("updated_at")
+                                item.save(update_fields=changed_fields)
                     delta = line["quantity_delta"]
-                    item.quantity_on_hand += delta
-                    item.save()
-                    InventoryTransaction.objects.create(
-                        item=item,
-                        transaction_type=InventoryTransaction.TransactionType.ADJUSTMENT,
-                        quantity_delta=delta,
-                        created_by=request.user,
+                    InventoryTransaction.record_adjustment(
+                        item,
+                        delta,
+                        user=request.user,
                         notes=line["notes"] or f"Bulk adjustment: {delta:+d}",
                     )
 
             messages.success(request, f"Committed {len(lines)} adjustments.")
             del request.session["bulk_adjust_lines"]
-            return redirect("bulk_adjust")
+            return redirect("batch_adjust")
 
         elif action == "clear":
             if "bulk_adjust_lines" in request.session:
                 del request.session["bulk_adjust_lines"]
-            return redirect("bulk_adjust")
+            return redirect("batch_adjust")
 
     # Render with current lines
     active_items = InventoryItem.objects.filter(active=True).order_by("category", "name")
@@ -2443,7 +2374,10 @@ def bulk_adjust(request):
 
     # Build display of pending lines
     for line in lines:
-        line["item_obj"] = InventoryItem.objects.get(pk=line["item_id"])
+        line["item_obj"] = (
+            InventoryItem.objects.filter(pk=line["item_id"]).first()
+            if line.get("item_id") else None
+        )
 
     # Compute net change for summary
     net_change = sum(line.get("quantity_delta", 0) for line in lines)
@@ -2738,49 +2672,6 @@ def export_transactions_csv(request):
 
 
 # ============================================================================
-# Approval Queue Views
-# ============================================================================
-
-@login_required
-@any_perm_required("inventory.view_approvalrequest")
-def approval_queue(request):
-    """Manager review queue for pending workflow approvals."""
-    status_filter = request.GET.get("status", ApprovalRequest.Status.PENDING)
-    requests = ApprovalRequest.objects.select_related("requested_by", "reviewed_by")
-    if status_filter in ApprovalRequest.Status.values:
-        requests = requests.filter(status=status_filter)
-    counts = {
-        "pending": ApprovalRequest.objects.filter(status=ApprovalRequest.Status.PENDING).count(),
-        "approved": ApprovalRequest.objects.filter(status=ApprovalRequest.Status.APPROVED).count(),
-        "rejected": ApprovalRequest.objects.filter(status=ApprovalRequest.Status.REJECTED).count(),
-    }
-    return render(request, "inventory/approval_queue.html", {
-        "approval_requests": requests,
-        "active_status": status_filter,
-        "counts": counts,
-    })
-
-
-@login_required
-@any_perm_required("inventory.change_approvalrequest")
-def approval_request_review(request, pk, action):
-    """Approve or reject a pending workflow request."""
-    if request.method != "POST":
-        return redirect("approval_queue")
-    approval = get_object_or_404(ApprovalRequest, pk=pk, status=ApprovalRequest.Status.PENDING)
-    status = {
-        "approve": ApprovalRequest.Status.APPROVED,
-        "reject": ApprovalRequest.Status.REJECTED,
-    }.get(action)
-    if not status:
-        messages.error(request, "Unknown approval action.")
-        return redirect("approval_queue")
-    approval.mark_reviewed(status, request.user, request.POST.get("review_notes", ""))
-    messages.success(request, f"Request {approval.get_status_display().lower()}.")
-    return redirect("approval_queue")
-
-
-# ============================================================================
 # Settings / User Management Views
 # ============================================================================
 
@@ -2788,11 +2679,24 @@ def approval_request_review(request, pk, action):
 @settings_access_required
 def settings(request):
     """Main settings page with tabs for user, security, and app settings."""
-    active_tab = request.GET.get("tab", "general")
+    requested_tab = request.GET.get("tab", "general")
+    available_tabs = {"general", "security"}
+    if request.user.has_perm("inventory.manage_users"):
+        available_tabs.add("users")
+    if request.user.has_perm("inventory.manage_groups") or request.user.has_perm(
+        "inventory.manage_group_permissions"
+    ):
+        available_tabs.add("groups")
+    active_tab = requested_tab if requested_tab in available_tabs else "general"
     context = {"active_tab": active_tab}
-    if active_tab == "users" and request.user.is_superuser:
+    if active_tab == "users" and request.user.has_perm("inventory.manage_users"):
         context["users"] = User.objects.all().order_by("-is_superuser", "username").prefetch_related("groups")
         context["locked_usernames"] = _locked_user_usernames()
+    if active_tab == "groups" and (
+        request.user.has_perm("inventory.manage_groups")
+        or request.user.has_perm("inventory.manage_group_permissions")
+    ):
+        context["groups"] = Group.objects.all().order_by("name").prefetch_related("permissions")
     return render(request, "inventory/settings.html", context)
 
 
@@ -2818,15 +2722,15 @@ def user_management(request):
 @login_required
 @any_perm_required("inventory.manage_groups", "inventory.manage_group_permissions")
 def group_management(request):
-    """Redirect to user management — groups/permissions are now managed per-user."""
-    return redirect("user_management")
+    """Use the canonical delegated group-management settings section."""
+    return redirect(f"{reverse('settings')}?tab=groups")
 
 
 @login_required
 @any_perm_required("inventory.manage_groups")
 def group_update(request, group_name):
-    """Redirect to user management — groups/permissions are now managed per-user."""
-    return redirect("user_management")
+    """Use the canonical delegated group-management settings section."""
+    return redirect(f"{reverse('settings')}?tab=groups")
 
 
 def _safe_settings_next(request):
@@ -2912,7 +2816,7 @@ def group_permissions(request, pk):
         existing_other_apps = group.permissions.exclude(content_type__app_label="inventory")
         group.permissions.set([*existing_other_apps, *selected_inventory])
         messages.success(request, f"Permissions updated for group '{group.name}'.")
-        return redirect("user_management")
+        return redirect(f"{reverse('settings')}?tab=groups")
 
     assigned_permission_ids = set(group.permissions.values_list("id", flat=True))
     return render(request, "inventory/group_permissions.html", {
@@ -3133,7 +3037,7 @@ def item_image_delete(request, item_id, image_id):
 
 
 @login_required
-@any_perm_required("inventory.change_inventoryitem")
+@any_perm_required("inventory.view_inventoryitem")
 def item_documents(request, item_id):
     item = get_object_or_404(InventoryItem, pk=item_id)
     return render(request, "inventory/item_documents.html", {
@@ -4760,8 +4664,8 @@ def _build_report_context(rng, *, kind, request):
 @login_required
 @manager_required
 def reports_index(request):
-    """Landing page — single Daily Activity card (weekly is auto-emailed Fridays)."""
-    return render(request, "inventory/reports_index.html", {})
+    """Compatibility URL that opens the only interactive report directly."""
+    return reports_daily(request)
 
 
 @login_required

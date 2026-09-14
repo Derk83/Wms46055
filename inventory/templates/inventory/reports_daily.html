@@ -10,7 +10,6 @@
     <div class="meta">{{ range.label }}</div>
   </div>
   <div class="actions">
-    <a class="btn secondary" href="{% url 'reports_index' %}">← All reports</a>
     <a class="btn" href="{% url 'reports_pdf_viewer' 'daily' %}?{% if preset != 'custom' %}preset={{ preset }}{% else %}date={{ date_value }}{% endif %}">Open PDF</a>
   </div>
 </section>
@@ -35,6 +34,12 @@
     </div>
   </div>
 </form>
+
+<section class="card">
+  <h2>Weekly report (auto-delivered)</h2>
+  <p>The weekly activity report is automatically generated and emailed to managers every <strong>Friday at 7:00 AM America/Chicago</strong>. It covers the previous Monday through Sunday.</p>
+  <p>Generated PDFs are archived at <code>media/auto_reports/weekly/</code> on the WMS host.</p>
+</section>
 
 <section class="summary-tiles" aria-label="Activity summary">
   <div class="summary-tile"><span class="summary-tile-label">New requests</span><span class="summary-tile-value">{{ summary.new_requests }}</span></div>

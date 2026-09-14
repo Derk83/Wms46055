@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
   <div>
-    <a href="{% url 'location_list' %}" class="btn btn-sm btn-outline-secondary mb-2">&larr; All Locations</a>
+    <a href="{% url 'location_list' %}" class="btn btn-secondary btn-sm mb-2">&larr; All Locations</a>
     <h1 class="mb-0">📍 {{ location_key }}</h1>
     <small class="text-muted">
       {% if parsed.rack %}Rack {{ parsed.rack }}, Section {{ parsed.section }}, Bin {{ parsed.bin_location }}{% else %}Standalone: {{ parsed.bin_location }}{% endif %}
@@ -42,17 +42,17 @@
             <tbody>
               {% for item in items %}
               <tr>
-                <td><a href="{% url 'item_detail' pk=item.pk %}">{{ item.part_number }}</a></td>
+                <td>{{ item.part_number }}</td>
                 <td>{{ item.name|truncatechars:40 }}</td>
                 <td>{{ item.quantity_on_hand }}</td>
                 <td>{{ item.uom }}</td>
                 <td>
-                  <a href="{% url 'item_detail' pk=item.pk %}" class="btn btn-sm btn-outline-primary">View</a>
+                  <a href="{% url 'item_detail' pk=item.pk %}" class="btn btn-secondary btn-sm">View</a>
                   {% if is_lead %}
                   <form method="POST" action="{% url 'location_remove_item' location_key=location_key item_pk=item.pk %}"
                         style="display:inline" onsubmit="return confirm('Remove {{ item.part_number }} from {{ location_key }}?')">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
+                    <button type="submit" class="btn btn-danger btn-sm">Remove</button>
                   </form>
                   {% endif %}
                 </td>
@@ -86,7 +86,7 @@
         <small>Scan to open this location and its current inventory</small>
         <p class="mt-2 mb-0">
           <code>LOC:{{ location_key }}</code>
-          <button class="btn btn-sm btn-outline-secondary ms-2" onclick="printLocationQR()">🖨️ Print</button>
+          <button class="btn btn-info btn-sm ms-2" onclick="printLocationQR()">🖨️ Print</button>
         </p>
         <p class="text-muted small">Scan with any QR scanner to view this location's items.</p>
       </div>

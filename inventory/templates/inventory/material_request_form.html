@@ -54,28 +54,23 @@
       <span class="draft-status" id="request-draft-status" aria-live="polite"></span>
     </div>
     {{ formset.management_form }}{{ formset.non_form_errors }}
-    <div class="table-responsive request-lines-table">
-      <table>
-        <thead><tr><th>Item</th><th>Quantity</th><th>Line notes</th><th><span class="sr-only">Remove</span></th></tr></thead>
-        <tbody id="request-lines-body">
+    <div class="request-lines" id="request-lines-body">
           {% for line_form in formset %}
-          <tr class="request-line" data-line-index="{{ forloop.counter0 }}">
-            <td>{{ line_form.id }}{{ line_form.item }}{{ line_form.item.errors }}</td>
-            <td>{{ line_form.quantity }}{{ line_form.quantity.errors }}</td>
-            <td>{{ line_form.notes }}{{ line_form.notes.errors }}</td>
-            <td class="line-remove-cell"><span class="delete-field">{{ line_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></td>
-          </tr>
+          <div class="request-line" data-line-index="{{ forloop.counter0 }}">
+            <div class="request-line-field request-line-item"><label for="{{ line_form.item.id_for_label }}">Item</label>{{ line_form.id }}{{ line_form.item }}{{ line_form.item.errors }}</div>
+            <div class="request-line-field request-line-quantity"><label for="{{ line_form.quantity.id_for_label }}">Quantity</label>{{ line_form.quantity }}{{ line_form.quantity.errors }}</div>
+            <div class="request-line-field request-line-notes"><label for="{{ line_form.notes.id_for_label }}">Line notes</label>{{ line_form.notes }}{{ line_form.notes.errors }}</div>
+            <div class="request-line-remove"><span class="delete-field">{{ line_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></div>
+          </div>
           {% endfor %}
-        </tbody>
-      </table>
     </div>
     <template id="empty-request-line">
-      <tr class="request-line" data-line-index="__prefix__">
-        <td>{{ formset.empty_form.id }}{{ formset.empty_form.item }}{{ formset.empty_form.item.errors }}</td>
-        <td>{{ formset.empty_form.quantity }}{{ formset.empty_form.quantity.errors }}</td>
-        <td>{{ formset.empty_form.notes }}{{ formset.empty_form.notes.errors }}</td>
-        <td class="line-remove-cell"><span class="delete-field">{{ formset.empty_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></td>
-      </tr>
+      <div class="request-line" data-line-index="__prefix__">
+        <div class="request-line-field request-line-item"><label for="{{ formset.empty_form.item.id_for_label }}">Item</label>{{ formset.empty_form.id }}{{ formset.empty_form.item }}{{ formset.empty_form.item.errors }}</div>
+        <div class="request-line-field request-line-quantity"><label for="{{ formset.empty_form.quantity.id_for_label }}">Quantity</label>{{ formset.empty_form.quantity }}{{ formset.empty_form.quantity.errors }}</div>
+        <div class="request-line-field request-line-notes"><label for="{{ formset.empty_form.notes.id_for_label }}">Line notes</label>{{ formset.empty_form.notes }}{{ formset.empty_form.notes.errors }}</div>
+        <div class="request-line-remove"><span class="delete-field">{{ formset.empty_form.DELETE }}</span><button type="button" class="icon-button remove-request-line" aria-label="Remove this line" title="Remove line">×</button></div>
+      </div>
     </template>
     <button type="button" class="btn secondary sm" id="add-request-line">+ Add blank line</button>
 

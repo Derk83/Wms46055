@@ -3,7 +3,7 @@
 {% block title %}Add Item to {{ location_key }}{% endblock %}
 {% block content %}
 <div class="page-header">
-  <a href="{% url 'location_detail' location_key=location_key %}" class="btn btn-sm btn-outline-secondary mb-2">&larr; Back to {{ location_key }}</a>
+  <div class="actions"><a href="{% url 'location_detail' location_key=location_key %}" class="btn btn-secondary btn-sm mb-2">&larr; Back to {{ location_key }}</a></div>
   <h1>➕ Add Item to {{ location_key }}</h1>
 </div>
 

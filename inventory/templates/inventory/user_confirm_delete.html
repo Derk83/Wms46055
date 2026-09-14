@@ -2,9 +2,9 @@
 {% block title %}Delete User - Warehouse{% endblock %}
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+    <div class="page-header">
         <h1>Delete User</h1>
-        <a href="{% url 'user_management' %}" class="btn light">← Back to Users</a>
+
     </div>
     <div class="card" style="max-width: 600px;">
         <div class="text-center py-4">
@@ -20,9 +20,9 @@
             </div>
             <form method="post">
                 {% csrf_token %}
-                <div class="d-flex justify-content-center gap-3">
-                    <a href="{% url 'user_management' %}" class="btn secondary">Cancel</a>
-                    <button type="submit" class="btn danger">
+                <div class="actions form-actions form-actions-center">
+                    <a href="{% url 'settings' %}?tab=users" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-danger">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         Yes, Delete User
                     </button>
@@ -31,10 +31,4 @@
         </div>
     </div>
 </div>
-<style>
-@media (max-width: 480px) {
-    .d-flex.justify-content-center { flex-direction: column; }
-    .d-flex.justify-content-center .btn { width: 100%; }
-}
-</style>
 {% endblock %}

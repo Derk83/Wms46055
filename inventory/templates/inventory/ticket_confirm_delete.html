@@ -1,8 +1,8 @@
 {% extends "inventory/base.html" %}
 {% block title %}Delete Ticket - Warehouse Ticket Portal{% endblock %}
 {% block content %}
+<div class="page-header"><h1>Delete Pick Ticket</h1></div>
 <div class="card" style="max-width: 600px;">
-  <h1>Delete Pick Ticket</h1>
   <div class="alert warning">
     <strong>Warning:</strong> This action cannot be undone.
   </div>
@@ -47,8 +47,8 @@
   <form method="post">
     {% csrf_token %}
     <div class="actions">
-      <button type="submit" class="btn danger">Yes, Delete Ticket</button>
-      <a href="{% url 'ticket_detail' ticket.pk %}" class="btn light">Cancel</a>
+      <button type="submit" class="btn btn-danger">Yes, Delete Ticket</button>
+      <a href="{% url 'ticket_detail' ticket.pk %}" class="btn btn-secondary">Cancel</a>
     </div>
   </form>
 </div>

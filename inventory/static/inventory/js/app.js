@@ -1,5 +1,28 @@
 (() => {
   'use strict';
+  // Shared scanner feedback only. Camera lifecycle and form-specific lookup
+  // behavior intentionally remain owned by each screen.
+  const successBeep = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const context = new AudioContext();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, context.currentTime);
+      gain.gain.setValueAtTime(0.001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.18, context.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.14);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.16);
+      window.setTimeout(() => context.close(), 260);
+    } catch (_) { /* audio feedback is optional */ }
+  };
+  window.WMSScanner = Object.freeze({successBeep});
+
   const params = new URLSearchParams(window.location.search);
   if (params.get('created') === '1') {
     try { sessionStorage.removeItem('bbx-material-request-draft-v1:/material-requests/new/'); } catch (_) { /* storage may be unavailable */ }
@@ -33,6 +56,8 @@
   const buttonRole = (button) => {
     const explicit = button.dataset.action;
     if (SEMANTIC_BUTTON_CLASSES.includes(`btn-${explicit}`)) return `btn-${explicit}`;
+    const serverRenderedRole = SEMANTIC_BUTTON_CLASSES.find(className => button.classList.contains(className));
+    if (serverRenderedRole) return serverRenderedRole;
     const form = button.closest('form');
     const intent = `${button.textContent} ${button.getAttribute('aria-label') || ''} ${button.getAttribute('title') || ''} ${button.getAttribute('href') || ''} ${form?.action || ''}`.toLowerCase();
     if (/delete|remove|reject|discard|clear all|start over/.test(intent)) return 'btn-danger';
@@ -63,6 +88,25 @@
   const navLabel = document.querySelector('[data-mobile-nav-label]');
   const navCloseButton = document.querySelector('[data-mobile-nav-close]');
   const navBackdrop = document.querySelector('[data-mobile-nav-backdrop]');
+  const pageRegions = [document.querySelector('main'), document.getElementById('toast-region')].filter(Boolean);
+  const pageRegionAria = new Map();
+  const focusableNavItems = () => [...nav.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter(element => !element.hidden && element.getClientRects().length);
+  const setPageInert = inert => {
+    pageRegions.forEach(region => {
+      if (inert) {
+        pageRegionAria.set(region, region.getAttribute('aria-hidden'));
+        region.inert = true;
+        region.setAttribute('aria-hidden', 'true');
+      } else {
+        region.inert = false;
+        const previous = pageRegionAria.get(region);
+        if (previous === null || previous === undefined) region.removeAttribute('aria-hidden');
+        else region.setAttribute('aria-hidden', previous);
+      }
+    });
+    if (!inert) pageRegionAria.clear();
+  };
   const closeNav = () => {
     if (!nav || !navButton) return;
     nav.classList.remove('is-open');
@@ -71,6 +115,9 @@
     navButton.classList.remove('is-open');
     navButton.setAttribute('aria-expanded', 'false');
     navButton.setAttribute('aria-label', 'Open navigation menu');
+    nav.removeAttribute('role');
+    nav.removeAttribute('aria-modal');
+    setPageInert(false);
     if (navLabel) navLabel.textContent = 'Menu';
   };
   const openNav = () => {
@@ -81,6 +128,9 @@
     navButton.classList.add('is-open');
     navButton.setAttribute('aria-expanded', 'true');
     navButton.setAttribute('aria-label', 'Close navigation menu');
+    nav.setAttribute('role', 'dialog');
+    nav.setAttribute('aria-modal', 'true');
+    setPageInert(true);
     if (navLabel) navLabel.textContent = 'Close';
     window.setTimeout(() => navCloseButton?.focus(), 0);
   };
@@ -97,9 +147,28 @@
   });
   nav?.querySelectorAll('a').forEach(link => link.addEventListener('click', closeNav));
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && document.body.classList.contains('nav-open')) {
+    if (!document.body.classList.contains('nav-open')) return;
+    if (event.key === 'Escape') {
       closeNav();
       navButton?.focus();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const items = focusableNavItems();
+      if (!items.length) {
+        event.preventDefault();
+        nav?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !nav.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   });
   document.addEventListener('click', event => {

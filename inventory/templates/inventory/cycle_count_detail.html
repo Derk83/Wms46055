@@ -5,11 +5,9 @@
 <div class="page-header">
   <h1>{{ cycle_count.display_name }}</h1>
   <div class="actions">
-    <a class="btn" href="{% url 'cycle_count_list' %}">Back to cycle counts</a>
-    {% if cycle_count.is_archived and perms.inventory.archive_cycle_counts %}
-    <a class="btn" href="{% url 'cycle_count_archive' %}">View Archives</a>
-    {% endif %}
-    <a class="btn" href="{% url 'cycle_count_pdf' cycle_count.pk %}" target="_blank" rel="noopener" data-action="primary">Print PDF</a>
+    {% if cycle_count.status == "open" or cycle_count.status == "in_progress" %}<button class="btn" type="submit" form="cycle-count-form" data-action="primary">Save Counts</button>{% endif %}
+    {% if cycle_count.is_archived %}<a class="btn" href="{% url 'cycle_count_archive' %}">Back to archive</a>{% else %}<a class="btn" href="{% url 'cycle_count_list' %}">Back to cycle counts</a>{% endif %}
+    <a class="btn" href="{% url 'cycle_count_pdf' cycle_count.pk %}" target="_blank" rel="noopener">Print PDF</a>
     {% if cycle_count.status == "completed" and perms.inventory.manage_cycle_counts %}
     <a class="btn" href="{% url 'cycle_count_results_pdf' cycle_count.pk %}" target="_blank" rel="noopener" data-action="primary">Download Reconciliation PDF</a>
     {% endif %}
@@ -52,7 +50,7 @@
 </div>
 {% endif %}
 
-<form method="post" class="card">
+<form method="post" class="card" id="cycle-count-form">
   {% csrf_token %}
   <input type="hidden" name="action" value="record">
   <p class="muted">Enter the quantity you actually counted for each item. Leave blank to skip. The system's on-hand quantity is hidden — verify against the physical count only.</p>
@@ -101,11 +99,6 @@
     </table>
   </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <button class="btn" type="submit" data-action="success">Save counts</button>
-    </div>
-  </div>
 </form>
 
 {% if perms.inventory.manage_cycle_counts %}

@@ -9,7 +9,7 @@
           <span class="badge status-{{ material_request.pick_ticket.status|lower }}">{{ material_request.pick_ticket.get_status_display }}</span>
         </div>
         <h2><a href="{% url 'material_request_detail' material_request.pk %}">{{ material_request.request_number }}</a></h2>
-        <div class="meta">Ticket <a href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">{{ material_request.pick_ticket.ticket_number }}</a></div>
+        <div class="meta">Ticket {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">{{ material_request.pick_ticket.ticket_number }}</a>{% else %}{{ material_request.pick_ticket.ticket_number }}{% endif %}</div>
       </div>
       <div class="work-queue-card__due">
         <span>Needed</span>
@@ -53,8 +53,7 @@
         <span class="assignment-readonly__value">{% if material_request.assigned_to %}{{ material_request.assigned_to.get_full_name|default:material_request.assigned_to.username }}{% else %}<em>Unassigned</em>{% endif %}</span>
       </div>
       {% endif %}
-      <a class="btn btn-primary btn-sm" href="{% url 'material_request_detail' material_request.pk %}">Open request</a>
-      <a class="btn btn-secondary btn-sm" href="{% url 'ticket_detail' material_request.pick_ticket.pk %}">Open ticket</a>
+
     </div>
   </article>
   {% endfor %}

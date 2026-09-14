@@ -11,7 +11,7 @@
     </div>
     <div class="actions">
       <a class="btn light" href="{% url 'inventory_list' %}">Inventory</a>
-      <a class="btn" href="{% url 'ticket_create' %}">Open Pick Ticket</a>
+      {% if perms.inventory.add_pickticket %}<a class="btn" href="{% url 'ticket_create' %}">New Pick Ticket</a>{% endif %}
     </div>
   </div>
   <div class="card scanner-card">

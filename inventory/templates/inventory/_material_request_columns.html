@@ -8,7 +8,7 @@
       {% if material_request.urgent %}<span class="badge urgent-badge">🚨 Urgent</span>{% endif %}
       <span class="badge status-{{ status_value|lower }}">{{ status_label }}</span>
       <dl><dt>Ticket</dt><dd>{{ material_request.pick_ticket.ticket_number }}</dd><dt>Requestor</dt><dd>{{ material_request.requestor_name|default:"—" }}</dd><dt>Location</dt><dd>{{ material_request.building_room|default:"—" }} · {{ material_request.location|default:"—" }}</dd><dt>Delivery</dt><dd>{{ material_request.delivery_at|date:"M j, Y g:i a" }}</dd><dt>Submitted</dt><dd>{{ material_request.created_at|date:"M j, Y g:i a" }} ({{ material_request.created_at|timesince }} ago)</dd><dt>Material</dt><dd>{{ material_request.line_count }} line{{ material_request.line_count|pluralize }} · {{ material_request.total_quantity|default:0 }} total</dd></dl>
-      <div class="actions no-print"><a class="btn secondary sm" href="{% url 'material_request_detail' material_request.pk %}">View</a>{% if perms.inventory.change_materialrequest %}<a class="btn secondary sm" href="{% url 'material_request_edit' material_request.pk %}">Edit</a>{% endif %}</div>
+      {% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<div class="actions no-print"><a class="btn secondary sm" href="{% url 'material_request_edit' material_request.pk %}">Edit</a></div>{% endif %}
     </article>
     {% endif %}{% endfor %}
   </section>

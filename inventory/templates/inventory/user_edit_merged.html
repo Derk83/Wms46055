@@ -2,9 +2,9 @@
 {% block title %}{{ title }} - Warehouse{% endblock %}
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between flex-wrap align-items-center mb-4 gap-2">
+    <div class="page-header">
         <h1>{{ title }}</h1>
-        <a href="{% url 'settings' %}?tab=users" class="btn light">← Back to Users</a>
+
     </div>
     {% if messages %}
     <div class="messages mb-3">
@@ -48,7 +48,7 @@
                             <p class="text-muted small mb-1">Leave blank to keep current password.</p>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input type="password" name="password" id="id_password" class="form-control" placeholder="New password" style="flex:1;">
-                                <button type="button" class="btn light sm" onclick="document.getElementById('id_password').value=''" title="Clear">✕</button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('id_password').value=''" title="Clear">✕</button>
                             </div>
                         </div>
                         {% else %}
@@ -95,10 +95,10 @@
                 <div class="card mb-4">
                     <div class="card-header" style="padding: 16px 20px; border-bottom: 1px solid var(--border); font-weight: 600;">Groups</div>
                     <div style="padding: 16px 20px;">
-                        <div class="group-admin-create mb-3">
+                        {% if perms.inventory.manage_groups %}<div class="group-admin-create mb-3">
                             <input form="group-create-form" type="text" name="name" class="form-control" placeholder="New group name (example: Material Handler)">
-                            <button form="group-create-form" type="submit" class="btn primary sm">Add Group</button>
-                        </div>
+                            <button form="group-create-form" type="submit" class="btn btn-primary btn-sm">Add Group</button>
+                        </div>{% endif %}
                         {% if all_groups %}
                         <div class="group-grid">
                             {% for g in all_groups %}
@@ -110,18 +110,18 @@
                             </label>
                             {% endfor %}
                         </div>
-                        <div class="group-admin-list mt-3">
-                            <p class="text-muted small mb-2">Rename groups, edit their permissions, or delete them here. Renaming keeps every user assignment and permission attached to the group.</p>
+                        {% if perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<div class="group-admin-list mt-3">
+                            <p class="text-muted small mb-2">Manage this group only with your delegated group permissions.</p>
                             {% for g in all_groups %}
                             <div class="group-admin-row">
-                                <label class="sr-only" for="group-name-{{ g.pk }}">Group name</label>
+                                {% if perms.inventory.manage_groups %}<label class="sr-only" for="group-name-{{ g.pk }}">Group name</label>
                                 <input id="group-name-{{ g.pk }}" form="group-rename-form-{{ g.pk }}" type="text" name="name" value="{{ g.name }}" class="form-control group-name-input" required maxlength="150">
-                                <button form="group-rename-form-{{ g.pk }}" type="submit" class="btn secondary sm">Rename</button>
-                                <a href="{% url 'group_permissions' g.pk %}" class="btn light sm">Edit Permissions</a>
-                                <button form="group-delete-form-{{ g.pk }}" type="submit" class="btn danger sm" onclick="return confirm('Delete group {{ g.name|escapejs }}? Users in this group will keep their accounts, but lose this group assignment.');">Delete</button>
+                                <button form="group-rename-form-{{ g.pk }}" type="submit" class="btn btn-warning btn-sm">Rename</button>{% endif %}
+                                {% if perms.inventory.manage_group_permissions %}<a href="{% url 'group_permissions' g.pk %}" class="btn btn-warning btn-sm">Edit Permissions</a>{% endif %}
+                                {% if perms.inventory.manage_groups %}<button form="group-delete-form-{{ g.pk }}" type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete group {{ g.name|escapejs }}? Users in this group will keep their accounts, but lose this group assignment.');">Delete</button>{% endif %}
                             </div>
                             {% endfor %}
-                        </div>
+                        </div>{% endif %}
                         {% else %}
                         <p class="text-muted small mb-0">No groups yet. Add the first group above.</p>
                         {% endif %}
@@ -151,62 +151,32 @@
             </div>
         </div>
 
-        <div class="d-flex justify-content-end gap-2 pt-3 border-top mb-4">
-            <button type="submit" class="btn primary">
+        <div class="actions form-actions">
+            <button type="submit" class="btn btn-primary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1" style="width:16px;height:16px;"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
                 {% if user_obj %}Save Changes{% else %}Create User{% endif %}
             </button>
-            <a href="{% url 'settings' %}?tab=users" class="btn secondary">Cancel</a>
+            <a href="{% url 'settings' %}?tab=users" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 
-    <form id="group-create-form" method="post" action="{% url 'group_create' %}">
+    {% if perms.inventory.manage_groups %}<form id="group-create-form" method="post" action="{% url 'group_create' %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-    </form>
+    </form>{% endif %}
     {% for g in all_groups %}
-    <form id="group-rename-form-{{ g.pk }}" method="post" action="{% url 'group_rename' g.pk %}">
+    {% if perms.inventory.manage_groups %}<form id="group-rename-form-{{ g.pk }}" method="post" action="{% url 'group_rename' g.pk %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
     </form>
     <form id="group-delete-form-{{ g.pk }}" method="post" action="{% url 'group_delete' g.pk %}">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
-    </form>
+    </form>{% endif %}
     {% endfor %}
 </div>
 
 <style>
-.form-label { display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; }
-.form-control {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    background: var(--bg);
-    color: var(--ink);
-    box-sizing: border-box;
-}
-.form-control:focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
-input[type="text"], input[type="email"], input[type="password"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    font-size: 14px;
-    background: var(--bg);
-    color: var(--ink);
-    box-sizing: border-box;
-}
-input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focus {
-    outline: none;
-    border-color: var(--primary);
-    box-shadow: var(--focus-ring);
-}
-.text-danger { color: #ef4444; }
-.text-muted { color: var(--muted); }
-
 .toggle-label {
     display: flex;
     align-items: center;
@@ -266,29 +236,6 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="password"]:focu
     border-color: var(--primary);
 }
 .group-chip input:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.permission-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.75rem;
-}
-.permission-set {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 0.75rem;
-    margin: 0;
-}
-.permission-set legend { font-weight: 700; padding: 0 0.35rem; font-size: 0.85rem; }
-.permission-chip {
-    display: flex;
-    gap: 0.45rem;
-    align-items: flex-start;
-    padding: 0.25rem 0;
-    font-size: 0.84rem;
-    cursor: pointer;
-}
-.permission-chip span { line-height: 1.25; }
-.permission-chip input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--primary); margin-top: 2px; }
 
 @media (max-width: 768px) {
     .status-toggles { flex-direction: column; }

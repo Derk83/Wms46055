@@ -42,6 +42,10 @@ urlpatterns = [
     path("receiving-tickets/<int:pk>/print/", views.receiving_ticket_print, name="receiving_ticket_print"),
     path("receiving-tickets/<int:pk>/edit/", views.receiving_ticket_edit, name="receiving_ticket_edit"),
     path("receiving-tickets/<int:pk>/delete/", views.receiving_ticket_delete, name="receiving_ticket_delete"),
+    # Batch adjustment is intentionally separate from selection-based bulk edit.
+    path("inventory/batch-adjust/", views.bulk_adjust, name="batch_adjust"),
+    path("inventory/bulk-edit/", views.inventory_bulk_edit, name="inventory_bulk_edit"),
+    # Compatibility name retained for existing bookmarks and integrations.
     path("inventory/bulk-edit/", views.inventory_bulk_edit, name="bulk_adjust"),
     path("qr-codes/", views.qr_codes, name="qr_codes"),
     path("qr-codes/app/", views.app_qr_code, name="app_qr_code"),

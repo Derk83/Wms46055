@@ -2,11 +2,7 @@
 {% load static %}
 {% block content %}
 <script src="{% static 'inventory/js/vendor/html5-qrcode.min.js' %}" type="text/javascript"></script>
-{% if is_edit and ticket.pk %}
-<h1>Edit Pick Ticket {{ ticket.ticket_number }}</h1>
-{% else %}
-<h1>New Pick Ticket</h1>
-{% endif %}
+<div class="page-header"><h1>{% if is_edit and ticket.pk %}Edit Pick Ticket {{ ticket.ticket_number }}{% else %}New Pick Ticket{% endif %}</h1></div>
 <form method="post" class="card">
   {% csrf_token %}
   <section aria-labelledby="ticket-details-heading">
@@ -77,7 +73,7 @@
               <td>
                 {% for hidden in line_form.hidden_fields %}{% if hidden.name != 'scan_code' %}{{ hidden }}{% endif %}{% endfor %}
                 {{ line_form.scan_code }}
-                <button type="button" class="btn light scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
+                <button type="button" class="btn btn-info scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
                 <div class="scan-status" aria-live="polite"></div>
                 {% if line_form.non_field_errors %}<div class="negative">{{ line_form.non_field_errors }}</div>{% endif %}
                 {% for error in line_form.scan_code.errors %}<div class="negative">{{ error }}</div>{% endfor %}
@@ -91,7 +87,7 @@
               <td>{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
               <td>
                 {% if line_form.instance.pk %}
-                  <label class="btn light" style="padding: 4px 8px; font-size: 0.8rem;">{{ line_form.DELETE }} Remove</label>
+                  <label class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">{{ line_form.DELETE }} Remove</label>
                 {% endif %}
               </td>
             </tr>
@@ -102,7 +98,7 @@
     <div id="ticket-scanner-panel" class="ticket-scanner-panel" hidden>
       <div class="ticket-scanner-toolbar">
         <strong>Scan barcode / QR code</strong>
-        <button type="button" class="btn light" id="ticketScannerClose">Close</button>
+        <button type="button" class="btn btn-secondary" id="ticketScannerClose">Close</button>
       </div>
       <div id="ticket-camera-reader" class="ticket-camera-reader"></div>
       <pre id="ticketScannerResult" class="ticket-scanner-result">Camera starting…</pre>
@@ -112,7 +108,7 @@
         <tr class="line-row">
           <td>
             {{ formset.empty_form.scan_code }}
-            <button type="button" class="btn light scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
+            <button type="button" class="btn btn-info scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
             <div class="scan-status" aria-live="polite"></div>
           </td>
           <td>
@@ -127,16 +123,16 @@
     </table>
     {% if formset.non_form_errors %}<div class="negative" style="margin-top: 0.5rem;">{{ formset.non_form_errors }}</div>{% endif %}
     <div class="actions" style="margin-top: 1rem; display: flex; gap: 8px; flex-wrap: wrap;">
-      <button class="btn" type="submit">{% if is_edit and ticket.pk %}Update Ticket{% else %}Submit Pick Ticket{% endif %}</button>
-      <a class="btn light" href="{% url 'ticket_list' %}">Cancel</a>
-      <button class="btn light" type="button" id="add-line" style="background: #e5e7eb; color: #374151;">+ Add Another Item</button>
+      <button class="btn btn-primary" type="submit">{% if is_edit and ticket.pk %}Update Ticket{% else %}Submit Pick Ticket{% endif %}</button>
+      <a class="btn btn-secondary" href="{% url 'ticket_list' %}">Cancel</a>
+      <button class="btn btn-secondary" type="button" id="add-line">+ Add Another Item</button>
     </div>
 </form>
 {% if is_edit and ticket.pk %}
 <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="margin-top: 1rem;">
   {% csrf_token %}
   <input type="hidden" name="status" value="{{ ticket.Status.CLOSED }}">
-  <button class="btn light" type="submit">Mark Completed</button>
+  <button class="btn btn-success" type="submit">Mark Closed/Delivered</button>
 </form>
 {% endif %}
 <style>
@@ -206,25 +202,7 @@
 <script>
   let ticketScanner = null;
   let activeScanRow = null;
-  function playTicketScanBeep() {
-    try {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-      gain.gain.setValueAtTime(0.001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.start();
-      oscillator.stop(ctx.currentTime + 0.16);
-      setTimeout(() => ctx.close(), 260);
-    } catch (error) {}
-  }
+  function playTicketScanBeep() { window.WMSScanner.successBeep(); }
   function attachScanLookup(row) {
     const input = row.querySelector('input[name$="-scan_code"]');
     if (!input || input.dataset.scanLookupReady === '1') return;

@@ -1,18 +1,19 @@
 {% extends "inventory/base.html" %}
 {% load static %}
-{% block title %}QR Codes - Warehouse{% endblock %}
+{% block title %}Label &amp; QR Tools - Warehouse{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1>QR Codes</h1>
-  <div class="actions">
-    <a href="{% url 'location_list' %}" class="btn light">View All Locations</a>
-    <a href="{% url 'app_qr_code' %}" class="btn light">📱 App QR</a>
-    <a href="{% url 'inventory_new' %}" class="btn light">Add New Item</a>
-    <a href="{% url 'inventory_list' %}" class="btn light">Back to Inventory</a>
-  </div>
+  <div><h1>Label &amp; QR Tools</h1><div class="meta">Choose the specific code or label you need.</div></div>
+  <div class="actions"><a href="{% url 'inventory_list' %}" class="btn btn-secondary">Back to Inventory</a></div>
 </div>
 
-<div class="card">
+<div class="grid">
+  {% if perms.inventory.manage_item_barcodes %}<div class="card"><h2>Item Barcode</h2><p>Choose an inventory item, then use its Barcode action to generate and print the item label.</p><a href="{% url 'inventory_list' %}" class="btn btn-primary">Choose Item</a></div>{% endif %}
+  {% if perms.inventory.view_qr_codes %}<div class="card"><h2>Location Labels</h2><p>Print a QR label for a warehouse rack, section, and bin.</p><a href="#location-labels" class="btn btn-info">Browse Location Labels</a></div>{% endif %}
+  {% if perms.inventory.view_app_qr_code %}<div class="card"><h2>App QR</h2><p>Print the QR code that opens the warehouse app.</p><a href="{% url 'app_qr_code' %}" class="btn btn-info">Open App QR</a></div>{% endif %}
+</div>
+
+{% if perms.inventory.view_qr_codes %}<div class="card" id="location-labels">
   <div class="card-header">
     <strong>📍 Location QR Codes — Print &amp; place at each bin</strong>
     <span class="badge">{{ location_qrs|length }} total</span>
@@ -27,7 +28,7 @@
         </a>
         <div class="qr-label"><strong>{{ lq.key }}</strong></div>
         <div class="qr-count">{{ lq.item_count }} item{{ lq.item_count|pluralize }}</div>
-        <button type="button" class="btn sm light qr-print-btn"
+        <button type="button" class="btn btn-info btn-sm qr-print-btn"
                 onclick="printQrCard('{{ lq.key|escapejs }}', '{{ lq.qr_b64 }}')">
           🖨️ Print
         </button>
@@ -35,7 +36,7 @@
       {% endfor %}
     </div>
   </div>
-</div>
+</div>{% endif %}
 
 <div id="qrPrintArea"></div>
 

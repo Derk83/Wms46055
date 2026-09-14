@@ -4,8 +4,8 @@
 <div class="page-header">
   <h1>Receiving Log</h1>
   <div class="actions">
-    <a href="{% url 'receiving' %}" class="btn secondary">New Receiving</a>
-    <a href="{% url 'export_inventory_xlsx' %}" class="btn secondary">Export Inventory (.xlsx)</a>
+    {% if perms.inventory.receive_stock %}<a href="{% url 'receiving' %}" class="btn secondary">New Receiving</a>{% endif %}
+    {% if perms.inventory.export_inventory %}<a href="{% url 'export_center' %}" class="btn secondary">Export Center</a>{% endif %}
   </div>
 </div>
 <!-- Filters -->
@@ -112,11 +112,9 @@
           <td>{{ ticket.total_quantity|default:0 }}</td>
           <td>{{ ticket.created_by.username }}</td>
           <td>
-            <a href="{% url 'receiving_ticket_print' ticket.pk %}" class="btn sm light" target="_blank">Print</a>
-            {% if request.user.is_staff or request.user.is_superuser %}
-            <a href="{% url 'receiving_ticket_edit' ticket.pk %}" class="btn sm">Edit</a>
-            <a href="{% url 'receiving_ticket_delete' ticket.pk %}" class="btn sm danger">Remove</a>
-            {% endif %}
+            {% if perms.inventory.print_receivingticket %}<a href="{% url 'receiving_ticket_print' ticket.pk %}" class="btn sm light" target="_blank" rel="noopener">Print</a>{% endif %}
+            {% if perms.inventory.change_receivingticket %}<a href="{% url 'receiving_ticket_edit' ticket.pk %}" class="btn sm">Edit</a>{% endif %}
+            {% if perms.inventory.delete_receivingticket %}<a href="{% url 'receiving_ticket_delete' ticket.pk %}" class="btn sm danger">Remove</a>{% endif %}
           </td>
         </tr>
         {% endfor %}

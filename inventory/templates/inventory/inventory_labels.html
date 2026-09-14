@@ -1,11 +1,9 @@
 {% extends "inventory/base.html" %}
-{% block title %}Print Labels - {{ item.name }} - Warehouse{% endblock %}
+{% block title %}Item Barcode Label - {{ item.name }} - Warehouse{% endblock %}
 {% block content %}
 <div class="page-header">
-  <h1>Print Barcode / QR Labels</h1>
-  <div class="actions">
-    <a href="{% url 'qr_codes' %}" class="btn light">Back to QR Codes</a>
-  </div>
+  <h1>Item Barcode Label</h1>
+
 </div>
 <div class="label-page">
   <div class="print-header">
@@ -28,7 +26,7 @@
   </div>
   <div class="print-actions no-print">
     <button class="btn" onclick="window.print()">Print Label</button>
-    <a href="{% url 'qr_codes' %}" class="btn light">Done</a>
+    <a href="{% url 'item_detail' item.pk %}" class="btn light">Done</a>
   </div>
 </div>
 <style>

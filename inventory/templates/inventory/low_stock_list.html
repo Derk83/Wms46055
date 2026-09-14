@@ -1,9 +1,11 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
+<div class="page-header">
 <h1>Low / Negative Stock</h1>
 <div class="actions">
-  <a class="btn light" href="{% url 'inventory_list' %}">All Inventory</a>
-  <a class="btn" href="{% url 'export_inventory_csv' %}">Export Inventory CSV</a>
+  <a class="btn btn-secondary" href="{% url 'inventory_list' %}">All Inventory</a>
+  {% if perms.inventory.export_inventory %}<a class="btn btn-info" href="{% url 'export_center' %}">Export Center</a>{% endif %}
+</div>
 </div>
 <div class="card">
 <div class="table-responsive">
@@ -17,7 +19,7 @@
     <td class="{% if item.quantity_on_hand < 0 %}negative{% else %}low{% endif %}">{{ item.quantity_on_hand }}</td>
     <td>{{ item.low_stock_threshold }}</td>
     <td>{{ item.building_room }} {{ item.storage_location }}</td>
-    <td><a href="{% url 'receive_stock' item.pk %}">Receive</a> · <a href="{% url 'inventory_edit' item.pk %}">Edit</a></td>
+    <td>{% if perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}">Receive Stock</a>{% endif %}{% if perms.inventory.receive_stock and perms.inventory.change_inventoryitem %} · {% endif %}{% if perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}">Edit</a>{% endif %}</td>
   </tr>
   {% empty %}<tr><td colspan="7">No low or negative stock right now.</td></tr>{% endfor %}
 </table>

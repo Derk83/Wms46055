@@ -1,12 +1,17 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
-<div class="card">
-  <div class="actions no-print">
-    <a class="btn" href="{% url 'ticket_edit' ticket.pk %}">Edit Pick Ticket</a>
-    <a class="btn light" href="{% url 'ticket_print' ticket.pk %}" target="_blank">Print Ticket</a>
-    <a class="btn light" href="{% url 'ticket_create' %}">New Pick Ticket</a>
-  </div>
+<div class="page-header">
   <h1>Pick Ticket {{ ticket.ticket_number }}</h1>
+  <div class="actions no-print">
+    {% if linked_request %}
+      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' linked_request.pk %}">Open Material Request</a>{% endif %}
+      {% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn btn-warning" href="{% url 'material_request_edit' linked_request.pk %}">Edit Material Request</a>{% endif %}
+    {% elif perms.inventory.change_pickticket %}<a class="btn btn-warning" href="{% url 'ticket_edit' ticket.pk %}">Edit Pick Ticket</a>{% endif %}
+    {% if perms.inventory.print_pickticket %}<a class="btn btn-info" href="{% url 'ticket_print' ticket.pk %}" target="_blank" rel="noopener">Print Ticket</a>{% endif %}
+    {% if perms.inventory.add_pickticket %}<a class="btn btn-primary" href="{% url 'ticket_create' %}">New Pick Ticket</a>{% endif %}
+  </div>
+</div>
+<div class="card">
   <div class="grid">
     <p><strong>Status:</strong><br><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></p>
     <p><strong>Date:</strong><br>{{ ticket.date }}</p>
@@ -25,28 +30,33 @@
     {% endfor %}
   </table>
   </div>
-  <div class="actions no-print" style="margin-top:20px;">
-    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
-      {% csrf_token %}
-      <input type="hidden" name="status" value="OPEN">
-      <button class="btn {% if ticket.status == 'OPEN' %}secondary{% else %}light{% endif %}" type="submit">Open</button>
-    </form>
-    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
-      {% csrf_token %}
-      <input type="hidden" name="status" value="PICKED">
-      <button class="btn {% if ticket.status == 'PICKED' %}secondary{% else %}light{% endif %}" type="submit">Mark Picked</button>
-    </form>
-    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
-      {% csrf_token %}
-      <input type="hidden" name="status" value="RECEIVED">
-      <button class="btn {% if ticket.status == 'RECEIVED' %}secondary{% else %}light{% endif %}" type="submit">Ready for Delivery</button>
-    </form>
-    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" style="display:inline;">
-      {% csrf_token %}
-      <input type="hidden" name="status" value="CLOSED">
-      <button class="btn danger" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Closed/Delivered</button>
-    </form>
-    <a class="btn danger" href="{% url 'ticket_delete' ticket.pk %}" style="margin-left: 8px;" onclick="return confirm('Delete this ticket? This will restore picked quantities to inventory.')">Delete Ticket</a>
+
+  {% if perms.inventory.change_pickticket %}
+  <div class="actions no-print" style="margin-top:20px;"{% if ticket.status == 'OPEN' %} data-next-status="PICKED"{% elif ticket.status == 'PICKED' %} data-next-status="RECEIVED"{% elif ticket.status == 'RECEIVED' %} data-next-status="CLOSED"{% endif %}>
+    {% if ticket.status == 'OPEN' %}
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="PICKED"><button class="btn btn-success" type="submit">Mark Picked</button></form>
+    {% elif ticket.status == 'PICKED' %}
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="RECEIVED"><button class="btn btn-success" type="submit">Ready for Delivery</button></form>
+    {% elif ticket.status == 'RECEIVED' %}
+    <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="CLOSED"><button class="btn btn-success" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Mark Closed/Delivered</button></form>
+    {% endif %}
+
+    <details class="secondary-status-actions">
+      <summary class="btn btn-secondary">Other status changes</summary>
+      <div class="actions" style="margin-top:8px;">
+        {% if ticket.status != 'OPEN' %}<form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="OPEN"><button class="btn btn-secondary" type="submit">Reopen</button></form>{% endif %}
+        {% if ticket.status != 'PICKED' and ticket.status != 'OPEN' %}<form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="PICKED"><button class="btn btn-secondary" type="submit">Mark Picked</button></form>{% endif %}
+        {% if ticket.status != 'RECEIVED' and ticket.status != 'PICKED' %}<form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="RECEIVED"><button class="btn btn-secondary" type="submit">Ready for Delivery</button></form>{% endif %}
+        {% if ticket.status != 'CLOSED' and ticket.status != 'RECEIVED' %}<form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="CLOSED"><button class="btn btn-secondary" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Mark Closed/Delivered</button></form>{% endif %}
+      </div>
+    </details>
   </div>
+  {% endif %}
+
+  {% if perms.inventory.delete_pickticket and not linked_request %}
+  <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+    <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}" onclick="return confirm('Delete this ticket? This will restore picked quantities to inventory.')">Delete Ticket</a>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

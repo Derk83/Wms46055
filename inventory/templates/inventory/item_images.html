@@ -9,7 +9,7 @@
     <p class="subtitle">{{ item.name }}</p>
 </div>
 
-<div class="card">
+{% if perms.inventory.change_inventoryitem %}<div class="card">
     <h2>Add Image</h2>
     <form method="post" enctype="multipart/form-data" action="{% url 'item_image_add' item.pk %}" class="form">
         {% csrf_token %}
@@ -29,7 +29,7 @@
         </div>
         <button type="submit" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Upload</button>
     </form>
-</div>
+</div>{% endif %}
 
 <div class="card">
     <h2>Gallery</h2>
@@ -44,11 +44,11 @@
                 {% if img.is_primary %}<span class="badge badge-primary">Primary</span>{% endif %}
                 {% if img.caption %}<p>{{ img.caption }}</p>{% endif %}
                 <p class="muted">Uploaded {{ img.uploaded_at|date:"Y-m-d H:i" }}</p>
-                <form method="post" action="{% url 'item_image_delete' item.pk img.pk %}" class="inline-form"
+                {% if perms.inventory.change_inventoryitem %}<form method="post" action="{% url 'item_image_delete' item.pk img.pk %}" class="inline-form"
                       onsubmit="return confirm('Delete this image?');">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger btn-sm"><i class="fa-solid fa-trash"></i> Delete</button>
-                </form>
+                </form>{% endif %}
             </div>
         </div>
         {% endfor %}

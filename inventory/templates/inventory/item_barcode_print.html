@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page-header no-print">
   <div><h1>Item Barcode</h1><p class="subtitle">{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</p></div>
-  <div class="actions"><a class="btn light" href="{% url 'item_detail' item.pk %}">Back</a><button class="btn accent" onclick="window.print()">Print Barcode</button></div>
+  <div class="actions"><a class="btn btn-secondary" href="{% url 'item_detail' item.pk %}">Back</a><button class="btn btn-info" onclick="window.print()">Print Barcode</button></div>
 </div>
 <section class="barcode-sheet">
   <article class="barcode-label">

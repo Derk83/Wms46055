@@ -2,12 +2,12 @@
 {% load static %}
 {% block content %}
 <script src="{% static 'inventory/js/vendor/html5-qrcode.min.js' %}" type="text/javascript"></script>
-<div class="page-header"><div><h1>Assign Existing UPC</h1><p class="subtitle">{{ item.part_number }} · {{ item.name }}</p></div><a class="btn light" href="{% url 'item_detail' item.pk %}">Cancel</a></div>
+<div class="page-header"><div><h1>Assign Existing UPC</h1><p class="subtitle">{{ item.part_number }} · {{ item.name }}</p></div><div class="actions"><a class="btn btn-secondary" href="{% url 'item_detail' item.pk %}">Cancel</a></div></div>
 <div class="card upc-card">
   <p>Scan the UPC already printed on this item, or enter it manually. Saving replaces the item's current barcode value.</p>
   <div id="upc-reader"></div>
-  <button type="button" class="btn light" id="start-upc-scan">Start Camera</button>
-  <form method="post" class="form-stack">{% csrf_token %}<div class="form-group"><label for="barcode_value">UPC / barcode</label><input id="barcode_value" name="barcode_value" value="{{ item.barcode_value|default_if_none:'' }}" inputmode="numeric" autocomplete="off" maxlength="160" required></div><button class="btn accent" type="submit">Save UPC</button></form>
+  <button type="button" class="btn btn-info" id="start-upc-scan">Start Camera</button>
+  <form method="post" class="form-stack">{% csrf_token %}<div class="form-group"><label for="barcode_value">UPC / barcode</label><input id="barcode_value" name="barcode_value" value="{{ item.barcode_value|default_if_none:'' }}" inputmode="numeric" autocomplete="off" maxlength="160" required></div><button class="btn btn-primary" type="submit">Save UPC</button></form>
 </div>
 <style>.upc-card{max-width:680px}.upc-card form{margin-top:18px}#upc-reader{width:100%;max-width:520px;min-height:240px;margin:14px 0;border:1px solid var(--border);border-radius:12px;overflow:hidden}</style>
 <script>

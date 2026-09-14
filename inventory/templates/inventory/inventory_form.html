@@ -1,7 +1,7 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
+<div class="page-header"><h1>{% if item %}Edit {{ item.name }}{% else %}Add Inventory Item{% endif %}</h1></div>
 <div class="card">
-  <h1>{% if item %}Edit {{ item.name }}{% else %}Add Inventory Item{% endif %}</h1>
   <form method="post">
     {% csrf_token %}
     <div class="form-row">
@@ -95,8 +95,8 @@
       </div>
     </div>
     <div class="actions">
-      <button class="btn" type="submit">Save</button>
-      <a class="btn light" href="{% url 'inventory_list' %}">Cancel</a>
+      <button class="btn btn-primary" type="submit">Save</button>
+      {% if item %}<a class="btn btn-secondary" href="{% url 'item_detail' item.pk %}">Cancel</a>{% else %}<a class="btn btn-secondary" href="{% url 'inventory_list' %}">Cancel</a>{% endif %}
     </div>
   </form>
 </div>

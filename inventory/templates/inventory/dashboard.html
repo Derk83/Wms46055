@@ -15,7 +15,7 @@
     <strong>{{ total_active_items }} / {{ total_items }}</strong>
     <small>View inventory →</small>
   </a>
-  <a href="{% url 'inventory_list' %}" class="stat dashboard-stat-link accent">
+  <a href="{% url 'inventory_list' %}" class="stat dashboard-stat-link accent dashboard-mobile-hide">
     <span>Total Qty On Hand</span>
     <strong>{{ total_qty_on_hand }}</strong>
     <small>View inventory →</small>
@@ -25,7 +25,7 @@
     <strong>{{ below_reorder }}</strong>
     <small>Review low stock →</small>
   </a>
-  <a href="{% url 'inventory_list' %}?stock=zero" class="stat dashboard-stat-link danger">
+  <a href="{% url 'inventory_list' %}?stock=zero" class="stat dashboard-stat-link danger dashboard-mobile-hide">
     <span>Zero Stock</span>
     <strong>{{ zero_stock_items }}</strong>
     <small>Review zero stock →</small>
@@ -35,11 +35,11 @@
     <strong>{{ negative_count }}</strong>
     <small>Review adjustments →</small>
   </a>
-  <a href="{% url 'ticket_list' %}" class="stat dashboard-stat-link ok">
+  {% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_list' %}" class="stat dashboard-stat-link ok">
     <span>Open Tickets</span>
     <strong>{{ open_ticket_count }} <small>({{ draft_ticket_count }} draft, {{ picked_ticket_count }} picked)</small></strong>
     <small>View tickets →</small>
-  </a>
+  </a>{% endif %}
 </div>
 {% include "inventory/_dashboard_quick_actions.html" %}
 <!-- Dashboard Grid -->
@@ -126,23 +126,19 @@
             <th>Building/Room</th>
             <th>Status</th>
             <th>Items</th>
-            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for ticket in recent_tickets %}
           <tr>
-            <td><a href="{% url 'ticket_detail' ticket.pk %}" class="fw-bold">{{ ticket.ticket_number }}</a></td>
+            <td>{% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_detail' ticket.pk %}" class="fw-bold">{{ ticket.ticket_number }}</a>{% else %}<strong>{{ ticket.ticket_number }}</strong>{% endif %}</td>
             <td>{{ ticket.date|date:"M d, Y" }}</td>
             <td>{{ ticket.requested_by_name }}</td>
             <td>{{ ticket.picked_by_name|default:"—" }}</td>
             <td>{{ ticket.received_by_name|default:"—" }}</td>
             <td>{{ ticket.building_room|default:"—" }}</td>
-            <td><span class="badge status-{{ ticket.status }}">{{ ticket.get_status_display }}</span></td>
+            <td><span class="badge status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></td>
             <td>{{ ticket.lines.count }}</td>
-            <td class="text-end">
-              <a href="{% url 'ticket_detail' ticket.pk %}" class="btn sm light">View</a>
-            </td>
           </tr>
           {% endfor %}
         </tbody>
@@ -176,13 +172,13 @@
         <tbody>
           {% for rt in recent_receiving %}
           <tr>
-            <td><a href="{% url 'receiving_ticket_print' rt.pk %}" class="fw-bold">{{ rt.ticket_number }}</a></td>
+            <td>{% if perms.inventory.print_receivingticket %}<a href="{% url 'receiving_ticket_print' rt.pk %}" class="fw-bold">{{ rt.ticket_number }}</a>{% else %}<strong>{{ rt.ticket_number }}</strong>{% endif %}</td>
             <td>{{ rt.date|date:"M d, Y" }}</td>
             <td>{{ rt.po_number|default:"—" }}</td>
             <td>{{ rt.received_by_name }}</td>
             <td>{{ rt.lines.count }}</td>
             <td class="text-end">
-              <a href="{% url 'receiving_ticket_print' rt.pk %}" class="btn sm light">Print</a>
+              {% if perms.inventory.print_receivingticket %}<a href="{% url 'receiving_ticket_print' rt.pk %}" class="btn sm light">Print</a>{% endif %}
             </td>
           </tr>
           {% endfor %}
@@ -220,10 +216,10 @@
             </td>
             <td>
               <span class="badge 
-                {% if tx.transaction_type == 'PICK' %}bg-danger
-                {% elif tx.transaction_type == 'RECEIPT' %}bg-success
-                {% elif tx.transaction_type == 'ADJUSTMENT' %}bg-warning text-dark
-                {% else %}bg-secondary{% endif %}">
+                {% if tx.transaction_type == 'PICK' %}transaction-pick
+                {% elif tx.transaction_type == 'RECEIPT' %}transaction-receipt
+                {% elif tx.transaction_type == 'ADJUSTMENT' %}transaction-adjustment
+                {% else %}transaction-other{% endif %}">
                 {{ tx.get_transaction_type_display }}
               </span>
             </td>
@@ -263,7 +259,7 @@
 }
 .dashboard-stat-link { color: var(--ink); text-decoration: none; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
 .dashboard-stat-link:hover { color: var(--ink); text-decoration: none; transform: translateY(-2px); border-color: var(--accent); box-shadow: var(--shadow); }
-.dashboard-stat-link:focus-visible { outline: none; box-shadow: var(--focus); }
+.dashboard-stat-link:focus-visible { outline: none; border-color: var(--accent); box-shadow:var(--focus)!important; }
 .dashboard-stat-link > small:last-child { margin-top: auto; padding-top: 5px; color: var(--muted); font-weight: 800; }
 .stat span {
   font-size: 13px;
@@ -340,7 +336,7 @@
 .quick-action-btn.success svg { color: var(--ok); }
 .quick-action-btn.warn svg { color: var(--warn); }
 .quick-action-btn.accent svg { color: var(--accent); }
-.quick-action-btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.quick-action-btn:focus-visible { outline: none; border-color: var(--accent); box-shadow:var(--focus)!important; }
 .empty-state { text-align: center; padding: 32px 24px; color: var(--muted); }
 .empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5; }
 .empty-state.small { padding: 24px 16px; }
@@ -364,7 +360,7 @@
   .mobile-dashboard-nav span { display: grid; width: 30px; height: 30px; place-items: center; flex: 0 0 auto; border-radius: 8px; background: color-mix(in srgb,var(--accent) 14%,var(--surface-2)); color: var(--accent); font-size: 20px; font-weight: 900; }
   .mobile-dashboard-nav strong { font-size: 13px; }
   .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-  .dashboard-stat-link:nth-child(2), .dashboard-stat-link:nth-child(5) { display: none; }
+  .dashboard-mobile-hide { display: none; }
   .stat { min-width: 0; min-height: 82px; padding: 12px 11px; gap: 3px; }
   .stat strong { font-size: 20px; overflow-wrap: anywhere; }
   .stat span { font-size: 10px; line-height: 1.25; }

@@ -11,7 +11,7 @@
       {% if view_mode == "queue" %}<a class="btn btn-secondary" href="?view=board">View Kanban</a>{% else %}<a class="btn btn-secondary" href="?view=queue">View Work Queue</a>{% endif %}
     {% endif %}
     <a class="btn btn-secondary" href="{% url 'material_request_archive' %}">Request archive</a>
-    <a class="btn btn-primary" href="{% url 'material_request_create' %}">New request</a>
+    {% if perms.inventory.add_materialrequest and perms.inventory.add_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn btn-primary" href="{% url 'material_request_create' %}">New request</a>{% endif %}
   </div>
 </section>
 <form method="get" class="card queue-filters no-print" role="search">

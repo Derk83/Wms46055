@@ -9,9 +9,9 @@
   <div class="actions">
     <a class="btn light" href="{% url 'inventory_list' %}">Back to Inventory</a>
     {% if not request.is_request_portal and perms.inventory.add_pickticket %}<a class="btn" href="{% url 'ticket_create' %}?item={{ item.pk }}">Start Pick Ticket</a>{% endif %}
-    {% if not request.is_request_portal and perms.inventory.receive_stock %}<a class="btn light" href="{% url 'receive_stock' item.pk %}">Adjust Inventory</a>{% endif %}
+    {% if not request.is_request_portal and perms.inventory.receive_stock %}<a class="btn" href="{% url 'receive_stock' item.pk %}" data-action="primary">Receive Stock</a>{% endif %}
     {% if not request.is_request_portal and perms.inventory.view_inventorytransaction %}<a class="btn light" href="{% url 'item_transaction_history' item.pk %}">Transaction History</a>{% endif %}
-    {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a class="btn light" href="{% url 'inventory_edit' item.pk %}">Edit Item</a>{% endif %}
+    {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a class="btn{% if perms.inventory.receive_stock %} light{% endif %}" href="{% url 'inventory_edit' item.pk %}"{% if not perms.inventory.receive_stock %} data-action="primary"{% endif %}>Edit Item</a>{% endif %}
     {% if not request.is_request_portal and perms.inventory.manage_item_barcodes %}<a class="btn light" href="{% url 'item_barcode_print' item.pk %}">Print Barcode</a><a class="btn light" href="{% url 'item_upc_assign' item.pk %}">Scan UPC</a>{% endif %}
   </div>
 </div>
@@ -19,6 +19,12 @@
   <div class="card"><h2>Inventory Level</h2><div class="stat"><strong>{{ item.quantity_on_hand }}</strong><span>{{ item.unit }}</span></div></div>
   <div class="card"><h2>Location</h2><p><strong>Building/Room:</strong> {{ item.building_room|default:"—" }}</p><p><strong>Rack:</strong> {{ item.rack|default:"—" }}</p><p><strong>Section:</strong> {{ item.section|default:"—" }}</p><p><strong>Bin:</strong> {{ item.bin_location|default:"—" }}</p><p><strong>Picker Location:</strong> {{ item.storage_location|default:"—" }}</p></div>
 </div>
+{% if not request.is_request_portal and perms.inventory.view_inventoryitem %}
+<div class="card">
+  <h2>Item Files</h2>
+  <div class="actions"><a class="btn light" href="{% url 'item_images' item.pk %}">Item Images</a><a class="btn light" href="{% url 'item_documents' item.pk %}">Documents</a></div>
+</div>
+{% endif %}
 <div class="card">
   <h2>Recent Transactions</h2>
   <div class="table-responsive"><table><tr><th>Date</th><th>Type</th><th>Qty</th><th>Notes</th></tr>{% for tx in transactions %}<tr><td>{{ tx.created_at }}</td><td>{{ tx.get_transaction_type_display }}</td><td>{{ tx.quantity_delta }}</td><td>{{ tx.notes|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4">No transactions yet.</td></tr>{% endfor %}</table></div>

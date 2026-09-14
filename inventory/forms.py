@@ -106,8 +106,12 @@ DELIVERY_TIME_CHOICES = [("", "Select time")] + [
 class QuarterHourSplitDateTimeWidget(forms.SplitDateTimeWidget):
     def __init__(self, attrs=None):
         super().__init__(attrs=attrs, date_format="%Y-%m-%d", time_format="%H:%M")
-        self.widgets[0] = forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d")
-        self.widgets[1] = forms.Select(choices=DELIVERY_TIME_CHOICES)
+        self.widgets[0] = forms.DateInput(
+            attrs={"type": "date", "aria-label": "Delivery date"}, format="%Y-%m-%d"
+        )
+        self.widgets[1] = forms.Select(
+            attrs={"aria-label": "Delivery time"}, choices=DELIVERY_TIME_CHOICES
+        )
 
     def decompress(self, value):
         if value:
@@ -200,6 +204,17 @@ class MaterialRequestLineForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        raw_index = self.prefix.rsplit("-", 1)[-1] if self.prefix else ""
+        line_label = (
+            "new request line"
+            if raw_index == "__prefix__"
+            else f"request line {int(raw_index) + 1}"
+            if raw_index.isdigit()
+            else "request line"
+        )
+        self.fields["item"].widget.attrs["aria-label"] = f"Item for {line_label}"
+        self.fields["quantity"].widget.attrs["aria-label"] = f"Quantity for {line_label}"
+        self.fields["notes"].widget.attrs["aria-label"] = f"Notes for {line_label}"
         self.fields["quantity"].min_value = 1
         self.fields["quantity"].widget.attrs["min"] = 1
         available = Q(active=True)

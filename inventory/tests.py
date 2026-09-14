@@ -30,7 +30,7 @@ class TicketImprovementTests(TestCase):
         self.assertEqual(response.context["app_url"], "https://bbx.rplwms.com")
 
     def test_groups_settings_page_loads_permissions(self):
-        """Groups page now redirects to user management — verify redirect."""
+        """Legacy groups route redirects to the canonical groups settings tab."""
         manager = Group.objects.create(name="Manager")
         permission = Permission.objects.filter(codename="view_inventoryitem").first()
         if permission:
@@ -39,16 +39,16 @@ class TicketImprovementTests(TestCase):
         response = self.client.get(reverse("group_management"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, reverse("user_management"))
+        self.assertRedirects(response, f"{reverse('settings')}?tab=groups")
 
     def test_groups_page_shows_material_handler_group_when_created(self):
-        """Groups page now redirects to user management — verify redirect."""
+        """Legacy groups route redirects to the canonical groups settings tab."""
         material_handler = Group.objects.create(name="Material Handler")
 
         response = self.client.get(reverse("group_management"))
 
         self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, reverse("user_management"))
+        self.assertRedirects(response, f"{reverse('settings')}?tab=groups")
 
     def test_group_update_uses_only_submitted_group_permission_field(self):
         """Group update now redirects to user management — verify redirect."""
@@ -64,8 +64,8 @@ class TicketImprovementTests(TestCase):
             f"permissions_{lead.pk}": [str(lead_perm.pk)],
         })
 
-        self.assertRedirects(response, reverse("user_management"))
-        # Permissions are no longer updated via group_update — now managed per-user
+        self.assertRedirects(response, f"{reverse('settings')}?tab=groups")
+        # Permissions are no longer updated via group_update — use group permissions.
 
     def test_self_edit_preserves_disabled_status_and_groups(self):
         manager = Group.objects.create(name="Manager")
@@ -139,7 +139,7 @@ class TicketImprovementTests(TestCase):
             "permissions": [str(view_perm.pk)],
         })
 
-        self.assertRedirects(response, reverse("user_management"))
+        self.assertRedirects(response, f"{reverse('settings')}?tab=groups")
         self.assertEqual(set(manager.permissions.values_list("pk", flat=True)), {view_perm.pk})
         self.assertEqual(set(lead.permissions.values_list("pk", flat=True)), {change_perm.pk})
 
@@ -567,7 +567,7 @@ class TicketImprovementTests(TestCase):
         self.assertEqual(delete_response.status_code, 302)
         self.assertNotContains(log_response, reverse("receiving_ticket_edit", args=[rt.pk]))
         self.assertNotContains(log_response, reverse("receiving_ticket_delete", args=[rt.pk]))
-        self.assertContains(log_response, reverse("receiving_ticket_print", args=[rt.pk]))
+        self.assertNotContains(log_response, reverse("receiving_ticket_print", args=[rt.pk]))
 
     def test_receiving_ticket_delete_reverses_inventory_for_admin(self):
         rt = ReceivingTicket.objects.create(po_number="PO-DELETE", created_by=self.user)
@@ -1183,7 +1183,7 @@ class TicketImprovementTests(TestCase):
     def test_item_detail_has_full_item_action_suite(self):
         response = self.client.get(reverse("item_detail", args=[self.item_a.pk]))
         self.assertContains(response, "Start Pick Ticket")
-        self.assertContains(response, "Adjust Inventory")
+        self.assertContains(response, "Receive Stock")
         self.assertContains(response, "Inventory Level")
         self.assertContains(response, "Transaction History")
 

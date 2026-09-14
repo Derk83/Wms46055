@@ -1,36 +1,37 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
-<h1>Pick Tickets</h1>
-<div class="actions"><a class="btn" href="{% url 'ticket_create' %}">New Pick Ticket</a><a class="btn light" href="{% url 'export_tickets_csv' %}">Export CSV</a></div>
+<div class="page-header"><h1>Pick Tickets</h1>
+<div class="actions">{% if perms.inventory.add_pickticket %}<a class="btn btn-primary" href="{% url 'ticket_create' %}">New Pick Ticket</a>{% endif %}{% if perms.inventory.view_pickticket %}<a class="btn btn-info" href="{% url 'export_tickets_csv' %}">Export CSV</a>{% endif %}</div></div>
 <div class="card">
 <form method="get" class="actions">
   <input type="search" name="q" value="{{ query }}" placeholder="Search tickets by ticket #, name, building, location, part #, or item" aria-label="Search tickets">
-  <select name="status" id="status">
+  <label class="sr-only" for="ticket-status-filter">Ticket status</label>
+  <select name="status" id="ticket-status-filter">
     <option value="">All Statuses</option>
     {% for value, label in status_choices %}
       <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
     {% endfor %}
   </select>
-  <button class="btn" type="submit">Filter</button>
-  {% if query or status %}<a class="btn light" href="{% url 'ticket_list' %}">Clear</a>{% endif %}
+  <button class="btn btn-primary" type="submit">Filter</button>
+  {% if query or status %}<a class="btn btn-secondary" href="{% url 'ticket_list' %}">Clear</a>{% endif %}
 </form>
 {% if query %}<p class="helptext">Showing results for “{{ query }}”.{% if status %} Status: {{ status }}{% endif %}</p>{% endif %}
 <div class="table-responsive">
-<table>
+<table class="responsive-records ticket-records">
 <tr><th>Ticket #</th><th>Date</th><th>Picked By</th><th>Received By</th><th>Requested By</th><th>Status</th><th>Location</th><th>Lines</th><th>Actions</th></tr>
 {% for ticket in tickets %}
-<tr>
-  <td><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.ticket_number }}</a></td>
-  <td>{{ ticket.date }}</td><td>{{ ticket.picked_by_name }}</td><td>{{ ticket.received_by_name }}</td><td>{{ ticket.requested_by_name }}</td>
-  <td><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></td>
-  <td>{{ ticket.building_room }} {{ ticket.location }}</td>
-  <td>{{ ticket.lines.count }}</td>
-  <td class="actions-cell">
-    <a href="{% url 'ticket_edit' ticket.pk %}" class="btn sm light">Edit</a>
-    <a href="{% url 'ticket_print' ticket.pk %}" class="btn sm light" target="_blank">Print</a>
+<tr class="responsive-record-card">
+  <td data-label="Ticket #"><a href="{% url 'ticket_detail' ticket.pk %}">{{ ticket.ticket_number }}</a></td>
+  <td data-label="Date">{{ ticket.date }}</td><td data-label="Picked by">{{ ticket.picked_by_name }}</td><td data-label="Received by">{{ ticket.received_by_name }}</td><td data-label="Requested by">{{ ticket.requested_by_name }}</td>
+  <td data-label="Status"><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></td>
+  <td data-label="Location">{{ ticket.building_room }} {{ ticket.location }}</td>
+  <td data-label="Lines">{{ ticket.lines.count }}</td>
+  <td class="actions-cell" data-label="Actions">
+    {% if perms.inventory.change_pickticket %}<a href="{% url 'ticket_edit' ticket.pk %}" class="btn btn-warning btn-sm">Edit</a>{% endif %}
+    {% if perms.inventory.print_pickticket %}<a href="{% url 'ticket_print' ticket.pk %}" class="btn btn-info btn-sm" target="_blank" rel="noopener">Print</a>{% endif %}
   </td>
 </tr>
-{% empty %}<tr><td colspan="9">No pick tickets yet.</td></tr>{% endfor %}
+{% empty %}<tr><td colspan="9" class="responsive-record-empty">No pick tickets yet.</td></tr>{% endfor %}
 </table>
 </div>
 </div>

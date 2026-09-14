@@ -83,4 +83,4 @@ def test_dashboard_quick_actions_contains_resume_work_tile(client):
     html = response.content.decode()
     assert f'href="{reverse("recently_viewed")}"' in html
     assert "Resume Work" in html
-    assert html.count('class="quick-action-btn') == 7
+    assert html.count('class="quick-action-btn') == 2
