@@ -50,7 +50,7 @@ class InventoryMoreChangesTests(TestCase):
     def test_inventory_page_has_fb_part_number_without_removed_columns(self):
         response = self.client.get(reverse("inventory_list"))
 
-        self.assertContains(response, '<th class="fb-col">FB Part #</th>', html=False)
+        self.assertContains(response, '<th class="fb-col" data-column="fb">FB Part #</th>', html=False)
         self.assertContains(response, "FB-9001")
         self.assertNotContains(response, '<th class="shipper-col">Shipper</th>', html=False)
         self.assertNotContains(response, 'data-label="Shipper"', html=False)

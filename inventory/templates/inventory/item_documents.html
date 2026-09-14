@@ -42,7 +42,7 @@
             <tr>
                 <td><i class="fa-solid fa-file-pdf"></i> {{ doc.original_filename }}</td>
                 <td>{{ doc.description|default:"—" }}</td>
-                <td>{{ doc.uploaded_at|date:"Y-m-d H:i" }}</td>
+                <td>{{ doc.uploaded_at|date:"M j, Y, g:i A" }}</td>
                 <td>
                     <a href="{% url 'serve_item_document' item.pk doc.pk %}" class="btn btn-sm btn-secondary" target="_blank" rel="noopener">
                         <i class="fa-solid fa-download"></i> Download

@@ -105,7 +105,7 @@
             <div class="helptext" style="margin-top: 2px;">{{ ticket.notes }}</div>
             {% endif %}
           </td>
-          <td>{{ ticket.date|date:"M d, Y H:i" }}</td>
+          <td>{{ ticket.date|date:"M j, Y, g:i A" }}</td>
           <td>{{ ticket.po_number|default:"—" }}</td>
           <td>{{ ticket.vendor|default:"—" }}</td>
           <td>{{ ticket.lines.count }}</td>

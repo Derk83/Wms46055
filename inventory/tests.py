@@ -650,7 +650,7 @@ class TicketImprovementTests(TestCase):
 
     def test_inventory_list_name_column_displays_description_and_clicks_to_detail(self):
         response = self.client.get(reverse("inventory_list"))
-        self.assertContains(response, "<th>Name</th>", html=False)
+        self.assertContains(response, '<th data-column="name">Name</th>', html=False)
         self.assertContains(response, f'href="{reverse("item_detail", args=[self.item_a.pk])}"', html=False)
         self.assertContains(response, "Cut resistant gloves")
         self.assertContains(response, "Hard hat helmet")

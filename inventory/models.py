@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
+from django.urls import reverse
 from django.utils import timezone
 from barcode import Code128
 from barcode.writer import ImageWriter
@@ -269,6 +270,9 @@ class InventoryItem(models.Model):
 
     def __str__(self):
         return f"{self.part_number} — {self.name}"
+
+    def get_absolute_url(self):
+        return reverse("item_detail", args=[self.pk])
 
     @property
     def is_low_stock(self):

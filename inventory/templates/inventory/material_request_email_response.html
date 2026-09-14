@@ -11,7 +11,7 @@
   <p>Thank you. The warehouse has been notified about {{ material_request.request_number }}.</p>
 {% else %}
   <h2>{{ material_request.request_number }} is ready for delivery</h2>
-  <p>Scheduled delivery: <strong>{% if material_request.delivery_at %}{{ material_request.delivery_at|date:"M j, Y g:i a" }}{% else %}Not scheduled{% endif %}</strong></p>
+  <p>Scheduled delivery: <strong>{% if material_request.delivery_at %}{{ material_request.delivery_at|date:"M j, Y, g:i A" }}{% else %}Not scheduled{% endif %}</strong></p>
   <form method="post" class="delivery-response-form">
     {% csrf_token %}<input type="hidden" name="token" value="{{ token }}">
     {{ delivery_response_form.non_field_errors }}

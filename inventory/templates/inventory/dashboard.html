@@ -132,7 +132,7 @@
           {% for ticket in recent_tickets %}
           <tr>
             <td>{% if perms.inventory.view_pickticket %}<a href="{% url 'ticket_detail' ticket.pk %}" class="fw-bold">{{ ticket.ticket_number }}</a>{% else %}<strong>{{ ticket.ticket_number }}</strong>{% endif %}</td>
-            <td>{{ ticket.date|date:"M d, Y" }}</td>
+            <td>{{ ticket.date|date:"M j, Y" }}</td>
             <td>{{ ticket.requested_by_name }}</td>
             <td>{{ ticket.picked_by_name|default:"—" }}</td>
             <td>{{ ticket.received_by_name|default:"—" }}</td>
@@ -173,7 +173,7 @@
           {% for rt in recent_receiving %}
           <tr>
             <td>{% if perms.inventory.print_receivingticket %}<a href="{% url 'receiving_ticket_print' rt.pk %}" class="fw-bold">{{ rt.ticket_number }}</a>{% else %}<strong>{{ rt.ticket_number }}</strong>{% endif %}</td>
-            <td>{{ rt.date|date:"M d, Y" }}</td>
+            <td>{{ rt.date|date:"M j, Y" }}</td>
             <td>{{ rt.po_number|default:"—" }}</td>
             <td>{{ rt.received_by_name }}</td>
             <td>{{ rt.lines.count }}</td>
@@ -227,7 +227,7 @@
               {{ tx.quantity_delta|default_if_none:"0"|yesno:"+,-" }}
             </td>
             <td>{{ tx.created_by.username|default:"System" }}</td>
-            <td class="text-nowrap">{{ tx.created_at|date:"M d, Y H:i" }}</td>
+            <td class="text-nowrap">{{ tx.created_at|date:"M j, Y, g:i A" }}</td>
           </tr>
           {% endfor %}
         </tbody>

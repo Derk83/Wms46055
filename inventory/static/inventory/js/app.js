@@ -366,3 +366,188 @@
   document.addEventListener('visibilitychange', schedule);
   schedule();
 })();
+
+/* Shared QoL interactions: list continuity, copy feedback, shortcuts, preferences, and submit safety. */
+(() => {
+  const userScope = document.body.dataset.notificationUser || 'anonymous';
+  const storageScope = `${location.host}:${userScope}`;
+  const announce = (message, kind = 'success') => {
+    const region = document.getElementById('toast-region');
+    if (!region) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${kind}`;
+    toast.textContent = message;
+    region.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 2600);
+  };
+
+  document.addEventListener('click', async (event) => {
+    const deleteButton = event.target.closest('[data-delete-item]');
+    if (deleteButton) {
+      const partNumber = deleteButton.dataset.partNumber || 'this item';
+      if (!window.confirm(`Delete inventory item "${partNumber}"? Its item record will be removed. This cannot be undone.`)) return;
+      const form = document.getElementById('deleteForm');
+      if (!form) return;
+      form.action = `/inventory/${encodeURIComponent(deleteButton.dataset.deleteItem)}/delete/`;
+      form.submit();
+      return;
+    }
+    const button = event.target.closest('[data-copy-text]');
+    if (!button) return;
+    const text = button.dataset.copyText || '';
+    try {
+      await navigator.clipboard.writeText(text);
+      announce(`${button.dataset.copyLabel || 'Value'} copied`);
+    } catch (_) {
+      const helper = document.createElement('textarea');
+      helper.value = text;
+      helper.setAttribute('readonly', '');
+      helper.style.position = 'fixed';
+      helper.style.opacity = '0';
+      document.body.appendChild(helper);
+      helper.select();
+      const copied = document.execCommand('copy');
+      helper.remove();
+      announce(copied ? `${button.dataset.copyLabel || 'Value'} copied` : 'Could not copy value', copied ? 'success' : 'error');
+    }
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const editable = event.target.matches('input, textarea, select, [contenteditable="true"]');
+    const clearableSearch = event.target.matches('#q, input[type="search"], [data-escape-clear]');
+    if (event.key === '/' && !editable && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const search = [...document.querySelectorAll('#q, [role="search"] input[type="search"], input[type="search"]')]
+        .find((field) => field.offsetParent !== null && !field.disabled);
+      if (search) {
+        event.preventDefault();
+        search.focus();
+        search.select();
+      }
+    } else if (event.key === 'Escape' && clearableSearch && event.target.value) {
+      event.preventDefault();
+      event.target.value = '';
+      event.target.dispatchEvent(new Event('input', {bubbles: true}));
+    }
+  });
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target;
+    if (event.defaultPrevented || !(form instanceof HTMLFormElement) || form.method.toLowerCase() === 'get' || form.dataset.noSubmitLock !== undefined || !form.checkValidity()) return;
+    if (form.dataset.submitting === 'true') {
+      event.preventDefault();
+      return;
+    }
+    form.dataset.submitting = 'true';
+    form.classList.add('is-submitting');
+    form.setAttribute('aria-busy', 'true');
+    const submitter = event.submitter;
+    window.setTimeout(() => {
+      if (!submitter) return;
+      submitter.disabled = true;
+      submitter.dataset.originalLabel = submitter.textContent;
+      submitter.textContent = submitter.dataset.loadingLabel || 'Working…';
+    }, 0);
+  });
+
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll('form[data-submitting="true"]').forEach((form) => {
+      delete form.dataset.submitting;
+      form.classList.remove('is-submitting');
+      form.removeAttribute('aria-busy');
+      form.querySelectorAll('[data-original-label]').forEach((submitter) => {
+        submitter.disabled = false;
+        submitter.textContent = submitter.dataset.originalLabel;
+        delete submitter.dataset.originalLabel;
+      });
+    });
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const listForm = document.querySelector('[data-stateful-list]');
+    if (listForm) {
+      const key = listForm.dataset.listKey;
+      const preferenceKey = `wms:${storageScope}:${key}:table`;
+      const stateKey = `wms:${storageScope}:${key}:state`;
+      const params = new URLSearchParams(location.search);
+      let preferences = {};
+      try { preferences = JSON.parse(localStorage.getItem(preferenceKey) || '{}'); } catch (_) {}
+      let preferenceRedirect = false;
+      if (!params.has('rows') && preferences.rows && preferences.rows !== 'all') {
+        params.set('rows', preferences.rows);
+        preferenceRedirect = true;
+      }
+      if (!params.has('sort') && preferences.sort && preferences.sort !== 'part') {
+        params.set('sort', preferences.sort);
+        preferenceRedirect = true;
+      }
+      if (preferenceRedirect) {
+        location.replace(`${location.pathname}?${params.toString()}`);
+        return;
+      }
+      const rows = listForm.querySelector('[name="rows"]');
+      const sort = listForm.querySelector('[name="sort"]');
+      listForm.addEventListener('submit', () => {
+        localStorage.setItem(preferenceKey, JSON.stringify({rows: rows?.value || 'all', sort: sort?.value || 'part'}));
+      });
+
+      const itemNodes = [...document.querySelectorAll('[data-item-id][data-item-url]')];
+      const returnTo = `${location.pathname}${location.search}`;
+      const items = [];
+      const seen = new Set();
+      document.querySelectorAll('[data-item-url]').forEach((node) => {
+        const id = node.dataset.itemId;
+        const link = node.querySelector('.item-detail-link');
+        const url = new URL(link ? link.href : location.href, location.origin);
+        url.searchParams.set('return_to', returnTo);
+        node.dataset.itemUrl = `${url.pathname}${url.search}`;
+        if (id && !seen.has(id)) {
+          seen.add(id);
+          items.push({id, url: node.dataset.itemUrl});
+        }
+        node.querySelectorAll('a.item-detail-link').forEach((link) => { link.href = node.dataset.itemUrl; });
+      });
+      const saveState = () => sessionStorage.setItem(stateKey, JSON.stringify({url: returnTo, scrollY: window.scrollY, items}));
+      document.addEventListener('click', (event) => {
+        if (event.target.closest('[data-item-id], a[href*="/inventory/"]')) saveState();
+      }, true);
+      window.addEventListener('pagehide', saveState);
+      try {
+        const prior = JSON.parse(sessionStorage.getItem(stateKey) || '{}');
+        if (prior.url === returnTo && Number.isFinite(prior.scrollY)) requestAnimationFrame(() => window.scrollTo(0, prior.scrollY));
+      } catch (_) {}
+
+      document.querySelectorAll('[data-column-toggle]').forEach((toggle) => {
+        const columnKey = `wms:${storageScope}:${key}:column:${toggle.dataset.columnToggle}`;
+        const apply = () => document.querySelectorAll(`[data-column="${toggle.dataset.columnToggle}"]`).forEach((cell) => cell.classList.toggle('is-column-hidden', !toggle.checked));
+        toggle.checked = localStorage.getItem(columnKey) !== 'hidden';
+        toggle.addEventListener('change', () => {
+          localStorage.setItem(columnKey, toggle.checked ? 'visible' : 'hidden');
+          apply();
+          announce('Column preference saved');
+        });
+        apply();
+      });
+    }
+
+    const currentItem = document.querySelector('[data-current-item]');
+    if (currentItem) {
+      const stateKey = `wms:${storageScope}:inventory:state`;
+      try {
+        const state = JSON.parse(sessionStorage.getItem(stateKey) || '{}');
+        if (state.url?.startsWith('/inventory/')) document.querySelectorAll('[data-list-back]').forEach((link) => { link.href = state.url; });
+        const index = (state.items || []).findIndex((entry) => entry.id === currentItem.dataset.currentItem);
+        const setNeighbor = (selector, entry) => {
+          const link = document.querySelector(selector);
+          if (!link || !entry) return;
+          const url = new URL(entry.url, location.origin);
+          url.searchParams.set('return_to', state.url || '/inventory/');
+          link.href = `${url.pathname}${url.search}`;
+          link.hidden = false;
+        };
+        setNeighbor('[data-previous-item]', state.items?.[index - 1]);
+        setNeighbor('[data-next-item]', state.items?.[index + 1]);
+      } catch (_) {}
+    }
+  });
+})();

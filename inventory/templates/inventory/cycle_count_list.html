@@ -78,7 +78,7 @@
             <td data-label="Items">{{ cc.total_items }}</td>
             <td data-label="Counted">{{ cc.counted_items }} / {{ cc.total_items }}</td>
             <td data-label="Variance">{{ cc.variance_count }}</td>
-            <td data-label="Created">{{ cc.created_at|date:"Y-m-d H:i" }}</td>
+            <td data-label="Created">{{ cc.created_at|date:"M j, Y, g:i A" }}</td>
             <td data-label="Created by">{{ cc.created_by.get_full_name|default:cc.created_by.username }}</td>
             <td data-label="Actions">
               <a class="btn" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>

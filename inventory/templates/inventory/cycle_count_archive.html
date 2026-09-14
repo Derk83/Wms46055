@@ -62,7 +62,7 @@
             <td data-label="Status"><span class="status-pill status-{{ cc.status }}">{{ cc.get_status_display }}</span></td>
             <td data-label="Items">{{ cc.total_items }}</td>
             <td data-label="Variances">{{ cc.variance_count }}</td>
-            <td data-label="Archived">{{ cc.archived_at|date:"Y-m-d H:i" }}</td>
+            <td data-label="Archived">{{ cc.archived_at|date:"M j, Y, g:i A" }}</td>
             <td data-label="Archived by">{{ cc.archived_by.get_full_name|default:cc.archived_by.username|default:"—" }}</td>
             <td data-label="Actions">
               <a class="btn" href="{% url 'cycle_count_detail' cc.pk %}">Open</a>

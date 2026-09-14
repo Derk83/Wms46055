@@ -777,7 +777,13 @@ def inventory_list(request):
     po_number = request.GET.get("po_number", "").strip()
     category = request.GET.get("category", "").strip()
     stock = request.GET.get("stock", "").strip()
+    data_quality = request.GET.get("data_quality", "").strip()
     sort = request.GET.get("sort", "part")
+    rows = request.GET.get("rows", "all")
+    if rows not in {"25", "50", "100", "all"}:
+        rows = "all"
+    if stock not in {"", "low", "zero", "negative"}:
+        stock = ""
 
     items = InventoryItem.objects.all()
     if query:
@@ -815,6 +821,23 @@ def inventory_list(request):
     elif stock == "negative":
         items = items.filter(quantity_on_hand__lt=0)
 
+    quality_labels = {
+        "missing_fb": "Missing FB Part #",
+        "missing_model": "Missing model number",
+        "missing_location": "Missing location",
+        "inactive": "Inactive items",
+    }
+    if data_quality == "missing_fb":
+        items = items.filter(Q(fb_part_number="") | Q(fb_part_number__isnull=True))
+    elif data_quality == "missing_model":
+        items = items.filter(Q(model_number="") | Q(model_number__isnull=True))
+    elif data_quality == "missing_location":
+        items = items.filter(building_room="", rack="", section="", bin_location="")
+    elif data_quality == "inactive":
+        items = items.filter(active=False)
+    elif data_quality:
+        data_quality = ""
+
     sort_map = {
         "part": "part_number",
         "part_desc": "-part_number",
@@ -828,8 +851,35 @@ def inventory_list(request):
         "bin": "bin_location",
         "updated": "-updated_at",
     }
-    items = items.distinct().order_by(sort_map.get(sort, "part_number"))
-    filters_active = any([query, part_number, fb_part_number, po_number, category, stock])
+    if sort not in sort_map:
+        sort = "part"
+    items = items.distinct().order_by(sort_map[sort])
+    result_count = items.count()
+    page_obj = None
+    if rows != "all":
+        from django.core.paginator import Paginator
+
+        page_obj = Paginator(items, int(rows)).get_page(request.GET.get("page"))
+        items = page_obj.object_list
+
+    active_filters = []
+    if query:
+        active_filters.append(f'Search: "{query}"')
+    if part_number:
+        active_filters.append(f"Part #: {part_number}")
+    if fb_part_number:
+        active_filters.append(f"FB Part #: {fb_part_number}")
+    if po_number:
+        active_filters.append(f"PO #: {po_number}")
+    if category:
+        active_filters.append(f"Category: {category}")
+    if stock:
+        active_filters.append(f"Stock: {stock.title()}")
+    if data_quality:
+        active_filters.append(quality_labels[data_quality])
+    filters_active = bool(active_filters)
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
     return render(
         request,
         "inventory/inventory_list.html",
@@ -842,7 +892,20 @@ def inventory_list(request):
             "category": category,
             "category_choices": CategoryChoices.choices,
             "stock": stock,
+            "data_quality": data_quality,
             "sort": sort,
+            "rows": rows,
+            "result_count": result_count,
+            "active_filters": active_filters,
+            "page_obj": page_obj,
+            "querystring": query_params.urlencode(),
+            "column_choices": [
+                ("fb", "FB Part #"),
+                ("name", "Name"),
+                ("qty", "Quantity"),
+                ("bin", "Bin"),
+                ("actions", "Actions"),
+            ],
             "filters_active": filters_active,
         },
     )
@@ -1591,6 +1654,17 @@ def scan_lookup(request):
 @portal_inventory_access_required
 def item_detail(request, pk):
     item = get_object_or_404(InventoryItem, pk=pk)
+    return_to = request.GET.get("return_to", "")
+    if not (
+        return_to.startswith("/")
+        and not return_to.startswith("//")
+        and url_has_allowed_host_and_scheme(
+            return_to,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+    ):
+        return_to = reverse("inventory_list")
     transactions = _visible_inventory_transactions(
         request,
         item.transactions.select_related("created_by", "pick_ticket"),
@@ -1602,7 +1676,11 @@ def item_detail(request, pk):
         label=f"{item.part_number} — {item.name}",
         url_name="item_detail",
     )
-    return render(request, "inventory/item_detail.html", {"item": item, "transactions": transactions})
+    return render(
+        request,
+        "inventory/item_detail.html",
+        {"item": item, "transactions": transactions, "return_to": return_to},
+    )
 
 
 @login_required
@@ -3680,6 +3758,8 @@ def material_request_assign(request, pk):
     )
     if changed:
         messages.success(request, f"Assignment updated for {material_request.request_number}.")
+    else:
+        messages.info(request, f"{material_request.request_number} was already assigned that way; no change was needed.")
     next_url = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
         next_url = reverse("material_request_board")

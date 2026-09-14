@@ -33,12 +33,12 @@
   </div>
   <div class="summary-tile">
     <span class="summary-tile-label">Created</span>
-    <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.created_at|date:"Y-m-d H:i" }}</span>
+    <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.created_at|date:"M j, Y, g:i A" }}</span>
   </div>
   {% if cycle_count.is_archived %}
   <div class="summary-tile">
     <span class="summary-tile-label">Archived</span>
-    <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %}<br><small style="font-weight:400;color:var(--muted)">by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}</small>{% endif %}</span>
+    <span class="summary-tile-value" style="font-size:14px">{{ cycle_count.archived_at|date:"M j, Y, g:i A" }}{% if cycle_count.archived_by %}<br><small style="font-weight:400;color:var(--muted)">by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}</small>{% endif %}</span>
   </div>
   {% endif %}
 </section>
@@ -152,7 +152,7 @@
   <form method="post" action="{% url 'cycle_count_unarchive_action' cycle_count.pk %}" class="action-row">
     {% csrf_token %}
     <button class="btn" type="submit">Restore to active list</button>
-    <small class="muted">Archived {{ cycle_count.archived_at|date:"Y-m-d H:i" }}{% if cycle_count.archived_by %} by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}{% endif %}. Restoring puts it back on the active cycle counts list.</small>
+    <small class="muted">Archived {{ cycle_count.archived_at|date:"M j, Y, g:i A" }}{% if cycle_count.archived_by %} by {{ cycle_count.archived_by.get_full_name|default:cycle_count.archived_by.username }}{% endif %}. Restoring puts it back on the active cycle counts list.</small>
   </form>
 </div>
 {% endif %}

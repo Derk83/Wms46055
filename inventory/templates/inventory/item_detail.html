@@ -1,13 +1,13 @@
 {% extends "inventory/base.html" %}
 {% block title %}{{ item.name }} - Warehouse{% endblock %}
 {% block content %}
-<div class="page-header">
+<div class="page-header" data-current-item="{{ item.pk }}">
   <div>
     <h1>{{ item.name }}</h1>
     <div class="meta">Part # {{ item.part_number }} · Location {{ item.storage_location|default:"—" }}</div>
   </div>
   <div class="actions">
-    <a class="btn light" href="{% url 'inventory_list' %}">Back to Inventory</a>
+    <a class="btn light" href="{{ return_to }}" data-list-back>Back to Inventory</a>
     {% if not request.is_request_portal and perms.inventory.add_pickticket %}<a class="btn" href="{% url 'ticket_create' %}?item={{ item.pk }}">Start Pick Ticket</a>{% endif %}
     {% if not request.is_request_portal and perms.inventory.receive_stock %}<a class="btn" href="{% url 'receive_stock' item.pk %}" data-action="primary">Receive Stock</a>{% endif %}
     {% if not request.is_request_portal and perms.inventory.view_inventorytransaction %}<a class="btn light" href="{% url 'item_transaction_history' item.pk %}">Transaction History</a>{% endif %}
@@ -15,9 +15,14 @@
     {% if not request.is_request_portal and perms.inventory.manage_item_barcodes %}<a class="btn light" href="{% url 'item_barcode_print' item.pk %}">Print Barcode</a><a class="btn light" href="{% url 'item_upc_assign' item.pk %}">Scan UPC</a>{% endif %}
   </div>
 </div>
+<nav class="qol-item-navigation" aria-label="Inventory item navigation">
+  <a class="btn light btn-sm" data-previous-item hidden>← Previous item</a>
+  <a class="btn light btn-sm" data-next-item hidden>Next item →</a>
+</nav>
 <div class="grid">
   <div class="card"><h2>Inventory Level</h2><div class="stat"><strong>{{ item.quantity_on_hand }}</strong><span>{{ item.unit }}</span></div></div>
-  <div class="card"><h2>Location</h2><p><strong>Building/Room:</strong> {{ item.building_room|default:"—" }}</p><p><strong>Rack:</strong> {{ item.rack|default:"—" }}</p><p><strong>Section:</strong> {{ item.section|default:"—" }}</p><p><strong>Bin:</strong> {{ item.bin_location|default:"—" }}</p><p><strong>Picker Location:</strong> {{ item.storage_location|default:"—" }}</p></div>
+  <div class="card"><h2>Location</h2><p><strong>Building/Room:</strong> {{ item.building_room|default:"—" }}</p><p><strong>Rack:</strong> {{ item.rack|default:"—" }}</p><p><strong>Section:</strong> {{ item.section|default:"—" }}</p><p><strong>Bin:</strong> {{ item.bin_location|default:"—" }}</p><p><strong>Picker Location:</strong> {{ item.storage_location|default:"—" }}{% if item.storage_location %}<button type="button" class="copy-button" data-copy-text="{{ item.storage_location }}" data-copy-label="Location">Copy</button>{% endif %}</p></div>
+  <div class="card"><h2>Identifiers</h2><p><strong>Part #:</strong> {{ item.part_number }} <button type="button" class="copy-button" data-copy-text="{{ item.part_number }}" data-copy-label="Part number">Copy</button></p><p><strong>FB Part #:</strong> {{ item.fb_part_number|default:"—" }}{% if item.fb_part_number %}<button type="button" class="copy-button" data-copy-text="{{ item.fb_part_number }}" data-copy-label="FB part number">Copy</button>{% endif %}</p><p><strong>Model #:</strong> {{ item.model_number|default:"—" }}{% if item.model_number %}<button type="button" class="copy-button" data-copy-text="{{ item.model_number }}" data-copy-label="Model number">Copy</button>{% endif %}</p><p><strong>Barcode:</strong> {{ item.barcode_value|default:"—" }}{% if item.barcode_value %}<button type="button" class="copy-button" data-copy-text="{{ item.barcode_value }}" data-copy-label="Barcode">Copy</button>{% endif %}</p><p><strong>QR code:</strong> {{ item.qr_code_value|default:"—" }}{% if item.qr_code_value %}<button type="button" class="copy-button" data-copy-text="{{ item.qr_code_value }}" data-copy-label="QR code">Copy</button>{% endif %}</p></div>
 </div>
 {% if not request.is_request_portal and perms.inventory.view_inventoryitem %}
 <div class="card">
@@ -27,6 +32,6 @@
 {% endif %}
 <div class="card">
   <h2>Recent Transactions</h2>
-  <div class="table-responsive"><table><tr><th>Date</th><th>Type</th><th>Qty</th><th>Notes</th></tr>{% for tx in transactions %}<tr><td>{{ tx.created_at }}</td><td>{{ tx.get_transaction_type_display }}</td><td>{{ tx.quantity_delta }}</td><td>{{ tx.notes|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4">No transactions yet.</td></tr>{% endfor %}</table></div>
+  <div class="table-responsive"><table><tr><th>Date</th><th>Type</th><th>Qty</th><th>Notes</th></tr>{% for tx in transactions %}<tr><td><time datetime="{{ tx.created_at|date:'c' }}">{{ tx.created_at|date:"M j, Y, g:i A" }}</time></td><td>{{ tx.get_transaction_type_display }}</td><td>{{ tx.quantity_delta }}</td><td>{{ tx.notes|default:"—" }}</td></tr>{% empty %}<tr><td colspan="4">No transactions yet.</td></tr>{% endfor %}</table></div>
 </div>
 {% endblock %}

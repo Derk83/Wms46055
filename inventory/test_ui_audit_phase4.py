@@ -61,9 +61,10 @@ def test_labels_and_qr_tools_are_one_permission_filtered_tools_surface(client):
     assert "Item Barcode" not in location_body
     assert reverse("app_qr_code") not in location_body
 
-    # Both desktop and mobile Tools navigation use the consolidated label.
+    # The redundant desktop More-menu link is intentionally removed; mobile keeps
+    # the single consolidated Labels & QR entry.
     dashboard = _body(client, barcode_user, reverse("dashboard"))
-    assert dashboard.count(f'href="{reverse("qr_codes")}">Labels &amp; QR</a>') == 2
+    assert dashboard.count(f'href="{reverse("qr_codes")}">Labels &amp; QR</a>') == 1
 
     no_tools = _actor("phase4-no-label-tools", "view_inventoryitem")
     assert reverse("qr_codes") not in _body(client, no_tools, reverse("dashboard"))

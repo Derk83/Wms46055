@@ -41,7 +41,7 @@
                     <tbody>
                         {% for tx in page_obj %}
                         <tr>
-                            <td class="text-nowrap">{{ tx.created_at|date:"Y-m-d H:i" }}</td>
+                            <td class="text-nowrap">{{ tx.created_at|date:"M j, Y, g:i A" }}</td>
                             <td>
                                 <span class="badge 
                                     {% if tx.transaction_type == 'PICK' %}bg-danger

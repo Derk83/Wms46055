@@ -86,7 +86,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 });
 </script>
-<form method="get" class="card inventory-filter-panel">
+<form method="get" class="card inventory-filter-panel" data-stateful-list data-list-key="inventory">
   <div class="filter-heading">
     <div>
       <h2>Find Inventory</h2>
@@ -94,10 +94,18 @@ document.addEventListener('DOMContentLoaded', function() {
     </div>
     {% if filters_active %}<a href="{% url 'inventory_list' %}" class="btn btn-secondary btn-sm">Clear Filters</a>{% endif %}
   </div>
+  <div class="inventory-quick-filters" aria-label="Quick inventory filters">
+    <a class="filter-chip{% if stock == 'low' %} is-active{% endif %}" href="?stock=low">Low Stock</a>
+    <a class="filter-chip{% if stock == 'zero' %} is-active{% endif %}" href="?stock=zero">Zero Stock</a>
+    <a class="filter-chip{% if data_quality == 'missing_location' %} is-active{% endif %}" href="?data_quality=missing_location">Missing Location</a>
+    <a class="filter-chip{% if data_quality == 'missing_fb' %} is-active{% endif %}" href="?data_quality=missing_fb">Missing FB Part #</a>
+    <a class="filter-chip{% if data_quality == 'missing_model' %} is-active{% endif %}" href="?data_quality=missing_model">Missing Model</a>
+    <a class="filter-chip{% if sort == 'updated' and not filters_active %} is-active{% endif %}" href="?sort=updated">Recently Updated</a>
+  </div>
   <div class="form-row">
     <div class="form-group">
       <label for="q">Search / Scan</label>
-      <input id="q" name="q" value="{{ query }}" placeholder="Barcode, QR, name, location, bin" autofocus>
+      <input id="q" name="q" value="{{ query }}" placeholder="Barcode, QR, name, location, bin" autofocus aria-keyshortcuts="/">
     </div>
     <div class="form-group">
       <label for="part_number">Part #</label>
@@ -145,12 +153,28 @@ document.addEventListener('DOMContentLoaded', function() {
         <option value="updated" {% if sort == "updated" %}selected{% endif %}>Recently Updated</option>
       </select>
     </div>
+    <div class="form-group">
+      <label for="rows">Rows Per Page</label>
+      <select id="rows" name="rows" data-table-preference="rows">
+        <option value="25" {% if rows == "25" %}selected{% endif %}>25</option>
+        <option value="50" {% if rows == "50" %}selected{% endif %}>50</option>
+        <option value="100" {% if rows == "100" %}selected{% endif %}>100</option>
+        <option value="all" {% if rows == "all" %}selected{% endif %}>All</option>
+      </select>
+    </div>
   </div>
   <div class="actions">
     <button type="submit" class="btn btn-primary">Apply Filters</button>
     <a href="{% url 'inventory_list' %}" class="btn btn-secondary">Reset</a>
   </div>
 </form>
+<div class="inventory-result-summary" data-result-summary>
+  <div><strong>{{ result_count }}</strong> matching item{{ result_count|pluralize }}{% if active_filters %}<span class="active-filter-list">{% for label in active_filters %}<span>{{ label }}</span>{% endfor %}</span>{% endif %}</div>
+  <details class="column-chooser">
+    <summary class="btn btn-secondary btn-sm">Columns</summary>
+    <div>{% for key, label in column_choices %}<label><input type="checkbox" data-column-toggle="{{ key }}" checked> {{ label }}</label>{% endfor %}</div>
+  </details>
+</div>
 <!-- Bulk Actions Form -->
 <form id="bulkForm" method="post"{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} action="{% url 'inventory_bulk_edit' %}"{% endif %}>
   {% csrf_token %}
@@ -174,25 +198,25 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="checkbox" id="selectAll" aria-label="Select all">
           </th>{% endif %}
           <th class="part-col">Part #</th>
-          <th class="fb-col">FB Part #</th>
-          <th>Name</th>
-          <th class="qty-col">Qty</th>
-          <th class="bin-col">Bin</th>
-          <th class="actions-col">Actions</th>
+          <th class="fb-col" data-column="fb">FB Part #</th>
+          <th data-column="name">Name</th>
+          <th class="qty-col" data-column="qty">Qty</th>
+          <th class="bin-col" data-column="bin">Bin</th>
+          <th class="actions-col" data-column="actions">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for item in items %}
-        <tr data-item-id="{{ item.id }}" data-item-url="{% url 'item_detail' item.pk %}">
+        <tr data-item-id="{{ item.id }}" data-item-url="{{ item.get_absolute_url }}">
           {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<td data-label="Select">
             <input type="checkbox" value="{{ item.id }}" class="item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">
           </td>{% endif %}
           <td data-label="Part #"><a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a></td>
-          <td data-label="FB Part #" class="fb-part-cell">{{ item.fb_part_number|default:"—" }}</td>
-          <td data-label="Name">{{ item.description|default:item.name }}</td>
-          <td data-label="Qty" class="qty-cell {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">{{ item.quantity_on_hand }}</td>
-          <td data-label="Bin" class="bin-cell">{% if item.storage_location %}<strong>{{ item.storage_location }}</strong>{% else %}—{% endif %}</td>
-          <td data-label="Actions" class="actions-cell">
+          <td data-label="FB Part #" class="fb-part-cell" data-column="fb">{{ item.fb_part_number|default:"—" }}</td>
+          <td data-label="Name" data-column="name">{{ item.description|default:item.name }}</td>
+          <td data-label="Qty" data-column="qty" class="qty-cell {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">{{ item.quantity_on_hand }}</td>
+          <td data-label="Bin" data-column="bin" class="bin-cell">{% if item.storage_location %}<strong>{{ item.storage_location }}</strong>{% else %}—{% endif %}</td>
+          <td data-label="Actions" data-column="actions" class="actions-cell">
             <div class="inventory-actions inventory-action-group" role="group" aria-label="Actions for {{ item.part_number }}">
               {% if not request.is_request_portal and perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary" title="Receive stock">Receive Stock</a>{% endif %}
               {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip" title="Edit item">Edit</a>{% endif %}
@@ -201,19 +225,19 @@ document.addEventListener('DOMContentLoaded', function() {
                 <a href="{% url 'item_barcode_print' item.pk %}" class="action-chip" title="Generate and print barcode">Barcode</a>
                 <a href="{% url 'item_upc_assign' item.pk %}" class="action-chip" title="Scan and assign an existing UPC">Scan UPC</a>
               {% endif %}
-              {% if not request.is_request_portal and perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" onclick="deleteItem({{ item.pk }}, '{{ item.part_number|escapejs }}')" title="Delete item">Delete</button>{% endif %}
+              {% if not request.is_request_portal and perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" data-delete-item="{{ item.pk }}" data-part-number="{{ item.part_number }}" title="Delete item">Delete</button>{% endif %}
             </div>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}7{% else %}6{% endif %}" class="empty-row">No inventory found.</td></tr>
+        <tr><td colspan="{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}7{% else %}6{% endif %}" class="empty-row">{% if filters_active %}<strong>No inventory matches these filters.</strong><br><a href="{% url 'inventory_list' %}">Clear filters and show all inventory</a>{% else %}<strong>No inventory items yet.</strong>{% if not request.is_request_portal and perms.inventory.add_inventoryitem %}<br><a href="{% url 'inventory_new' %}">Add the first inventory item</a>{% endif %}{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   <div class="mobile-inventory-list">
     {% for item in items %}
-      <article class="mobile-inventory-card" data-item-id="{{ item.id }}" data-item-url="{% url 'item_detail' item.pk %}">
+      <article class="mobile-inventory-card" data-item-id="{{ item.id }}" data-item-url="{{ item.get_absolute_url }}">
         <div class="mobile-card-top{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} has-selection{% endif %}">
           {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">{% endif %}
           <div class="mobile-item-main">
@@ -230,18 +254,29 @@ document.addEventListener('DOMContentLoaded', function() {
           <div data-label="Bin"><span>Bin</span><strong>{{ item.storage_location|default:"—" }}</strong></div>
           <div data-label="Category"><span>Category</span><strong>{{ item.category|default:"—" }}</strong></div>
         </div>
-        <div class="mobile-actions inventory-actions inventory-action-group">
-          {% if not request.is_request_portal and perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary">Receive Stock</a>{% endif %}
-          {% if not request.is_request_portal and perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip">Edit</a>{% endif %}
-          {% if not request.is_request_portal and perms.inventory.view_inventorytransaction %}<a href="{% url 'item_transaction_history' item.pk %}" class="action-chip">History</a>{% endif %}
-          {% if not request.is_request_portal and perms.inventory.manage_item_barcodes %}<a href="{% url 'item_barcode_print' item.pk %}" class="action-chip">Barcode</a><a href="{% url 'item_upc_assign' item.pk %}" class="action-chip">Scan UPC</a>{% endif %}
-          {% if not request.is_request_portal and perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" onclick="deleteItem({{ item.pk }}, '{{ item.part_number|escapejs }}')">Delete</button>{% endif %}
-        </div>
+        {% if not request.is_request_portal %}<div class="mobile-actions inventory-actions inventory-action-group">
+          {% if perms.inventory.receive_stock %}<a href="{% url 'receive_stock' item.pk %}" class="action-chip primary">Receive Stock</a>{% elif perms.inventory.change_inventoryitem %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip primary">Edit</a>{% endif %}
+          {% if perms.inventory.change_inventoryitem and perms.inventory.receive_stock or perms.inventory.view_inventorytransaction or perms.inventory.manage_item_barcodes or perms.inventory.delete_inventoryitem %}
+          <details class="mobile-secondary-actions"><summary class="action-chip">More actions</summary><div>
+            {% if perms.inventory.change_inventoryitem and perms.inventory.receive_stock %}<a href="{% url 'inventory_edit' item.pk %}" class="action-chip">Edit</a>{% endif %}
+            {% if perms.inventory.view_inventorytransaction %}<a href="{% url 'item_transaction_history' item.pk %}" class="action-chip">History</a>{% endif %}
+            {% if perms.inventory.manage_item_barcodes %}<a href="{% url 'item_barcode_print' item.pk %}" class="action-chip">Barcode</a><a href="{% url 'item_upc_assign' item.pk %}" class="action-chip">Scan UPC</a>{% endif %}
+            {% if perms.inventory.delete_inventoryitem %}<button type="button" class="action-chip danger" data-delete-item="{{ item.pk }}" data-part-number="{{ item.part_number }}">Delete</button>{% endif %}
+          </div></details>
+          {% endif %}
+        </div>{% endif %}
       </article>
     {% empty %}
-      <div class="empty-row">No inventory found.</div>
+      <div class="empty-row">{% if filters_active %}<strong>No inventory matches these filters.</strong><br><a href="{% url 'inventory_list' %}">Clear filters and show all inventory</a>{% else %}<strong>No inventory items yet.</strong>{% if not request.is_request_portal and perms.inventory.add_inventoryitem %}<br><a href="{% url 'inventory_new' %}">Add the first inventory item</a>{% endif %}{% endif %}</div>
     {% endfor %}
   </div>
+  {% if page_obj and page_obj.paginator.num_pages > 1 %}
+  <nav class="pagination" aria-label="Inventory pages">
+    {% if page_obj.has_previous %}<a class="btn btn-secondary btn-sm" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="btn btn-secondary btn-sm" href="?{% if querystring %}{{ querystring }}&amp;{% endif %}page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+  </nav>
+  {% endif %}
 </div>
 </form>
 <form id="deleteForm" method="post" style="display:none;"><input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}"></form>
@@ -382,12 +417,6 @@ document.addEventListener('DOMContentLoaded', function() {
             event.preventDefault();
         }
     });
-    window.deleteItem = function(pk, partNumber) {
-        if (!confirm('Delete "' + partNumber + '"? This cannot be undone.')) return;
-        var form = document.getElementById('deleteForm');
-        form.action = '/inventory/' + pk + '/delete/';
-        form.submit();
-    };
 });
 </script>
 {% endblock %}
