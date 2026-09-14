@@ -34,3 +34,8 @@ The actual Django template, production CSS, and JavaScript were rendered through
 - Migration drift check passed.
 - JavaScript syntax and Git diff checks passed.
 - Independent correctness review returned PASS.
+- Production static CSS hash matched the committed source after `collectstatic`.
+- Gunicorn accepted the HUP and remained active.
+- Authenticated production render verified desktop priority navigation, More/account menus, functional search, and zero horizontal overflow.
+- Authenticated 1024px production render retained the 390px drawer, 50px rows, notification control, and theme control.
+- Live browser console reported no errors.
