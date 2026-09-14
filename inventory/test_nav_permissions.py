@@ -108,6 +108,10 @@ def test_approved_desktop_header_has_priority_navigation_and_grouped_more_menu(c
     assert ">More <" in body
     for label in ("Insights", "Tools", "Admin"):
         assert f">{label}<" in body
+    more_menu = body.split('id="header-more-menu"', 1)[1].split("</div>", 1)[0]
+    assert f'href="{reverse("location_list")}"' in more_menu
+    assert f'href="{reverse("qr_codes")}"' not in more_menu
+    assert f'href="{reverse("qr_codes")}"' in body
 
 
 def test_approved_desktop_header_css_preserves_mobile_drawer_breakpoint():
