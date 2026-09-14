@@ -87,3 +87,5 @@ Authenticated production verification confirmed the title/action card and `New P
 Added persistent per-user recent-work history for inventory items, pick tickets, material requests, and receiving tickets. Successful detail visits are deduplicated, ordered by latest access, and capped at 20 records per user.
 
 The dashboard Quick Actions position formerly occupied by `New Pick Ticket` now contains `Resume Work`, opening a permission-filtered Recently Viewed page. Missing records and records the user can no longer access are removed from their history automatically.
+
+Authenticated production verification confirmed the seven-tile Quick Actions bar, recorded an existing inventory detail visit, displayed that record once on Recently Viewed, and resumed the correct item detail URL without browser errors or inventory changes.
