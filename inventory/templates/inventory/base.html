@@ -44,7 +44,7 @@
           {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
         </section>
       </div>
-      <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+      <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
       <div class="account-menu">
         <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="account-menu-panel">
           <span class="account-menu-name">{{ user.get_full_name|default:user.username }}</span>
@@ -91,6 +91,12 @@
       <div class="nav-section"><div class="nav-section-label">Tools</div><a href="{% url 'location_list' %}">Locations</a>{% if perms.inventory.scan_codes %}<a href="{% url 'scanner' %}">Scanner</a>{% endif %}{% if perms.inventory.manage_cycle_counts or perms.inventory.perform_cycle_count %}<a href="{% url 'cycle_count_list' %}">Cycle Count</a>{% endif %}{% if perms.inventory.archive_cycle_counts %}<a href="{% url 'cycle_count_archive' %}">Cycle Count Archive</a>{% endif %}</div>
       {% if perms.inventory.manage_users or perms.inventory.manage_groups or perms.inventory.manage_group_permissions %}<div class="nav-section"><div class="nav-section-label">Admin</div><a href="{% url 'settings' %}">Settings</a></div>{% endif %}
     {% endif %}
+    {% if not request.is_request_portal %}
+    <div class="mobile-nav-utilities" aria-label="App controls">
+      <button class="mobile-nav-utility mobile-nav-install pwa-install-button" type="button" data-pwa-install hidden><span aria-hidden="true">⇩</span><span>Install app</span></button>
+      <button class="mobile-nav-utility" type="button" data-theme-toggle data-mobile-theme-toggle aria-pressed="false"><span aria-hidden="true">◐</span><span data-theme-label>Light theme</span></button>
+    </div>
+    {% endif %}
     <div class="mobile-nav-account"><span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span><form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form></div>
   </nav>
   <button type="button" class="nav-backdrop" aria-label="Close navigation menu" tabindex="-1" data-mobile-nav-backdrop></button>
@@ -109,7 +115,7 @@
         {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
       </section>
     </div>
-    <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
+    <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme">◐</button>
     <form method="post" action="{% url 'logout' %}" data-push-logout>{% csrf_token %}<button class="btn secondary sm" type="submit">Logout</button></form>
   </div>
   {% endif %}

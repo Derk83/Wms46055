@@ -135,6 +135,23 @@ def test_approved_desktop_header_script_controls_more_and_account_menus():
     assert "data-account-menu" in script
 
 
+def test_approved_phone_header_keeps_only_notification_beside_last_hamburger():
+    template = (
+        Path(__file__).parent / "templates" / "inventory" / "base.html"
+    ).read_text()
+    css = (Path(__file__).parent / "static" / "inventory" / "css" / "app.css").read_text()
+    script = (Path(__file__).parent / "static" / "inventory" / "js" / "app.js").read_text()
+
+    assert 'class="mobile-nav-utilities"' in template
+    assert "data-mobile-theme-toggle" in template
+    assert "mobile-nav-install" in template
+    assert ".site-header--wms .header-controls{order:2;margin-left:auto}" in css
+    assert ".site-header--wms .nav-toggle{order:3;margin-left:0}" in css
+    assert ".desktop-header-top #theme-toggle{display:none!important}" in css
+    assert ".mobile-nav-utilities{display:grid;" in css
+    assert "querySelectorAll('[data-theme-toggle]')" in script
+
+
 @pytest.mark.django_db
 def test_global_search_returns_inventory_matches(client):
     user = User.objects.create_user(username="warehouse-search", password="pw")

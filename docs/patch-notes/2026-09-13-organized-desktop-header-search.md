@@ -39,3 +39,17 @@ The actual Django template, production CSS, and JavaScript were rendered through
 - Authenticated production render verified desktop priority navigation, More/account menus, functional search, and zero horizontal overflow.
 - Authenticated 1024px production render retained the 390px drawer, 50px rows, notification control, and theme control.
 - Live browser console reported no errors.
+
+## Phone header follow-up
+
+After reviewing the production header at a 390px phone viewport, the compact header was simplified to the approved phone arrangement:
+
+- Logo remains at the left.
+- Notification bell remains directly accessible.
+- Hamburger is the final control at the far right.
+- Theme and install controls move into the WMS drawer on screens up to 600px.
+- The 601–1120px iPad header remains unchanged.
+- The request portal header remains unchanged.
+- Drawer navigation rows remain 50px with no horizontal overflow.
+
+The corrected real Django render was verified at 390×844 in both closed-header and open-drawer states. Theme switching was exercised successfully from inside the drawer.

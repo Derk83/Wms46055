@@ -5,22 +5,24 @@
     try { sessionStorage.removeItem('bbx-material-request-draft-v1:/material-requests/new/'); } catch (_) { /* storage may be unavailable */ }
   }
   const root = document.documentElement;
-  const themeButton = document.getElementById('theme-toggle');
+  const themeButtons = Array.from(document.querySelectorAll('[data-theme-toggle]'));
   const applyTheme = (theme) => {
     root.dataset.theme = theme;
-    if (themeButton) {
-      const isLight = theme === 'light';
-      themeButton.setAttribute('aria-pressed', String(isLight));
-      themeButton.setAttribute('aria-label', `Switch to ${isLight ? 'dark' : 'light'} theme`);
-      themeButton.title = `Switch to ${isLight ? 'dark' : 'light'} theme`;
-    }
+    const isLight = theme === 'light';
+    themeButtons.forEach((button) => {
+      button.setAttribute('aria-pressed', String(isLight));
+      button.setAttribute('aria-label', `Switch to ${isLight ? 'dark' : 'light'} theme`);
+      button.title = `Switch to ${isLight ? 'dark' : 'light'} theme`;
+      const label = button.querySelector('[data-theme-label]');
+      if (label) label.textContent = `${isLight ? 'Dark' : 'Light'} theme`;
+    });
   };
   applyTheme(root.dataset.theme || 'dark');
-  themeButton?.addEventListener('click', () => {
+  themeButtons.forEach((button) => button.addEventListener('click', () => {
     const next = root.dataset.theme === 'light' ? 'dark' : 'light';
     localStorage.setItem('bbx-theme', next);
     applyTheme(next);
-  });
+  }));
 
   // Every standard WMS action uses one predictable semantic color. Explicit
   // data-action values win; otherwise legacy markup is classified by intent.
