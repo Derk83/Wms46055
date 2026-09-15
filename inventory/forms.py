@@ -228,8 +228,23 @@ class MaterialRequestLineForm(forms.ModelForm):
         self.fields["item"].queryset = InventoryItem.objects.filter(available).order_by(
             "part_number"
         )
+        self.fields["shortage_action"].choices = [
+            ("", "Choose what happens to the remaining items"),
+            (
+                MaterialRequestLine.ShortageAction.AVAILABLE_ONLY,
+                "Use available stock and cancel the rest",
+            ),
+            (
+                MaterialRequestLine.ShortageAction.BACKORDER,
+                "Request the rest when available",
+            ),
+            (
+                MaterialRequestLine.ShortageAction.PROCUREMENT,
+                "Ask Procurement to purchase the rest",
+            ),
+        ]
         self.fields["shortage_action"].widget.attrs["aria-label"] = (
-            f"Shortage decision for {line_label}"
+            f"What should happen to the remaining items for {line_label}"
         )
 
     def clean(self):

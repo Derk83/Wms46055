@@ -1023,9 +1023,9 @@ class MaterialRequest(models.Model):
 
 class MaterialRequestLine(models.Model):
     class ShortageAction(models.TextChoices):
-        AVAILABLE_ONLY = "available_only", "Fulfill available quantity only"
-        BACKORDER = "backorder", "Backorder the remaining quantity"
-        PROCUREMENT = "procurement", "Send the remaining quantity to Procurement"
+        AVAILABLE_ONLY = "available_only", "Use available stock and cancel the rest"
+        BACKORDER = "backorder", "Request the rest when available"
+        PROCUREMENT = "procurement", "Ask Procurement to purchase the rest"
 
     material_request = models.ForeignKey(
         MaterialRequest, related_name="lines", on_delete=models.CASCADE

@@ -1553,7 +1553,11 @@ def ticket_delete(request, pk):
                 from .services import delete_material_request
 
                 request_number = linked_request.request_number
-                delete_material_request(linked_request, actor=request.user)
+                try:
+                    delete_material_request(linked_request, actor=request.user)
+                except ValidationError as exc:
+                    messages.error(request, "; ".join(exc.messages))
+                    return redirect("ticket_detail", pk=ticket.pk)
                 messages.success(
                     request,
                     f"Deleted pick ticket {ticket_number}, linked material request {request_number}, and restored inventory.",

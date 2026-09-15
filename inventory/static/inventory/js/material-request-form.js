@@ -20,8 +20,13 @@
   const draftKey = `bbx-material-request-draft-v1:${location.pathname}`;
   let saveTimer;
 
-  function stockForItem(itemId) {
-    const card = pickerList?.querySelector(`.inventory-picker-item[data-item-id="${CSS.escape(String(itemId))}"]`);
+  function stockForItem(itemId, row = null) {
+    if (row && row.dataset.originalItem === String(itemId) && row.dataset.originalStock !== undefined) {
+      return Math.max(0, Number.parseInt(row.dataset.originalStock || "0", 10));
+    }
+    const card = pickerList?.querySelector(
+      `.inventory-picker-item[data-item-id="${CSS.escape(String(itemId))}"]`
+    );
     return Math.max(0, Number.parseInt(card?.dataset.stock || "0", 10));
   }
 
@@ -34,9 +39,15 @@
     const restoredAllocation = item?.value === row.dataset.originalItem
       ? Number.parseInt(row.dataset.currentAllocation || "0", 10)
       : 0;
-    const available = stockForItem(item?.value) + restoredAllocation;
-    const isShort = Boolean(item?.value) && Number.parseInt(quantity?.value || "0", 10) > available;
+    const available = stockForItem(item?.value, row) + restoredAllocation;
+    const requested = Number.parseInt(quantity?.value || "0", 10);
+    const isShort = Boolean(item?.value) && requested > available;
+    const summary = decision.querySelector("[data-shortage-summary]");
     decision.hidden = !isShort;
+    if (isShort && summary) {
+      const remaining = requested - available;
+      summary.textContent = `You requested ${requested}. ${available} ${available === 1 ? "is" : "are"} available now. Choose what to do with the remaining ${remaining}.`;
+    }
     if (!isShort) action.value = "";
   }
 
@@ -83,8 +94,8 @@
     if (deleted) deleted.checked = false;
     row.hidden = false;
     select.value = String(itemId);
-    select.dispatchEvent(new Event("change", { bubbles: true }));
     if (!quantity.value) quantity.value = "1";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
     if (!fromDialog) {
       quantity.focus();
       row.scrollIntoView({ behavior: "smooth", block: "center" });

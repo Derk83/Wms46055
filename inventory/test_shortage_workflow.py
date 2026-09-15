@@ -265,7 +265,50 @@ class MaterialShortageViewsTests(TestCase):
         response = self.client.get(reverse("material_request_detail", args=[self.request.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Allocated now")
-        self.assertContains(response, "Send the remaining quantity to Procurement")
+        self.assertContains(response, "Ask Procurement to purchase the rest")
+
+    def test_procurement_backed_request_delete_is_blocked_without_server_error(self):
+        response = self.client.post(
+            reverse("material_request_delete", args=[self.request.pk]),
+            HTTP_HOST="requests.rplwms.com",
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be deleted after backorder fulfillment or procurement")
+        self.assertTrue(MaterialRequest.objects.filter(pk=self.request.pk).exists())
+        self.assertTrue(PickTicket.objects.filter(pk=self.request.pick_ticket_id).exists())
+
+    def test_procurement_backed_linked_ticket_delete_is_blocked_without_server_error(self):
+        response = self.client.post(
+            reverse("ticket_delete", args=[self.request.pick_ticket_id]),
+            HTTP_HOST="bbx.rplwms.com",
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be deleted after backorder fulfillment or procurement")
+        self.assertTrue(MaterialRequest.objects.filter(pk=self.request.pk).exists())
+        self.assertTrue(PickTicket.objects.filter(pk=self.request.pick_ticket_id).exists())
+
+    def test_shortage_copy_and_supply_links_are_clear_and_prominent(self):
+        form_response = self.client.get(reverse("material_request_create"))
+        self.assertEqual(form_response.status_code, 200)
+        for copy in (
+            "Not enough stock — choose what happens next",
+            "Use available stock and cancel the rest",
+            "Request the rest when available",
+            "Ask Procurement to purchase the rest",
+        ):
+            self.assertContains(form_response, copy)
+
+        dashboard_response = self.client.get(reverse("dashboard"))
+        self.assertEqual(dashboard_response.status_code, 200)
+        html = dashboard_response.content.decode()
+        desktop_nav = html.split('<nav class="desktop-priority-nav"', 1)[1].split("</nav>", 1)[0]
+        primary_links, more_menu = desktop_nav.split('<div class="header-more">', 1)
+        self.assertIn("Backorders", primary_links)
+        self.assertIn("Procurement", primary_links)
+        self.assertNotIn("Backorders", more_menu)
+        self.assertNotIn("Procurement", more_menu)
 
     def test_request_form_requires_shortage_choice_before_submit(self):
         from datetime import timedelta
