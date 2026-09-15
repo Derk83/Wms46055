@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.contrib.auth.models import Group, User
+from django.contrib.auth.models import Group, Permission, User
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -39,6 +39,21 @@ class MaterialRequestBoardArchiveTests(TestCase):
         self.assertNotContains(response, ">Received<", html=False)
         self.assertContains(response, 'id="material-request-live-region"', html=False)
         self.assertContains(response, "material-request-board-poll", html=False)
+
+    def test_dual_role_user_gets_portal_safe_board_after_creating_request(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(codename="view_all_materialrequests")
+        )
+        request_obj = self.make_request()
+
+        response = self.client.get(
+            reverse("material_request_board"), HTTP_HOST="requests.rplwms.com"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, request_obj.request_number)
+        self.assertContains(response, 'aria-label="Material request status board"', html=False)
+        self.assertNotContains(response, 'aria-label="Warehouse material request work queue"', html=False)
 
     def test_partial_board_response_is_available_on_both_hosts(self):
         self.make_request()

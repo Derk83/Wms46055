@@ -3707,7 +3707,10 @@ def material_request_board(request):
     ).annotate(
         line_count=Count("lines", distinct=True), total_quantity=Sum("lines__quantity")
     )
-    is_warehouse = request.user.has_perm("inventory.view_all_materialrequests")
+    is_warehouse = (
+        not request.is_request_portal
+        and request.user.has_perm("inventory.view_all_materialrequests")
+    )
     requested_view = request.GET.get("view", "").lower()
     view_mode = "queue" if is_warehouse and requested_view not in {"kanban", "board"} else "kanban"
     query = request.GET.get("q", "").strip()
