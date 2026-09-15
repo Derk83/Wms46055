@@ -724,11 +724,12 @@ def dashboard(request):
 @login_required
 @require_GET
 def global_search(request):
-    """Permission-aware search across the three daily WMS record types."""
+    """Permission-aware search across the four daily WMS record types."""
     query = request.GET.get("q", "").strip()[:120]
     inventory_results = InventoryItem.objects.none()
     ticket_results = PickTicket.objects.none()
     request_results = MaterialRequest.objects.none()
+    backorder_results = MaterialBackorder.objects.none()
 
     if query:
         inventory_results = InventoryItem.objects.filter(
@@ -765,11 +766,26 @@ def global_search(request):
                 | Q(lines__item__name__icontains=query)
             ).distinct().order_by("-created_at")[:10]
 
+        if request.user.has_perm("inventory.view_materialbackorder") or request.user.has_perm(
+            "inventory.manage_backorders"
+        ):
+            backorder_results = MaterialBackorder.objects.select_related(
+                "line__item", "line__material_request"
+            ).filter(
+                Q(backorder_number__icontains=query)
+                | Q(line__material_request__request_number__icontains=query)
+                | Q(line__material_request__requestor_name__icontains=query)
+                | Q(line__item__part_number__icontains=query)
+                | Q(line__item__fb_part_number__icontains=query)
+                | Q(line__item__name__icontains=query)
+            ).distinct().order_by("-created_at")[:10]
+
     return render(request, "inventory/global_search.html", {
         "query": query,
         "inventory_results": inventory_results,
         "ticket_results": ticket_results,
         "request_results": request_results,
+        "backorder_results": backorder_results,
     })
 
 
@@ -1415,6 +1431,9 @@ def ticket_detail(request, pk):
         {
             "ticket": ticket,
             "linked_request": linked_request,
+            "can_cascade_delete": bool(
+                linked_request and _can_cascade_delete_material_request(request.user)
+            ),
             "supplemental_fulfillment": supplemental_fulfillment,
             "status_choices": PickTicket.Status.choices,
         },
@@ -1522,55 +1541,6 @@ def ticket_delete(request, pk):
     queryset = _visible_pick_tickets(
         request, PickTicket.objects.prefetch_related("lines__item")
     )
-    linked_delete_perms = (
-        "inventory.delete_materialrequest",
-        "inventory.delete_materialrequestline",
-    )
-
-    if request.method == "POST":
-        with transaction.atomic():
-            ticket = get_object_or_404(queryset.select_for_update(), pk=pk)
-            supplemental_fulfillment = BackorderFulfillment.objects.select_for_update().select_related(
-                "backorder"
-            ).filter(pick_ticket=ticket).first()
-            if supplemental_fulfillment:
-                messages.error(
-                    request,
-                    f"{ticket.ticket_number} is an immutable fulfillment for "
-                    f"{supplemental_fulfillment.backorder.backorder_number} and cannot be deleted.",
-                )
-                return redirect("ticket_detail", pk=ticket.pk)
-            linked_request = (
-                MaterialRequest.objects.select_for_update()
-                .filter(pick_ticket=ticket)
-                .first()
-            )
-            if linked_request and not request.user.has_perms(linked_delete_perms):
-                raise PermissionDenied
-
-            ticket_number = ticket.ticket_number
-            if linked_request:
-                from .services import delete_material_request
-
-                request_number = linked_request.request_number
-                try:
-                    delete_material_request(linked_request, actor=request.user)
-                except ValidationError as exc:
-                    messages.error(request, "; ".join(exc.messages))
-                    return redirect("ticket_detail", pk=ticket.pk)
-                messages.success(
-                    request,
-                    f"Deleted pick ticket {ticket_number}, linked material request {request_number}, and restored inventory.",
-                )
-            else:
-                # The ticket lock keeps link detection and stock restoration atomic.
-                ticket.delete()
-                messages.success(
-                    request,
-                    f"Deleted pick ticket {ticket_number} and restored inventory.",
-                )
-        return redirect("ticket_list")
-
     ticket = get_object_or_404(queryset, pk=pk)
     supplemental_fulfillment = BackorderFulfillment.objects.select_related(
         "backorder"
@@ -1583,12 +1553,40 @@ def ticket_delete(request, pk):
         )
         return redirect("ticket_detail", pk=ticket.pk)
     linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
-    if linked_request and not request.user.has_perms(linked_delete_perms):
-        raise PermissionDenied
+    if linked_request:
+        if not _can_cascade_delete_material_request(request.user):
+            raise PermissionDenied
+        return redirect("material_request_delete", pk=linked_request.pk)
+
+    if request.method == "POST":
+        with transaction.atomic():
+            ticket = get_object_or_404(queryset.select_for_update(), pk=pk)
+            if BackorderFulfillment.objects.filter(pick_ticket=ticket).exists():
+                messages.error(
+                    request,
+                    f"{ticket.ticket_number} became linked to a fulfillment; nothing was deleted.",
+                )
+                return redirect("ticket_detail", pk=ticket.pk)
+            linked_request_id = MaterialRequest.objects.filter(
+                pick_ticket=ticket
+            ).values_list("pk", flat=True).first()
+            if linked_request_id is not None:
+                if not _can_cascade_delete_material_request(request.user):
+                    raise PermissionDenied
+                return redirect("material_request_delete", pk=linked_request_id)
+
+            ticket_number = ticket.ticket_number
+            ticket.delete()
+            messages.success(
+                request,
+                f"Deleted pick ticket {ticket_number} and restored inventory.",
+            )
+        return redirect("ticket_list")
+
     return render(
         request,
         "inventory/ticket_confirm_delete.html",
-        {"ticket": ticket, "linked_request": linked_request},
+        {"ticket": ticket, "linked_request": None},
     )
 
 
@@ -3933,6 +3931,68 @@ def material_request_create(request):
     })
 
 
+MATERIAL_REQUEST_CASCADE_DELETE_PERMS = (
+    "inventory.delete_materialrequest",
+    "inventory.delete_materialrequestline",
+    "inventory.delete_pickticket",
+    "inventory.delete_pickticketline",
+    "inventory.delete_materialbackorder",
+    "inventory.delete_procurementrequisition",
+    "inventory.delete_backorderfulfillment",
+)
+
+
+def _can_cascade_delete_material_request(user):
+    return user_can_view_reports(user) and user.has_perms(
+        MATERIAL_REQUEST_CASCADE_DELETE_PERMS
+    )
+
+
+def _warehouse_record_url(name, *args, fragment=""):
+    path = reverse(name, args=args, urlconf="inventory.urls")
+    return f"https://bbx.rplwms.com{path}{fragment}"
+
+
+def _material_request_deletion_links(material_request):
+    backorders = list(
+        MaterialBackorder.objects.filter(line__material_request=material_request)
+        .select_related("line__item")
+        .order_by("pk")
+    )
+    backorder_ids = [backorder.pk for backorder in backorders]
+    requisitions = list(
+        ProcurementRequisition.objects.filter(backorder_id__in=backorder_ids).order_by("pk")
+    )
+    fulfillments = list(
+        BackorderFulfillment.objects.filter(backorder_id__in=backorder_ids)
+        .select_related("pick_ticket")
+        .order_by("pk")
+    )
+    links = [{
+        "kind": "Original pick ticket",
+        "number": material_request.pick_ticket.ticket_number,
+        "url": _warehouse_record_url("ticket_detail", material_request.pick_ticket_id),
+    }]
+    links.extend({
+        "kind": "Backorder",
+        "number": backorder.backorder_number,
+        "url": _warehouse_record_url(
+            "backorder_list", fragment=f"#backorder-{backorder.pk}"
+        ),
+    } for backorder in backorders)
+    links.extend({
+        "kind": "Procurement requisition",
+        "number": requisition.requisition_number,
+        "url": _warehouse_record_url("procurement_requisition_detail", requisition.pk),
+    } for requisition in requisitions)
+    links.extend({
+        "kind": "Backorder fulfillment ticket",
+        "number": fulfillment.pick_ticket.ticket_number,
+        "url": _warehouse_record_url("ticket_detail", fulfillment.pick_ticket_id),
+    } for fulfillment in fulfillments)
+    return links
+
+
 @login_required
 @request_portal_access_required
 @any_perm_required("inventory.view_materialrequest")
@@ -3957,6 +4017,7 @@ def material_request_detail(request, pk):
     return render(request, "inventory/material_request_detail.html", {
         "material_request": material_request,
         "delivery_response_form": response_form,
+        "can_cascade_delete": _can_cascade_delete_material_request(request.user),
     })
 
 
@@ -4161,21 +4222,49 @@ def material_request_edit(request, pk):
 
 @login_required
 @request_portal_access_required
-@all_perms_required("inventory.delete_materialrequest", "inventory.delete_materialrequestline")
 def material_request_delete(request, pk):
-    from .services import delete_material_request
+    from .services import delete_material_request_cascade
 
-    material_request = get_object_or_404(_visible_material_requests(request), pk=pk)
+    material_request = get_object_or_404(
+        _visible_material_requests(
+            request,
+            MaterialRequest.objects.select_related("pick_ticket"),
+        ),
+        pk=pk,
+    )
+    if not _can_cascade_delete_material_request(request.user):
+        raise PermissionDenied
+    linked_records = _material_request_deletion_links(material_request)
+    context = {
+        "material_request": material_request,
+        "linked_records": linked_records,
+    }
     if request.method == "POST":
+        if request.POST.get("confirm_linked_deletion") != "yes":
+            context["confirmation_error"] = (
+                "Check the confirmation box before deleting this request and its linked tickets."
+            )
+            return render(
+                request,
+                "inventory/material_request_confirm_delete.html",
+                context,
+            )
         number = material_request.request_number
         try:
-            delete_material_request(material_request, actor=request.user)
+            delete_material_request_cascade(material_request, actor=request.user)
         except ValidationError as exc:
             messages.error(request, "; ".join(exc.messages))
             return redirect("material_request_detail", pk=pk)
-        messages.success(request, f"{number} and its linked pick ticket were deleted; inventory was restored.")
+        messages.success(
+            request,
+            f"{number} and {len(linked_records)} linked records were deleted; inventory was restored.",
+        )
         return redirect("material_request_board")
-    return render(request, "inventory/material_request_confirm_delete.html", {"material_request": material_request})
+    return render(
+        request,
+        "inventory/material_request_confirm_delete.html",
+        context,
+    )
 
 
 @login_required

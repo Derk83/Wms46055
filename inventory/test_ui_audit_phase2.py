@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import Permission
+from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
 from django.utils import timezone
 
@@ -69,6 +69,7 @@ def test_linked_ticket_uses_material_request_as_canonical_edit_surface_with_tick
         "delete_materialrequest", "delete_materialrequestline",
         "view_inventoryitem",
     )
+    actor.groups.add(Group.objects.get(name="Logistics Manager"))
     ticket = PickTicket.objects.create(created_by=actor)
     material_request = MaterialRequest.objects.create(creator=actor, pick_ticket=ticket)
 

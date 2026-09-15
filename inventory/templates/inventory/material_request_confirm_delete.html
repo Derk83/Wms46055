@@ -1,6 +1,41 @@
 {% extends "inventory/base.html" %}
 {% block title %}Delete {{ material_request.request_number }} · RPL Warehouse{% endblock %}
 {% block content %}
-<section class="page-header"><div><h1>Delete {{ material_request.request_number }}?</h1><div class="meta">This also deletes {{ material_request.pick_ticket.ticket_number }} and restores all inventory deducted by it.</div></div></section>
-<form method="post" class="card">{% csrf_token %}<p>This action cannot be undone.</p><div class="actions"><button class="btn danger" type="submit">Delete request and restore stock</button><a class="btn secondary" href="{% url 'material_request_detail' material_request.pk %}">Cancel</a></div></form>
+<div class="cascade-dialog-backdrop" aria-hidden="true"></div>
+<dialog class="cascade-delete-dialog" open aria-modal="true" aria-labelledby="cascade-delete-title" aria-describedby="cascade-delete-warning">
+  <form method="post">
+    {% csrf_token %}
+    <div class="cascade-delete-heading">
+      <span class="cascade-delete-icon" aria-hidden="true">!</span>
+      <div>
+        <span class="eyebrow">Manager confirmation</span>
+        <h1 id="cascade-delete-title">Delete {{ material_request.request_number }}?</h1>
+      </div>
+    </div>
+    <p id="cascade-delete-warning">This permanently deletes the material request and every linked ticket below. Inventory deducted by the original and fulfillment pick tickets will be restored.</p>
+
+    <section class="cascade-linked-records" aria-labelledby="linked-records-title">
+      <h2 id="linked-records-title">Linked records that will be deleted</h2>
+      <ul>
+        {% for record in linked_records %}
+        <li>
+          <span>{{ record.kind }}</span>
+          <a href="{{ record.url }}" target="_blank" rel="noopener noreferrer" aria-label="Open {{ record.kind }} {{ record.number }} in a new window">{{ record.number }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    {% if confirmation_error %}<div class="form-errors" role="alert">{{ confirmation_error }}</div>{% endif %}
+    <label class="cascade-confirm-check" for="confirm-linked-deletion">
+      <input id="confirm-linked-deletion" type="checkbox" name="confirm_linked_deletion" value="yes" required>
+      <span>I understand that {{ material_request.request_number }} and all linked records listed above will be deleted.</span>
+    </label>
+
+    <div class="actions">
+      <button class="btn danger" type="submit">Delete request and linked tickets</button>
+      <a class="btn secondary" href="{% url 'material_request_detail' material_request.pk %}">Cancel</a>
+    </div>
+  </form>
+</dialog>
 {% endblock %}

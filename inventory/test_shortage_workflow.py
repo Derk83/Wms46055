@@ -1,13 +1,17 @@
-from django.contrib.auth.models import User
+from unittest.mock import patch
+
+from django.contrib.auth.models import Group, Permission, User
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from .models import (
+    BackorderFulfillment,
     InventoryItem,
     InventoryTransaction,
     MaterialBackorder,
     MaterialRequest,
+    MaterialRequestEvent,
     PickTicket,
     PickTicketLine,
     ProcurementRequisition,
@@ -15,6 +19,7 @@ from .models import (
 from .services import (
     create_material_request,
     delete_material_request,
+    delete_material_request_cascade,
     fulfill_material_backorder,
     update_material_request,
     update_procurement_requisition,
@@ -209,6 +214,54 @@ class MaterialShortageWorkflowTests(TestCase):
         self.assertTrue(MaterialRequest.objects.filter(pk=request.pk).exists())
         self.assertTrue(ProcurementRequisition.objects.filter(backorder__line__material_request=request).exists())
 
+    def test_manager_cascade_rolls_back_complete_graph_and_stock_on_failure(self):
+        request = self.create_request(action="procurement")
+        backorder = request.lines.get().backorder
+        self.item.adjust_quantity(
+            10,
+            InventoryTransaction.TransactionType.RECEIPT,
+            user=self.user,
+            notes="Rollback test receipt",
+        )
+        _, supplemental_ticket = fulfill_material_backorder(
+            backorder, quantity=10, actor=self.user
+        )
+        main_ticket_id = request.pick_ticket_id
+        request_id = request.pk
+        backorder_id = backorder.pk
+        requisition_id = backorder.procurement_requisition.pk
+        supplemental_ticket_id = supplemental_ticket.pk
+        baseline_deleted_events = MaterialRequestEvent.objects.filter(
+            event_type=MaterialRequestEvent.EventType.DELETED
+        ).count()
+        original_delete = PickTicket.delete
+
+        def fail_on_main_ticket(ticket, *args, **kwargs):
+            if ticket.pk == main_ticket_id:
+                raise RuntimeError("injected cascade failure")
+            return original_delete(ticket, *args, **kwargs)
+
+        with patch.object(PickTicket, "delete", new=fail_on_main_ticket):
+            with self.assertRaisesMessage(RuntimeError, "injected cascade failure"):
+                delete_material_request_cascade(request, actor=self.user)
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity_on_hand, 0)
+        self.assertTrue(MaterialRequest.objects.filter(pk=request_id).exists())
+        self.assertTrue(MaterialBackorder.objects.filter(pk=backorder_id).exists())
+        self.assertTrue(ProcurementRequisition.objects.filter(pk=requisition_id).exists())
+        self.assertTrue(BackorderFulfillment.objects.filter(pick_ticket_id=supplemental_ticket_id).exists())
+        self.assertEqual(
+            PickTicket.objects.filter(pk__in=[main_ticket_id, supplemental_ticket_id]).count(),
+            2,
+        )
+        self.assertEqual(
+            MaterialRequestEvent.objects.filter(
+                event_type=MaterialRequestEvent.EventType.DELETED
+            ).count(),
+            baseline_deleted_events,
+        )
+
     def test_procurement_received_cannot_exceed_ordered(self):
         requisition = self.create_request(action="procurement").lines.get().backorder.procurement_requisition
         with self.assertRaisesMessage(ValidationError, "cannot exceed"):
@@ -267,27 +320,156 @@ class MaterialShortageViewsTests(TestCase):
         self.assertContains(response, "Allocated now")
         self.assertContains(response, "Ask Procurement to purchase the rest")
 
-    def test_procurement_backed_request_delete_is_blocked_without_server_error(self):
-        response = self.client.post(
+    def test_manager_delete_dialog_lists_linked_records_and_requires_checkbox(self):
+        backorder = self.request.lines.get().backorder
+        requisition = backorder.procurement_requisition
+        response = self.client.get(
             reverse("material_request_delete", args=[self.request.pk]),
-            HTTP_HOST="requests.rplwms.com",
-            follow=True,
+            HTTP_HOST="bbx.rplwms.com",
         )
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "cannot be deleted after backorder fulfillment or procurement")
+        for number in (
+            self.request.pick_ticket.ticket_number,
+            backorder.backorder_number,
+            requisition.requisition_number,
+        ):
+            self.assertContains(response, number)
+        self.assertContains(response, 'name="confirm_linked_deletion"')
+        self.assertContains(response, 'target="_blank"', count=3)
+        portal_response = self.client.get(
+            reverse("material_request_delete", args=[self.request.pk]),
+            HTTP_HOST="requests.rplwms.com",
+        )
+        self.assertEqual(portal_response.status_code, 200)
+        self.assertContains(portal_response, "https://bbx.rplwms.com/tickets/")
+        self.assertContains(portal_response, "https://bbx.rplwms.com/procurement/")
+
+        response = self.client.post(
+            reverse("material_request_delete", args=[self.request.pk]),
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Check the confirmation box")
         self.assertTrue(MaterialRequest.objects.filter(pk=self.request.pk).exists())
         self.assertTrue(PickTicket.objects.filter(pk=self.request.pick_ticket_id).exists())
 
-    def test_procurement_backed_linked_ticket_delete_is_blocked_without_server_error(self):
-        response = self.client.post(
+    def test_linked_pick_ticket_delete_routes_to_manager_cascade_dialog(self):
+        response = self.client.get(
             reverse("ticket_delete", args=[self.request.pick_ticket_id]),
             HTTP_HOST="bbx.rplwms.com",
-            follow=True,
         )
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "cannot be deleted after backorder fulfillment or procurement")
+        self.assertRedirects(
+            response,
+            reverse("material_request_delete", args=[self.request.pk]),
+            fetch_redirect_response=False,
+        )
+
+    def test_manager_confirmed_delete_removes_entire_graph_and_restores_stock(self):
+        backorder = self.request.lines.get().backorder
+        requisition_id = backorder.procurement_requisition.pk
+        self.item.adjust_quantity(
+            1,
+            InventoryTransaction.TransactionType.RECEIPT,
+            user=self.admin,
+            notes="Cascade test receipt",
+        )
+        _, supplemental_ticket = fulfill_material_backorder(
+            backorder, quantity=1, actor=self.admin
+        )
+        main_ticket_id = self.request.pick_ticket_id
+        supplemental_ticket_id = supplemental_ticket.pk
+        request_id = self.request.pk
+        backorder_id = backorder.pk
+
+        unrelated_item = InventoryItem.objects.create(
+            part_number="UNRELATED", name="Unrelated", quantity_on_hand=3
+        )
+        unrelated_request = create_material_request(
+            creator=self.admin,
+            requestor_name="Other requester",
+            requestor_email="other@example.com",
+            building_room="200",
+            location="Office",
+            notes="",
+            lines=[{
+                "item": unrelated_item,
+                "quantity": 1,
+                "notes": "",
+                "shortage_action": "",
+            }],
+        )
+
+        response = self.client.get(
+            reverse("material_request_delete", args=[request_id]),
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertContains(response, supplemental_ticket.ticket_number)
+        self.assertContains(response, 'target="_blank"', count=4)
+        response = self.client.post(
+            reverse("material_request_delete", args=[request_id]),
+            {"confirm_linked_deletion": "yes"},
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertRedirects(
+            response,
+            reverse("material_request_board"),
+            fetch_redirect_response=False,
+        )
+
+        self.item.refresh_from_db()
+        self.assertEqual(self.item.quantity_on_hand, 2)
+        self.assertFalse(MaterialRequest.objects.filter(pk=request_id).exists())
+        self.assertFalse(MaterialBackorder.objects.filter(pk=backorder_id).exists())
+        self.assertFalse(ProcurementRequisition.objects.filter(pk=requisition_id).exists())
+        self.assertFalse(BackorderFulfillment.objects.filter(pick_ticket_id=supplemental_ticket_id).exists())
+        self.assertFalse(PickTicket.objects.filter(pk__in=[main_ticket_id, supplemental_ticket_id]).exists())
+        self.assertTrue(MaterialRequest.objects.filter(pk=unrelated_request.pk).exists())
+        deletion_event = MaterialRequestEvent.objects.get(
+            event_type=MaterialRequestEvent.EventType.DELETED,
+            request_number_snapshot=self.request.request_number,
+        )
+        self.assertIn("Manager cascade deleted linked records", deletion_event.change_summary)
+
+    def test_non_manager_with_delete_permissions_cannot_use_cascade(self):
+        non_manager = User.objects.create_user("delete-operator")
+        permission_names = [
+            "delete_materialrequest",
+            "delete_materialrequestline",
+            "delete_pickticket",
+            "delete_pickticketline",
+            "delete_materialbackorder",
+            "delete_procurementrequisition",
+            "delete_backorderfulfillment",
+        ]
+        non_manager.user_permissions.add(
+            *Permission.objects.filter(
+                content_type__app_label="inventory",
+                codename__in=permission_names,
+            )
+        )
+        self.request.creator = non_manager
+        self.request.save(update_fields=["creator"])
+        self.client.force_login(non_manager)
+        response = self.client.post(
+            reverse("material_request_delete", args=[self.request.pk]),
+            {"confirm_linked_deletion": "yes"},
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertEqual(response.status_code, 403)
         self.assertTrue(MaterialRequest.objects.filter(pk=self.request.pk).exists())
-        self.assertTrue(PickTicket.objects.filter(pk=self.request.pick_ticket_id).exists())
+
+    def test_manager_roles_receive_complete_cascade_permissions(self):
+        manager = User.objects.create_user("logistics-manager")
+        manager.groups.add(Group.objects.get(name="Logistics Manager"))
+        self.assertTrue(manager.has_perms((
+            "inventory.delete_materialrequest",
+            "inventory.delete_materialrequestline",
+            "inventory.delete_pickticket",
+            "inventory.delete_pickticketline",
+            "inventory.delete_materialbackorder",
+            "inventory.delete_procurementrequisition",
+            "inventory.delete_backorderfulfillment",
+        )))
 
     def test_shortage_copy_and_supply_links_are_clear_and_prominent(self):
         form_response = self.client.get(reverse("material_request_create"))
@@ -309,6 +491,29 @@ class MaterialShortageViewsTests(TestCase):
         self.assertIn("Procurement", primary_links)
         self.assertNotIn("Backorders", more_menu)
         self.assertNotIn("Procurement", more_menu)
+
+    def test_global_search_includes_permission_scoped_backorders(self):
+        backorder = self.request.lines.get().backorder
+        response = self.client.get(
+            reverse("global_search"),
+            {"q": backorder.backorder_number},
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Backorders")
+        self.assertContains(response, backorder.backorder_number)
+        self.assertContains(response, f"#backorder-{backorder.pk}")
+
+        no_backorder_access = User.objects.create_user("search-no-backorders")
+        self.client.force_login(no_backorder_access)
+        response = self.client.get(
+            reverse("global_search"),
+            {"q": backorder.backorder_number},
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, f"#backorder-{backorder.pk}")
+        self.assertNotContains(response, "<h2>Backorders</h2>", html=True)
 
     def test_request_form_requires_shortage_choice_before_submit(self):
         from datetime import timedelta

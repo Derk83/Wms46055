@@ -57,7 +57,7 @@
   {% endif %}
 
   {% if linked_request %}
-    {% if perms.inventory.delete_pickticket and perms.inventory.delete_materialrequest and perms.inventory.delete_materialrequestline %}
+    {% if can_cascade_delete %}
     <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
       <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
     </div>

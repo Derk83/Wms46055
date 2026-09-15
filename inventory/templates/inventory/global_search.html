@@ -2,10 +2,10 @@
 {% block title %}Search · RPL Warehouse{% endblock %}
 {% block content %}
 <section class="page-header">
-  <div><h1>Warehouse Search</h1><div class="meta">Inventory, pick tickets, and material requests in one place.</div></div>
+  <div><h1>Warehouse Search</h1><div class="meta">Inventory, pick tickets, material requests, and backorders in one place.</div></div>
 </section>
 <form class="card search-form" method="get" action="{% url 'global_search' %}" role="search">
-  <div class="form-group global-search-field"><label for="warehouse-search">Search warehouse</label><input id="warehouse-search" type="search" name="q" value="{{ query }}" placeholder="Part number, item, ticket, request, person, or location" autofocus></div>
+  <div class="form-group global-search-field"><label for="warehouse-search">Search warehouse</label><input id="warehouse-search" type="search" name="q" value="{{ query }}" placeholder="Part number, item, PT, MR, BO, person, or location" autofocus></div>
   <button class="btn btn-primary" type="submit">Search</button>
 </form>
 {% if query %}
@@ -22,6 +22,10 @@
   {% if perms.inventory.view_materialrequest %}<section class="card">
     <div class="card-header"><h2>Material Requests</h2><a class="btn sm light" href="{% url 'material_request_board' %}?q={{ query|urlencode }}">View request board</a></div>
     {% if request_results %}<div class="global-result-list">{% for material_request in request_results %}<a class="global-result" href="{% url 'material_request_detail' material_request.pk %}"><span><strong>{{ material_request.request_number }}</strong><small>{{ material_request.requestor_name }} · {{ material_request.building_room }}</small></span><span class="badge status-{{ material_request.pick_ticket.status|lower }}">{{ material_request.pick_ticket.get_status_display }}</span></a>{% endfor %}</div>{% else %}<div class="empty-state small">No material requests match.</div>{% endif %}
+  </section>{% endif %}
+  {% if perms.inventory.view_materialbackorder or perms.inventory.manage_backorders %}<section class="card">
+    <div class="card-header"><h2>Backorders</h2><a class="btn sm light" href="{% url 'backorder_list' %}">View backorder queue</a></div>
+    {% if backorder_results %}<div class="global-result-list">{% for backorder in backorder_results %}<a class="global-result" href="{% url 'backorder_list' %}#backorder-{{ backorder.pk }}"><span><strong>{{ backorder.backorder_number }}</strong><small>{{ backorder.line.material_request.request_number }} · {{ backorder.line.item.part_number }} · {{ backorder.line.item.name }}</small></span><span class="badge status-{{ backorder.status|lower }}">{{ backorder.get_status_display }}</span></a>{% endfor %}</div>{% else %}<div class="empty-state small">No backorders match.</div>{% endif %}
   </section>{% endif %}
 </div>
 {% else %}<section class="card empty-state"><h2>Search the warehouse</h2><p>Enter a part number, item description, ticket number, request number, person, or location.</p></section>{% endif %}

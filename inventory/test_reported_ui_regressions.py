@@ -52,11 +52,8 @@ def test_dashboard_restores_all_seven_permission_aware_quick_actions(client):
 
 
 @pytest.mark.django_db
-def test_delete_pickticket_permission_deletes_linked_ticket_and_request(client):
-    actor = _actor(
-        "reported-ticket-delete", "view_pickticket", "delete_pickticket",
-        "delete_materialrequest", "delete_materialrequestline",
-    )
+def test_manager_delete_pickticket_routes_to_checked_request_cascade(client):
+    actor = User.objects.create_superuser("reported-ticket-delete", "", "pw")
     item = InventoryItem.objects.create(
         part_number="REPORTED-DELETE-1", name="Delete regression item", quantity_on_hand=10,
     )
@@ -69,15 +66,23 @@ def test_delete_pickticket_permission_deletes_linked_ticket_and_request(client):
     assert detail.status_code == 200
     assert f'href="{reverse("ticket_delete", args=[ticket.pk])}"' in detail.content.decode()
 
-    confirmation = client.get(reverse("ticket_delete", args=[ticket.pk]), HTTP_HOST="bbx.rplwms.com")
-    assert confirmation.status_code == 200
-    confirmation_html = confirmation.content.decode()
-    assert material_request.request_number in confirmation_html
-    assert "linked material request" in confirmation_html.lower()
+    delete_url = reverse("ticket_delete", args=[ticket.pk])
+    cascade_url = reverse("material_request_delete", args=[material_request.pk])
+    confirmation = client.get(delete_url, HTTP_HOST="bbx.rplwms.com")
+    assert confirmation.status_code == 302
+    assert confirmation.url == cascade_url
+    unchecked = client.post(cascade_url, HTTP_HOST="bbx.rplwms.com")
+    assert unchecked.status_code == 200
+    assert PickTicket.objects.filter(pk=ticket.pk).exists()
+    assert MaterialRequest.objects.filter(pk=material_request.pk).exists()
 
-    deleted = client.post(reverse("ticket_delete", args=[ticket.pk]), HTTP_HOST="bbx.rplwms.com")
+    deleted = client.post(
+        cascade_url,
+        {"confirm_linked_deletion": "yes"},
+        HTTP_HOST="bbx.rplwms.com",
+    )
     assert deleted.status_code == 302
-    assert deleted.url == reverse("ticket_list")
+    assert deleted.url == reverse("material_request_board")
     assert not PickTicket.objects.filter(pk=ticket.pk).exists()
     assert not MaterialRequest.objects.filter(pk=material_request.pk).exists()
     item.refresh_from_db()

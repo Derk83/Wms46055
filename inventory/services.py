@@ -243,16 +243,29 @@ def update_pick_ticket_status(ticket, new_status, *, actor):
     valid_statuses = {value for value, _label in PickTicket.Status.choices}
     if new_status not in valid_statuses:
         raise ValidationError("Invalid pick-ticket status.")
+    request_id = MaterialRequest.objects.filter(
+        pick_ticket_id=ticket.pk
+    ).values_list("pk", flat=True).first()
+    material_request = None
+    if request_id is not None:
+        material_request = MaterialRequest.objects.select_for_update().get(pk=request_id)
     ticket = PickTicket.objects.select_for_update().get(pk=ticket.pk)
+    if material_request is None:
+        try:
+            material_request = ticket.material_request
+        except MaterialRequest.DoesNotExist:
+            material_request = None
+        if material_request is not None:
+            raise ValidationError(
+                "This ticket was linked to a material request during the update; please retry."
+            )
     old_status = ticket.status
     if old_status == new_status:
         return None
 
     ticket.status = new_status
     ticket.save(update_fields=["status", "updated_at"])
-    try:
-        material_request = ticket.material_request
-    except MaterialRequest.DoesNotExist:
+    if material_request is None:
         return None
 
     if new_status == PickTicket.Status.RECEIVED:
@@ -566,9 +579,26 @@ def update_procurement_requisition(requisition, *, actor, **values):
     return requisition
 
 
+def _create_material_request_deletion_event(material_request, ticket, *, actor, summary=""):
+    event = MaterialRequestEvent.objects.create(
+        material_request=material_request,
+        event_type=MaterialRequestEvent.EventType.DELETED,
+        actor=actor,
+        request_number_snapshot=material_request.request_number,
+        ticket_number_snapshot=ticket.ticket_number,
+        requestor_snapshot=material_request.requestor_name,
+        change_summary=summary,
+    )
+    from .push import queue_material_request_push
+
+    queue_material_request_push(event)
+    return event
+
+
 @transaction.atomic
 def delete_material_request(material_request, *, actor=None):
-    material_request = MaterialRequest.objects.select_for_update().select_related("pick_ticket").get(
+    """Delete an unprocessed request through the standard protected workflow."""
+    material_request = MaterialRequest.objects.select_for_update().get(
         pk=material_request.pk
     )
     _, requisitions, fulfillments = _lock_request_shortage_records(material_request)
@@ -577,18 +607,60 @@ def delete_material_request(material_request, *, actor=None):
             "This request cannot be deleted after backorder fulfillment or procurement processing has begun."
         )
     ticket = PickTicket.objects.select_for_update().get(pk=material_request.pick_ticket_id)
-    event = MaterialRequestEvent.objects.create(
-        material_request=material_request,
-        event_type=MaterialRequestEvent.EventType.DELETED,
-        actor=actor,
-        request_number_snapshot=material_request.request_number,
-        ticket_number_snapshot=ticket.ticket_number,
-        requestor_snapshot=material_request.requestor_name,
+    event = _create_material_request_deletion_event(
+        material_request, ticket, actor=actor
     )
-    from .push import queue_material_request_push
-
-    queue_material_request_push(event)
     # Remove the protected link first; the event/outbox survives with its snapshots.
     material_request.delete()
     ticket.delete()
+    return event
+
+
+@transaction.atomic
+def delete_material_request_cascade(material_request, *, actor):
+    """Delete a manager-confirmed request and its complete shortage/ticket graph."""
+    material_request = MaterialRequest.objects.select_for_update().get(
+        pk=material_request.pk
+    )
+    backorders, requisitions, fulfillments = _lock_request_shortage_records(material_request)
+    main_ticket_id = material_request.pick_ticket_id
+    supplemental_ticket_ids = [fulfillment.pick_ticket_id for fulfillment in fulfillments]
+    ticket_ids = sorted({main_ticket_id, *supplemental_ticket_ids})
+    tickets = {
+        ticket.pk: ticket
+        for ticket in PickTicket.objects.select_for_update().filter(pk__in=ticket_ids).order_by("pk")
+    }
+    if set(tickets) != set(ticket_ids):
+        raise ValidationError("A linked pick ticket is missing; nothing was deleted.")
+
+    item_ids = list(
+        PickTicketLine.objects.filter(ticket_id__in=ticket_ids)
+        .values_list("item_id", flat=True)
+        .distinct()
+    )
+    # Lock inventory after the complete request/BO/PRQ/fulfillment/ticket graph.
+    list(InventoryItem.objects.select_for_update().filter(pk__in=item_ids).order_by("pk"))
+
+    linked_numbers = [tickets[main_ticket_id].ticket_number]
+    linked_numbers.extend(backorder.backorder_number for backorder in backorders)
+    linked_numbers.extend(requisition.requisition_number for requisition in requisitions)
+    linked_numbers.extend(
+        tickets[fulfillment.pick_ticket_id].ticket_number for fulfillment in fulfillments
+    )
+    event = _create_material_request_deletion_event(
+        material_request,
+        tickets[main_ticket_id],
+        actor=actor,
+        summary=f"Manager cascade deleted linked records: {', '.join(linked_numbers)}",
+    )
+
+    # Remove protected graph edges before deleting the request and its tickets.
+    for fulfillment in fulfillments:
+        fulfillment.delete()
+    for requisition in requisitions:
+        requisition.delete()
+    material_request.delete()
+    for ticket_id in supplemental_ticket_ids:
+        tickets[ticket_id].delete()
+    tickets[main_ticket_id].delete()
     return event
