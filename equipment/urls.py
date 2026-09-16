@@ -1,0 +1,41 @@
+from django.contrib.auth import views as auth_views
+from django.urls import path
+
+from inventory.auth_forms import WarehouseAuthenticationForm
+
+from . import views
+
+urlpatterns = [
+    path(
+        "login/",
+        auth_views.LoginView.as_view(
+            template_name="equipment/login.html",
+            authentication_form=WarehouseAuthenticationForm,
+            next_page="equipment_dashboard",
+        ),
+        name="login",
+    ),
+    path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
+    path("", views.dashboard, name="equipment_dashboard"),
+    path("assets/", views.asset_list, name="equipment_asset_list"),
+    path("assets/add/", views.asset_create, name="equipment_asset_create"),
+    path("assets/<uuid:pk>/", views.asset_detail, name="equipment_asset_detail"),
+    path("assets/<uuid:pk>/edit/", views.asset_edit, name="equipment_asset_edit"),
+    path("assets/<uuid:pk>/return/", views.asset_return, name="equipment_asset_return"),
+    path("assets/<uuid:pk>/label/", views.asset_label, name="equipment_asset_label"),
+    path("checkouts/", views.checkout_list, name="equipment_checkout_list"),
+    path("checkouts/new/", views.checkout_create, name="equipment_checkout_create"),
+    path("checkouts/<uuid:pk>/", views.checkout_detail, name="equipment_checkout_detail"),
+    path("reservations/", views.reservation_list, name="equipment_reservations"),
+    path("reservations/<uuid:pk>/status/", views.reservation_status, name="equipment_reservation_status"),
+    path("maintenance/", views.maintenance_list, name="equipment_maintenance"),
+    path("maintenance/<int:pk>/complete/", views.maintenance_complete, name="equipment_maintenance_complete"),
+    path("rentals/", views.rental_list, name="equipment_rentals"),
+    path("history/", views.history, name="equipment_history"),
+    path("reports/", views.reports, name="equipment_reports"),
+    path("reports/export.csv", views.export_assets, name="equipment_export"),
+    path("imports/", views.import_center, name="equipment_import"),
+    path("imports/<uuid:pk>/", views.import_batch, name="equipment_import_batch"),
+    path("scan/", views.scan_lookup, name="equipment_scan"),
+    path("api/scan/", views.scan_api, name="equipment_scan_api"),
+]

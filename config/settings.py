@@ -36,7 +36,7 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() in {"1", "true", "yes", 
 # Internal LAN/Tailscale hostnames were pruned on 2026-09-13 to reduce attack
 # surface; if you need to expose the app directly on the internal network
 # again, add them back as concrete entries (no wildcards) and document why.
-# The reverse proxy at bbx.rplwms.com / requests.rplwms.com terminates TLS
+# The reverse proxy at bbx.rplwms.com / requests.rplwms.com / equipment.rplwms.com terminates TLS
 # and forwards to gunicorn on 127.0.0.1:8089, so this list only needs
 # loopback entries plus the public hostnames.
 ALLOWED_HOSTS = [
@@ -44,6 +44,7 @@ ALLOWED_HOSTS = [
     'localhost',
     'bbx.rplwms.com',
     'requests.rplwms.com',
+    'equipment.rplwms.com',
     'rplwms.com',
     'www.rplwms.com',
     'wms.bonksystems.com',
@@ -52,6 +53,7 @@ ALLOWED_HOSTS = [
 
 APP_URL = 'https://bbx.rplwms.com'
 REQUESTS_URL = 'https://requests.rplwms.com'
+EQUIPMENT_URL = 'https://equipment.rplwms.com'
 
 WEBPUSH_VAPID_PUBLIC_KEY = os.environ.get("WEBPUSH_VAPID_PUBLIC_KEY", "")
 WEBPUSH_VAPID_PRIVATE_KEY = os.environ.get("WEBPUSH_VAPID_PRIVATE_KEY", "")
@@ -91,6 +93,7 @@ PORTAL_TRUSTED_PROXY_IPS = [
 CSRF_TRUSTED_ORIGINS = [
     'https://bbx.rplwms.com',
     'https://requests.rplwms.com',
+    'https://equipment.rplwms.com',
     'https://rplwms.com',
     'https://www.rplwms.com',
     'https://wms.bonksystems.com',
@@ -121,6 +124,7 @@ INSTALLED_APPS = [
     'axes',
     'csp',
     'inventory',
+    'equipment',
 ]
 
 AXES_ENABLED = not RUNNING_TESTS
@@ -196,7 +200,8 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': Path(os.environ.get('DJANGO_DB_PATH', BASE_DIR / 'db.sqlite3')),
+        'OPTIONS': {'timeout': float(os.environ.get('DJANGO_SQLITE_TIMEOUT', '30'))},
     }
 }
 

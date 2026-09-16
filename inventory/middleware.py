@@ -16,9 +16,10 @@ class ProxySSLHeaderMiddleware:
 
 
 class HostURLConfMiddleware:
-    """Strictly isolate the focused request portal from warehouse URLs."""
+    """Strictly isolate the request and equipment portals from warehouse URLs."""
 
     request_host = "requests.rplwms.com"
+    equipment_host = "equipment.rplwms.com"
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -26,9 +27,12 @@ class HostURLConfMiddleware:
     def __call__(self, request):
         host = request.get_host().split(":", 1)[0].lower().rstrip(".")
         request.is_request_portal = host == self.request_host
+        request.is_equipment_portal = host == self.equipment_host
         request.is_wms_host = host == "bbx.rplwms.com"
         if request.is_request_portal:
             request.urlconf = "inventory.request_urls"
+        elif request.is_equipment_portal:
+            request.urlconf = "equipment.urls"
         return self.get_response(request)
 
 

@@ -1,0 +1,27 @@
+{% load static %}<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light"><meta name="theme-color" content="#15171a">
+  <title>{% block title %}RPL Equipment{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'equipment/css/equipment.css' %}">
+  <script src="{% static 'equipment/js/equipment.js' %}" defer></script>
+</head>
+<body>
+<header class="site-header equipment-header">
+  <a class="brand" href="{% if user.is_authenticated %}{% url 'equipment_dashboard' %}{% else %}{% url 'login' %}{% endif %}"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box"><span>RPL Equipment</span></a>
+  {% if user.is_authenticated %}
+  <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="equipment-nav"><span class="nav-toggle-icon"><i></i><i></i><i></i></span><span>Menu</span></button>
+  <nav class="site-nav site-nav--sectioned" id="equipment-nav">
+    <div class="mobile-nav-head"><div><strong>RPL Equipment</strong><small>Asset control center</small></div><button class="mobile-nav-close" type="button" aria-label="Close menu">×</button></div>
+    <section class="nav-section"><span class="nav-section-label">Workspace</span><a href="{% url 'equipment_dashboard' %}">Dashboard</a><a href="{% url 'equipment_asset_list' %}">Equipment</a><a href="{% url 'equipment_scan' %}">Scan</a></section>
+    <section class="nav-section"><span class="nav-section-label">Operations</span><a href="{% url 'equipment_checkout_list' %}">Custody</a><a href="{% url 'equipment_reservations' %}">Reservations</a><a href="{% url 'equipment_maintenance' %}">Maintenance</a><a href="{% url 'equipment_rentals' %}">Rentals</a></section>
+    <section class="nav-section"><span class="nav-section-label">Insights</span><a href="{% url 'equipment_reports' %}">Reports</a>{% if perms.equipment.view_equipment_audit %}<a href="{% url 'equipment_history' %}">History</a>{% endif %}{% if perms.equipment.import_equipment %}<a href="{% url 'equipment_import' %}">Imports</a>{% endif %}</section>
+    <div class="mobile-nav-account"><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary w-100" type="submit">Sign out</button></form></div>
+  </nav>
+  <div class="header-controls"><button class="equipment-theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme"><span aria-hidden="true">◐</span><span>Theme</span></button><span class="user-info">{{ user.get_full_name|default:user.username }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary sm" type="submit">Sign out</button></form></div>
+  {% endif %}
+</header>
+<main>{% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main>
+</body></html>
