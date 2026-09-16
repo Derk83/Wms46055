@@ -16,14 +16,28 @@
   <a class="brand" href="{% if user.is_authenticated %}{% url 'equipment_dashboard' %}{% else %}{% url 'login' %}{% endif %}" aria-label="RPL Equipment home">{% include "equipment/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>EQUIPMENT</small></span></a>
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="equipment-nav"><span class="nav-toggle-icon"><i></i><i></i><i></i></span><span>Menu</span></button>
-  <nav class="site-nav site-nav--sectioned" id="equipment-nav">
-    <div class="mobile-nav-head"><div><strong>RPL Equipment</strong><small>Asset control center</small></div><button class="mobile-nav-close" type="button" aria-label="Close menu">×</button></div>
-    <section class="nav-section"><span class="nav-section-label">Workspace</span><a href="{% url 'equipment_dashboard' %}">Dashboard</a><a href="{% url 'equipment_asset_list' %}">Equipment</a><a href="{% url 'equipment_scan' %}">Scan</a></section>
-    <section class="nav-section"><span class="nav-section-label">Operations</span><a href="{% url 'equipment_checkout_list' %}">Custody</a><a href="{% url 'equipment_reservations' %}">Reservations</a><a href="{% url 'equipment_maintenance' %}">Maintenance</a><a href="{% url 'equipment_rentals' %}">Rentals</a></section>
-    <section class="nav-section"><span class="nav-section-label">Insights</span><a href="{% url 'equipment_reports' %}">Reports</a>{% if perms.equipment.view_equipment_audit %}<a href="{% url 'equipment_history' %}">History</a>{% endif %}{% if perms.equipment.import_equipment %}<a href="{% url 'equipment_import' %}">Imports</a>{% endif %}</section>
-    <div class="mobile-nav-account"><strong>{{ user.get_full_name|default:user.username }}</strong><button class="btn secondary w-100 pwa-install-button" type="button" data-pwa-install hidden>Install app</button><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary w-100" type="submit">Sign out</button></form></div>
+  <nav class="site-nav" id="equipment-nav">
+    <div class="mobile-nav-head"><div><strong>Menu</strong><small>Equipment navigation</small></div><button type="button" class="mobile-nav-close" aria-label="Close navigation">×</button></div>
+    <section class="nav-section"><span class="nav-section-label">Workspace</span><a href="{% url 'equipment_dashboard' %}">Dashboard</a><a href="{% url 'equipment_asset_list' %}">Equipment</a><a href="{% url 'equipment_scan' %}">Scan</a><a href="{% url 'equipment_checkout_list' %}">Custody</a><a href="{% url 'equipment_reservations' %}">Reservations</a></section>
+    <div class="header-more">
+      <button class="header-more-toggle" type="button" data-header-more-toggle aria-expanded="false" aria-controls="equipment-more-menu">More <span aria-hidden="true">▾</span></button>
+      <div id="equipment-more-menu" class="header-more-menu" data-header-more-menu hidden>
+        <section><strong>Operations</strong><a href="{% url 'equipment_maintenance' %}">Maintenance</a><a href="{% url 'equipment_rentals' %}">Rentals</a></section>
+        <section><strong>Insights</strong><a href="{% url 'equipment_reports' %}">Reports</a>{% if perms.equipment.view_equipment_audit %}<a href="{% url 'equipment_history' %}">History</a>{% endif %}</section>
+        {% if perms.equipment.import_equipment %}<section><strong>Admin</strong><a href="{% url 'equipment_import' %}">Imports</a></section>{% endif %}
+      </div>
+    </div>
+    <div class="mobile-nav-utilities" aria-label="App controls"><button class="mobile-nav-utility mobile-nav-install pwa-install-button" type="button" data-pwa-install hidden><span aria-hidden="true">⇩</span><span>Install app</span></button><button class="mobile-nav-utility" type="button" data-equipment-theme-toggle><span aria-hidden="true">◐</span><span>Theme</span></button></div>
+    <div class="mobile-nav-account"><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary w-100" type="submit">Sign out</button></form></div>
   </nav>
-  <div class="header-controls"><button class="equipment-theme-toggle pwa-install-button" type="button" data-pwa-install hidden aria-label="Install RPL Equipment"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg><span>Install</span></button><button class="equipment-theme-toggle" id="theme-toggle" type="button" aria-label="Switch color theme"><span aria-hidden="true">◐</span><span>Theme</span></button><span class="user-info">{{ user.get_full_name|default:user.username }}</span><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary sm" type="submit">Sign out</button></form></div>
+  <div class="header-controls">
+    <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install RPL Equipment" title="Install app"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg></button>
+    <button class="icon-button" type="button" data-equipment-theme-toggle aria-label="Switch color theme" title="Change color theme"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 9 9 0 1 0 20.7 15.1Z"/></svg></button>
+    <div class="account-menu">
+      <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="equipment-account-menu"><span class="account-menu-name">{{ user.get_full_name|default:user.username }}</span><span class="account-avatar" aria-hidden="true">{{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}</span><span class="account-chevron" aria-hidden="true">▾</span></button>
+      <div id="equipment-account-menu" class="account-menu-panel" data-account-menu hidden><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form></div>
+    </div>
+  </div>
   {% endif %}
 </header>
 <main>{% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main>
