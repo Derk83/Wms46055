@@ -1,0 +1,10 @@
+{% extends "equipment/base.html" %}
+{% block title %}Offline · RPL Equipment{% endblock %}
+{% block content %}
+<section class="card empty-state" aria-labelledby="offline-title">
+  <p class="equipment-eyebrow">Connection unavailable</p>
+  <h1 id="offline-title">RPL Equipment is offline</h1>
+  <p>Your equipment data was not cached. Reconnect to the network, then reload this page to continue.</p>
+  <a class="btn" href="/">Try again</a>
+</section>
+{% endblock %}

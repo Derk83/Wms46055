@@ -5,3 +5,6 @@
 @media(max-width:1100px){.equipment-operations-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.equipment-stats--wide{grid-template-columns:1fr 1fr}.equipment-attention .card-header{gap:10px}.attention-count{align-self:flex-start}.equipment-quick-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.equipment-quick-actions .btn{justify-content:center}.dashboard-list>a{align-items:stretch;flex-direction:column;gap:8px}.dashboard-list>a>span:last-child{text-align:left;justify-items:start}.equipment-capacity-table{min-width:580px}}
 @media print{.equipment-header{display:none!important}.asset-label{width:4in;margin:0;padding:.18in;border:2px solid #000}.asset-label img{width:1.25in;height:1.25in}.asset-label h1{font-size:24pt}}
+
+.equipment-header>.brand>.app-brand-copy{display:grid}
+@media(max-width:700px){.equipment-header>.brand>.app-brand-copy{display:none}}

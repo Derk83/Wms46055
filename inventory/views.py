@@ -126,18 +126,20 @@ def pwa_manifest(request):
     is_portal = getattr(request, "is_request_portal", False)
     name = "RPL Warehouse — Material Requests" if is_portal else "RPL Warehouse"
     short_name = "RPL Requests" if is_portal else "RPL WMS"
+    icon_name = "requests" if is_portal else "warehouse"
+    icon_192 = f"/static/inventory/icons/{icon_name}-192.png"
     shortcuts = [
         {
             "name": "New Material Request",
             "short_name": "New Request",
             "url": "/material-requests/new/",
-            "icons": [{"src": "/static/inventory/icons/icon-192.png", "sizes": "192x192"}],
+            "icons": [{"src": icon_192, "sizes": "192x192"}],
         },
         {
             "name": "Inventory",
             "short_name": "Inventory",
             "url": "/inventory/",
-            "icons": [{"src": "/static/inventory/icons/icon-192.png", "sizes": "192x192"}],
+            "icons": [{"src": icon_192, "sizes": "192x192"}],
         },
     ]
     manifest = {
@@ -153,8 +155,9 @@ def pwa_manifest(request):
         "theme_color": "#0b0c0e",
         "categories": ["business", "productivity"],
         "icons": [
-            {"src": "/static/inventory/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "/static/inventory/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"},
+            {"src": icon_192, "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": f"/static/inventory/icons/{icon_name}-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": f"/static/inventory/icons/{icon_name}-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
         ],
         "shortcuts": shortcuts,
     }

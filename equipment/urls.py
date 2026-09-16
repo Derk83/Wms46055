@@ -6,6 +6,9 @@ from inventory.auth_forms import WarehouseAuthenticationForm
 from . import views
 
 urlpatterns = [
+    path("manifest.webmanifest", views.pwa_manifest, name="equipment_pwa_manifest"),
+    path("service-worker.js", views.service_worker, name="equipment_service_worker"),
+    path("offline/", views.offline, name="equipment_offline"),
     path(
         "login/",
         auth_views.LoginView.as_view(

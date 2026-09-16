@@ -1,17 +1,16 @@
 {% load static inventory_extras %}
 'use strict';
 
-const CACHE_VERSION = 'bbx-shell-v5';
+const CACHE_VERSION = 'bbx-shell-v6';
 const OFFLINE_URL = '/offline/';
+const APP_ICON = '{% if request.is_request_portal %}{% static "inventory/icons/requests-192.png" %}{% else %}{% static "inventory/icons/warehouse-192.png" %}{% endif %}';
 const SHELL_ASSETS = [
   OFFLINE_URL,
   '{% versioned_static "inventory/css/app.css" %}',
   '{% versioned_static "inventory/js/app.js" %}',
   '{% versioned_static "inventory/js/pwa.js" %}',
   '{% versioned_static "inventory/js/push.js" %}',
-  '{% static "inventory/img/blackbox-logo.png" %}',
-  '{% static "inventory/icons/icon-192.png" %}',
-  '{% static "inventory/icons/icon-512.png" %}'
+  APP_ICON
 ];
 
 const populateShellCache = async () => {
@@ -79,7 +78,7 @@ self.addEventListener('push', (event) => {
   }
   const options = {
     body: data.body || 'A warehouse update is available.',
-    icon: '{% static "inventory/icons/icon-192.png" %}',
+    icon: APP_ICON,
     badge: '{% static "inventory/icons/badge-96.png" %}',
     tag: data.tag || 'black-box-warehouse',
     renotify: true,
@@ -114,7 +113,7 @@ self.addEventListener('notificationclick', (event) => {
         if (!response.ok) throw new Error('Delivery confirmation failed');
         return self.registration.showNotification('Delivery confirmation sent', {
           body: 'The warehouse has been notified that you are ready.',
-          icon: '{% static "inventory/icons/icon-192.png" %}',
+          icon: APP_ICON,
           tag: 'delivery-confirmed',
           data: {url: data.url || '/'}
         });

@@ -1,0 +1,16 @@
+<svg class="brand-logo app-mark" viewBox="0 0 112 112" aria-hidden="true" focusable="false">
+  <rect class="app-mark-tile" x="2" y="2" width="108" height="108" rx="25"/>
+  {% if request.is_request_portal %}
+  <g class="app-mark-symbol" transform="translate(5 7) scale(.98)">
+    <path d="M25 10h40l14 14v66H25zM65 10v15h14"/>
+    <path d="m34 40 5 5 8-9M53 41h15M34 59l5 5 8-9M53 60h15M34 78l5 5 8-9M53 79h15"/>
+  </g>
+  {% else %}
+  <g class="app-mark-symbol" transform="translate(7 4.5) scale(.98)">
+    <rect x="35" y="13" width="30" height="29" rx="3"/>
+    <rect x="17" y="48" width="30" height="29" rx="3"/>
+    <rect x="53" y="48" width="30" height="29" rx="3"/>
+    <path d="M11 85h78M21 85v7M79 85v7"/>
+  </g>
+  {% endif %}
+</svg>

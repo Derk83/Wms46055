@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 from django.contrib.auth.models import Permission, User
 from django.contrib.sessions.models import Session
+from django.contrib.staticfiles import finders
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -19,9 +20,9 @@ class PWAInstallabilityTests(TestCase):
         self.user = User.objects.create_user("pwa-user", password="pw")
 
     def test_manifest_is_installable_and_host_specific_on_both_domains(self):
-        for host, expected_name in (
-            ("bbx.rplwms.com", "RPL Warehouse"),
-            ("requests.rplwms.com", "RPL Warehouse — Material Requests"),
+        for host, expected_name, icon_name in (
+            ("bbx.rplwms.com", "RPL Warehouse", "warehouse"),
+            ("requests.rplwms.com", "RPL Warehouse — Material Requests", "requests"),
         ):
             response = self.client.get("/manifest.webmanifest", HTTP_HOST=host, secure=True)
             self.assertEqual(response.status_code, 200)
@@ -33,9 +34,12 @@ class PWAInstallabilityTests(TestCase):
             self.assertEqual(manifest["display"], "standalone")
             self.assertEqual({icon["sizes"] for icon in manifest["icons"]}, {"192x192", "512x512"})
             self.assertTrue(any("maskable" in icon.get("purpose", "") for icon in manifest["icons"]))
+            self.assertTrue(all(f"/{icon_name}-" in icon["src"] for icon in manifest["icons"]))
+            for icon in manifest["icons"]:
+                self.assertIsNotNone(finders.find(icon["src"].removeprefix("/static/")))
 
     def test_service_worker_is_root_scoped_and_never_intercepts_writes(self):
-        for host in ("bbx.rplwms.com", "requests.rplwms.com"):
+        for host, icon_name in (("bbx.rplwms.com", "warehouse"), ("requests.rplwms.com", "requests")):
             response = self.client.get("/service-worker.js", HTTP_HOST=host, secure=True)
             self.assertEqual(response.status_code, 200)
             self.assertTrue(response["Content-Type"].startswith("application/javascript"))
@@ -48,7 +52,8 @@ class PWAInstallabilityTests(TestCase):
             self.assertNotIn("/api/", source)
             self.assertIn("request.mode === 'navigate'", source)
             self.assertIn("/offline/", source)
-            self.assertIn("const CACHE_VERSION = 'bbx-shell-v5';", source)
+            self.assertIn("const CACHE_VERSION = 'bbx-shell-v6';", source)
+            self.assertIn(f"/static/inventory/icons/{icon_name}-192.png", source)
             self.assertIn("new Request(asset, {cache: 'reload'})", source)
             self.assertIn("fetch(request, {cache: 'no-store'})", source)
             self.assertIn("catch(() => caches.match(request))", source)

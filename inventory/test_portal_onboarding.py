@@ -101,7 +101,7 @@ def test_public_root_is_branded_registration_not_internal_portal_data():
     response = Client().get("/", HTTP_HOST=REQUEST_HOST)
     body = response.content.decode()
     assert response.status_code == 200
-    assert "BLACK BOX" in body and "Request access" in body and "Already approved? Sign in" in body
+    assert "RPL" in body and "MATERIAL REQUESTS" in body and "Request access" in body and "Already approved? Sign in" in body
     assert "Inventory On Hand" not in body and "Material Request Board" not in body
     assert "no-store" in response["Cache-Control"]
 

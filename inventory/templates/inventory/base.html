@@ -16,15 +16,21 @@
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/notification-center.css' %}">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="{% static 'inventory/icons/apple-touch-icon.png' %}">
+  {% if request.is_request_portal %}
+  <link rel="icon" type="image/svg+xml" href="{% static 'inventory/branding/requests-mark.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'inventory/icons/requests-apple-touch-icon.png' %}">
+  {% else %}
+  <link rel="icon" type="image/svg+xml" href="{% static 'inventory/branding/warehouse-mark.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'inventory/icons/warehouse-apple-touch-icon.png' %}">
+  {% endif %}
 </head>
 <body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
 <header class="site-header{% if request.is_request_portal %} site-header--portal{% else %} site-header--wms{% endif %}">
   {% if user.is_authenticated and not request.is_request_portal %}
   <div class="desktop-header-top">
     <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">
-      <img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse">
-      <span class="brand-primary">RPL Warehouse</span>
+      {% include "inventory/includes/app_mark.html" %}
+      <span class="app-brand-copy"><strong>RPL</strong><small>WAREHOUSE</small></span>
     </a>
     <form class="desktop-global-search" method="get" action="{% url 'global_search' %}" role="search">
       <label class="sr-only" for="desktop-global-search-input">Search warehouse</label>
@@ -75,9 +81,9 @@
       </div>
     </div>
   </nav>
-  <a class="brand mobile-header-brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse"><span class="brand-primary">RPL Warehouse</span></a>
+  <a class="brand mobile-header-brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">{% include "inventory/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>WAREHOUSE</small></span></a>
   {% else %}
-  <a class="brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="RPL Warehouse"><span class="brand-primary">RPL Warehouse</span>{% if request.is_request_portal %}<span class="brand-subtitle">Material Requests</span>{% endif %}</a>
+  <a class="brand" href="{% url 'dashboard' %}" aria-label="{% if request.is_request_portal %}RPL Material Requests{% else %}RPL Warehouse{% endif %} home">{% include "inventory/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>{% if request.is_request_portal %}MATERIAL REQUESTS{% else %}WAREHOUSE{% endif %}</small></span></a>
   {% endif %}
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle><span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span><span data-mobile-nav-label>Menu</span></button>

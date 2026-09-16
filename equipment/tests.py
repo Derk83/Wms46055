@@ -7,6 +7,7 @@ import zipfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
+from django.contrib.staticfiles import finders
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -253,6 +254,31 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.assertIn("/login/", response.url)
         self.assertEqual(self.client.get("/inventory/").status_code, 404)
         self.assertEqual(self.client.get("/material-requests/").status_code, 404)
+
+    def test_equipment_manifest_and_login_use_equipment_identity(self):
+        manifest_response = self.client.get("/manifest.webmanifest", secure=True)
+        self.assertEqual(manifest_response.status_code, 200)
+        self.assertEqual(manifest_response["Content-Type"], "application/manifest+json")
+        manifest = manifest_response.json()
+        self.assertEqual(manifest["name"], "RPL Equipment")
+        self.assertEqual({icon["sizes"] for icon in manifest["icons"]}, {"192x192", "512x512"})
+        self.assertTrue(all("/equipment-" in icon["src"] for icon in manifest["icons"]))
+        self.assertTrue(any(icon["purpose"] == "maskable" for icon in manifest["icons"]))
+        for icon in manifest["icons"]:
+            self.assertIsNotNone(finders.find(icon["src"].removeprefix("/static/")))
+
+        worker = self.client.get("/service-worker.js", secure=True)
+        self.assertEqual(worker.status_code, 200)
+        self.assertEqual(worker["Content-Type"], "application/javascript")
+        self.assertEqual(worker["Service-Worker-Allowed"], "/")
+        self.assertIn(b"rpl-equipment-shell-v1", worker.content)
+        self.assertContains(self.client.get("/offline/", secure=True), "RPL Equipment is offline")
+
+        login = self.client.get("/login/", secure=True)
+        self.assertContains(login, 'href="/manifest.webmanifest"', html=False)
+        self.assertContains(login, "equipment/branding/equipment-mark.svg")
+        self.assertContains(login, "equipment/icons/equipment-apple-touch-icon.png")
+        self.assertContains(login, "app-mark-symbol")
 
     def test_authorized_dashboard_and_register_render(self):
         self.client.force_login(self.user)

@@ -15,7 +15,8 @@ from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_http_methods, require_POST, require_safe
 
 from .forms import (
     AssetForm,
@@ -89,6 +90,50 @@ def _csv_safe(value):
     if isinstance(value, str) and value.startswith(("=", "+", "-", "@")):
         return "'" + value
     return value
+
+
+@require_safe
+@never_cache
+def pwa_manifest(request):
+    manifest = {
+        "id": "/",
+        "name": "RPL Equipment",
+        "short_name": "RPL Equipment",
+        "description": "RPL equipment custody, reservations, maintenance, and asset control.",
+        "start_url": "/",
+        "scope": "/",
+        "display": "standalone",
+        "display_override": ["window-controls-overlay", "standalone"],
+        "background_color": "#0b0c0e",
+        "theme_color": "#0b0c0e",
+        "categories": ["business", "productivity"],
+        "icons": [
+            {"src": "/static/equipment/icons/equipment-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "/static/equipment/icons/equipment-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "/static/equipment/icons/equipment-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+        ],
+        "shortcuts": [
+            {"name": "Equipment register", "short_name": "Equipment", "url": "/assets/", "icons": [{"src": "/static/equipment/icons/equipment-192.png", "sizes": "192x192"}]},
+            {"name": "Scan equipment", "short_name": "Scan", "url": "/scan/", "icons": [{"src": "/static/equipment/icons/equipment-192.png", "sizes": "192x192"}]},
+        ],
+    }
+    response = JsonResponse(manifest, content_type="application/manifest+json")
+    response["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+    return response
+
+
+@require_safe
+@never_cache
+def service_worker(request):
+    response = render(request, "equipment/service_worker.js", content_type="application/javascript")
+    response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response["Service-Worker-Allowed"] = "/"
+    return response
+
+
+@require_safe
+def offline(request):
+    return render(request, "equipment/offline.html")
 
 
 @equipment_access

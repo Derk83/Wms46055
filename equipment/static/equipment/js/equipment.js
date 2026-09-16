@@ -1,6 +1,11 @@
 (() => {
   "use strict";
   const root = document.documentElement;
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/service-worker.js").catch(() => {});
+    });
+  }
   const themeButton = document.getElementById("theme-toggle");
   const savedTheme = localStorage.getItem("equipment-theme");
   const preferredLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;

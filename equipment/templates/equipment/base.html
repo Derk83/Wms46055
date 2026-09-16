@@ -6,11 +6,14 @@
   <title>{% block title %}RPL Equipment{% endblock %}</title>
   <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
   <link rel="stylesheet" href="{% static 'equipment/css/equipment.css' %}">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="{% static 'equipment/branding/equipment-mark.svg' %}">
+  <link rel="apple-touch-icon" href="{% static 'equipment/icons/equipment-apple-touch-icon.png' %}">
   <script src="{% static 'equipment/js/equipment.js' %}" defer></script>
 </head>
 <body>
 <header class="site-header equipment-header">
-  <a class="brand" href="{% if user.is_authenticated %}{% url 'equipment_dashboard' %}{% else %}{% url 'login' %}{% endif %}"><img class="brand-logo" src="{% static 'inventory/img/blackbox-logo.png' %}" alt="Black Box"><span>RPL Equipment</span></a>
+  <a class="brand" href="{% if user.is_authenticated %}{% url 'equipment_dashboard' %}{% else %}{% url 'login' %}{% endif %}" aria-label="RPL Equipment home">{% include "equipment/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>EQUIPMENT</small></span></a>
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="equipment-nav"><span class="nav-toggle-icon"><i></i><i></i><i></i></span><span>Menu</span></button>
   <nav class="site-nav site-nav--sectioned" id="equipment-nav">
