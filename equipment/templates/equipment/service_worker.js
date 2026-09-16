@@ -1,6 +1,6 @@
 {% load static inventory_extras %}
 "use strict";
-const CACHE_VERSION = "rpl-equipment-shell-v1";
+const CACHE_VERSION = "rpl-equipment-shell-v2";
 const OFFLINE_URL = "/offline/";
 const SHELL = [
   OFFLINE_URL,

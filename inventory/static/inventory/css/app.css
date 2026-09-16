@@ -213,6 +213,7 @@ html,body{max-width:100%}body{overflow-x:hidden}main,.page-header,.card,.row,.ro
 @media(max-width:600px){.cascade-delete-dialog form{padding:19px}.cascade-delete-dialog .actions{align-items:stretch;flex-direction:column}.cascade-delete-dialog .btn{width:100%}.cascade-linked-records li{align-items:flex-start;flex-direction:column;gap:3px}}
 
 /* Keep app marks square and portal branding legible after legacy wordmark rules. */
+.kanban-empty{margin-bottom:14px}
 .site-header--portal .brand .app-mark,.portal-public-header .brand .app-mark{width:44px;height:44px;flex-basis:44px}
 .site-header--portal .brand .app-brand-copy,.portal-public-header .brand .app-brand-copy{display:grid;color:#f6f7f8}
 .site-header--portal .app-brand-copy strong,.portal-public-header .app-brand-copy strong{color:#f6f7f8}

@@ -1,6 +1,8 @@
 from datetime import datetime, timezone as datetime_timezone
+from pathlib import Path
 
 from django.contrib.auth.models import Group, Permission, User
+from django.contrib.staticfiles import finders
 from django.db import IntegrityError, transaction
 from django.test import Client, TestCase, TransactionTestCase
 from django.urls import reverse
@@ -222,6 +224,8 @@ class MaterialRequestAccessAndHostTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'class="kanban kanban-empty"', html=False)
         self.assertContains(response, "No requests found")
+        stylesheet = Path(finders.find("inventory/css/app.css")).read_text()
+        self.assertIn(".kanban-empty{margin-bottom:14px}", stylesheet)
 
         self._request_for(self.user, "Portal User")
         populated = self.client.get(

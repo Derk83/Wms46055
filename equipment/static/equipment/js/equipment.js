@@ -6,6 +6,43 @@
       navigator.serviceWorker.register("/service-worker.js").catch(() => {});
     });
   }
+
+  let installPrompt = null;
+  const installButtons = Array.from(document.querySelectorAll("[data-pwa-install]"));
+  const isiOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const hideInstall = () => installButtons.forEach((button) => { button.hidden = true; });
+  const showInstall = () => installButtons.forEach((button) => { button.hidden = false; });
+  const showInstallMessage = (message) => {
+    const region = document.getElementById("toast-region");
+    if (!region) return;
+    const item = document.createElement("div");
+    item.className = "toast";
+    item.textContent = message;
+    region.appendChild(item);
+    window.setTimeout(() => item.remove(), 5500);
+  };
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPrompt = event;
+    showInstall();
+  });
+  if (isiOS && !standalone) showInstall();
+  installButtons.forEach((button) => button.addEventListener("click", async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      await installPrompt.userChoice;
+      installPrompt = null;
+      hideInstall();
+    } else if (isiOS) {
+      showInstallMessage("To install RPL Equipment: tap Share, then Add to Home Screen.");
+    }
+  }));
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    hideInstall();
+  });
+
   const themeButton = document.getElementById("theme-toggle");
   const savedTheme = localStorage.getItem("equipment-theme");
   const preferredLight = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
