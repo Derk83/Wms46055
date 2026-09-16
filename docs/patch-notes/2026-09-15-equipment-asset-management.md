@@ -37,11 +37,11 @@ The import preserves source provenance, reconstructs baseline custody history, e
 
 ## Verification
 
-- Full release gate: **547 tests passed**, **45 Django subtests passed**.
+- Full release gate: **548 tests passed**, **45 Django subtests passed**.
 - Final focused equipment gate: **28 tests passed**.
 - Django system check: no issues.
 - Migration drift: none.
-- Independent security and data-integrity review completed; all blocker, high, and medium findings resolved.
+- Independent securit...[truncated]
 - Production migrations `equipment.0001` through `equipment.0003` applied successfully.
 - Production service active with zero unexpected restarts.
 - Authenticated checks returned HTTP 200 for dashboard, register, asset detail, reservations, maintenance, rentals, history, reports, imports, and scanner.
