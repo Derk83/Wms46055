@@ -40,5 +40,6 @@ urlpatterns = [
     path("imports/", views.import_center, name="equipment_import"),
     path("imports/<uuid:pk>/", views.import_batch, name="equipment_import_batch"),
     path("scan/", views.scan_lookup, name="equipment_scan"),
+    path("api/assets/search/", views.asset_search_api, name="equipment_asset_search_api"),
     path("api/scan/", views.scan_api, name="equipment_scan_api"),
 ]

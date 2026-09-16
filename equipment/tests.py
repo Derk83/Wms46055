@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 from io import BytesIO
 import os
 from pathlib import Path
@@ -286,21 +287,24 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.client.force_login(self.user)
         dashboard = self.client.get("/")
         self.assertEqual(dashboard.status_code, 200)
-        self.assertContains(dashboard, "Equipment control center")
+        self.assertContains(dashboard, "Equipment overview")
         self.assertContains(dashboard, "Needs attention")
         self.assertContains(dashboard, "Active custody")
         self.assertContains(dashboard, "Upcoming reservations")
-        self.assertContains(dashboard, "Equipment register")
+        self.assertContains(dashboard, "Live equipment")
         self.assertContains(dashboard, "Availability by category")
+        self.assertContains(dashboard, "Current utilization")
         self.assertContains(dashboard, 'data-pwa-install', count=2, html=False)
         self.assertContains(dashboard, 'data-equipment-theme-toggle', count=2, html=False)
-        self.assertContains(dashboard, 'data-header-more-toggle', count=1, html=False)
+        self.assertContains(dashboard, 'class="equipment-sidebar"', count=1, html=False)
+        self.assertContains(dashboard, 'data-equipment-live-search', count=1, html=False)
         self.assertContains(dashboard, 'data-account-toggle', count=1, html=False)
         self.assertContains(dashboard, 'id="toast-region"', html=False)
         script = Path(finders.find("equipment/js/equipment.js")).read_text()
         self.assertIn("beforeinstallprompt", script)
         self.assertIn("Add to Home Screen", script)
         self.assertIn("closeHeaderMenus", script)
+        self.assertIn("AbortController", script)
         register = self.client.get("/assets/?q=TEST01")
         self.assertEqual(register.status_code, 200)
         self.assertContains(register, self.asset.asset_tag)
@@ -461,12 +465,17 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.client.force_login(user)
         dashboard = self.client.get("/")
         self.assertEqual(dashboard.status_code, 200)
-        self.assertContains(dashboard, "Equipment register")
+        self.assertContains(dashboard, "Live equipment")
         self.assertNotContains(dashboard, "Active custody")
         self.assertNotContains(dashboard, "Upcoming reservations")
         self.assertNotContains(dashboard, "Maintenance queue")
         self.assertNotContains(dashboard, "Active rentals")
         self.assertNotContains(dashboard, "Recent activity")
+        self.assertNotContains(dashboard, 'href="/checkouts/"', html=False)
+        self.assertNotContains(dashboard, 'href="/reservations/"', html=False)
+        self.assertNotContains(dashboard, 'href="/maintenance/"', html=False)
+        self.assertNotContains(dashboard, 'href="/rentals/"', html=False)
+        self.assertNotContains(dashboard, 'href="/reports/"', html=False)
         self.assertEqual(self.client.get("/assets/").status_code, 200)
         self.assertEqual(self.client.get("/checkouts/").status_code, 403)
         self.assertEqual(self.client.get("/maintenance/").status_code, 403)
@@ -523,6 +532,90 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         response = self.client.get("/api/scan/", {"q": "DUPLICATE"})
         self.assertEqual(response.status_code, 409)
         self.assertTrue(response.json()["ambiguous"])
+
+    def test_asset_search_api_matches_serial_and_excludes_sensitive_fields(self):
+        AssetIdentifier.objects.create(
+            asset=self.asset,
+            kind=AssetIdentifier.Kind.SERIAL,
+            namespace="SERIAL",
+            value="SECRET-SERIAL-42",
+        )
+        self.asset.purchase_cost = Decimal("999.99")
+        self.asset.review_notes = "Sensitive review note"
+        self.asset.save(update_fields=("purchase_cost", "review_notes", "updated_at"))
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/assets/search/", {"q": "SECRET-SERIAL"})
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["results"]), 1)
+        self.assertEqual(payload["results"][0]["asset_tag"], self.asset.asset_tag)
+        self.assertNotIn("purchase_cost", payload["results"][0])
+        self.assertNotIn("review_notes", payload["results"][0])
+        self.assertEqual(self.client.get("/api/assets/search/", {"category": "invalid"}).json()["results"], [])
+
+    def test_dashboard_utilization_excludes_service_assets(self):
+        self.asset.status = Asset.Status.CHECKED_OUT
+        self.asset.save(update_fields=("status", "updated_at"))
+        Asset.objects.create(
+            asset_tag="RPL-EQ-TRANSIT",
+            category=self.category,
+            name="Transit scanner",
+            status=Asset.Status.IN_TRANSIT,
+            condition=Asset.Condition.GOOD,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        Asset.objects.create(
+            asset_tag="RPL-EQ-SERVICE",
+            category=self.category,
+            name="Service scanner",
+            status=Asset.Status.MAINTENANCE,
+            condition=Asset.Condition.FAIR,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.context["utilized_total"], 2)
+        self.assertEqual(response.context["operational_pool_total"], 2)
+        self.assertEqual(response.context["utilization_percent"], 100)
+        self.assertEqual(response.context["category_capacity"][0].service, 1)
+
+    def test_dashboard_rental_cost_watch_requires_cost_permission(self):
+        vendor = EquipmentVendor.objects.create(name="Rental Cost Vendor")
+        contract = RentalContract.objects.create(
+            contract_number="RENT-COST-001",
+            vendor=vendor,
+            starts_on=timezone.localdate(),
+            status=RentalContract.Status.ACTIVE,
+            created_by=self.user,
+        )
+        RentalAsset.objects.create(
+            contract=contract,
+            asset=self.asset,
+            rate_amount=Decimal("1200.00"),
+            rate_period=RentalAsset.RatePeriod.FOUR_WEEK,
+        )
+        self.client.force_login(self.user)
+        authorized = self.client.get("/")
+        self.assertTrue(authorized.context["can_view_rental_costs"])
+        self.assertEqual(authorized.context["rental_monthly_cost"], Decimal("1300.00"))
+        self.assertContains(authorized, "Rental cost watch")
+        self.assertContains(authorized, "$1300.00")
+
+        self.user.user_permissions.remove(
+            Permission.objects.get(codename="view_asset_costs", content_type__app_label="equipment")
+        )
+        user_without_costs = get_user_model().objects.get(pk=self.user.pk)
+        self.client.force_login(user_without_costs)
+        restricted = self.client.get("/")
+        self.assertFalse(restricted.context["can_view_rental_costs"])
+        self.assertNotContains(restricted, "Rental cost watch")
+        self.assertNotContains(restricted, "$1300.00")
 
     def test_csv_formula_values_are_neutralized(self):
         self.asset.name = '=HYPERLINK("https://invalid.example")'

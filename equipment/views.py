@@ -1,8 +1,10 @@
 import base64
 import csv
 from datetime import datetime, time, timedelta
+from decimal import Decimal
 from functools import wraps
 from io import BytesIO
+from urllib.parse import urlencode
 
 import qrcode
 from django.contrib import messages
@@ -134,6 +136,36 @@ def service_worker(request):
 @require_safe
 def offline(request):
     return render(request, "equipment/offline.html")
+
+
+def _filter_assets(queryset, *, query="", category="", status="", ownership="", review=""):
+    if query:
+        queryset = queryset.filter(
+            Q(asset_tag__icontains=query)
+            | Q(legacy_tag__icontains=query)
+            | Q(name__icontains=query)
+            | Q(manufacturer__icontains=query)
+            | Q(model_number__icontains=query)
+            | Q(identifiers__value__icontains=query)
+            | Q(current_party__display_name__icontains=query)
+            | Q(current_location__name__icontains=query)
+            | Q(current_location__code__icontains=query)
+        ).distinct()
+    if category:
+        try:
+            category_id = int(category)
+        except (TypeError, ValueError):
+            return queryset.none()
+        queryset = queryset.filter(category_id=category_id)
+    if status:
+        valid_statuses = {choice for choice, _label in Asset.Status.choices}
+        queryset = queryset.filter(status=status) if status in valid_statuses else queryset.none()
+    if ownership:
+        valid_ownerships = {choice for choice, _label in Asset.Ownership.choices}
+        queryset = queryset.filter(ownership=ownership) if ownership in valid_ownerships else queryset.none()
+    if review == "1":
+        queryset = queryset.filter(review_required=True)
+    return queryset
 
 
 @equipment_access
@@ -285,17 +317,66 @@ def dashboard(request):
         + rental_obligations.count()
     )
 
-    category_capacity = (
+    category_capacity = list(
         EquipmentCategory.objects.filter(active=True, assets__archived_at__isnull=True)
         .annotate(
             total=Count("assets"),
             available=Count("assets", filter=Q(assets__status=Asset.Status.AVAILABLE)),
             checked_out=Count("assets", filter=Q(assets__status=Asset.Status.CHECKED_OUT)),
+            in_transit=Count("assets", filter=Q(assets__status=Asset.Status.IN_TRANSIT)),
             reserved=Count("assets", filter=Q(assets__status=Asset.Status.RESERVED)),
             service=Count("assets", filter=Q(assets__status__in=(Asset.Status.MAINTENANCE, Asset.Status.OUT_OF_SERVICE))),
         )
         .order_by("name")
     )
+    for category_item in category_capacity:
+        category_item.operational_pool = (
+            category_item.available + category_item.reserved + category_item.checked_out + category_item.in_transit
+        )
+        category_item.utilized = category_item.checked_out + category_item.in_transit
+        category_item.utilization_percent = (
+            round(category_item.utilized * 100 / category_item.operational_pool)
+            if category_item.operational_pool
+            else 0
+        )
+
+    utilized_total = status_counts.get(Asset.Status.CHECKED_OUT, 0) + status_counts.get(Asset.Status.IN_TRANSIT, 0)
+    operational_pool_total = (
+        status_counts.get(Asset.Status.AVAILABLE, 0)
+        + status_counts.get(Asset.Status.RESERVED, 0)
+        + utilized_total
+    )
+    utilization_percent = round(utilized_total * 100 / operational_pool_total) if operational_pool_total else 0
+
+    can_view_rental_costs = can_view_rentals and request.user.has_perm("equipment.view_asset_costs")
+    rental_monthly_cost = Decimal("0.00")
+    rental_uncosted_asset_total = 0
+    rental_cost_by_vendor = []
+    if can_view_rental_costs:
+        cost_by_vendor = {}
+        rate_multipliers = {
+            RentalAsset.RatePeriod.DAY: Decimal(365) / Decimal(12),
+            RentalAsset.RatePeriod.WEEK: Decimal(52) / Decimal(12),
+            RentalAsset.RatePeriod.FOUR_WEEK: Decimal(13) / Decimal(12),
+            RentalAsset.RatePeriod.MONTH: Decimal(1),
+        }
+        cost_lines = RentalAsset.objects.filter(
+            returned_on__isnull=True,
+            contract__status=RentalContract.Status.ACTIVE,
+        ).select_related("contract__vendor")
+        for rental_line in cost_lines:
+            if rental_line.rate_amount is None:
+                rental_uncosted_asset_total += 1
+                continue
+            monthly_cost = rental_line.rate_amount * rate_multipliers[rental_line.rate_period]
+            rental_monthly_cost += monthly_cost
+            vendor_name = rental_line.contract.vendor.name
+            cost_by_vendor[vendor_name] = cost_by_vendor.get(vendor_name, Decimal("0.00")) + monthly_cost
+        rental_monthly_cost = rental_monthly_cost.quantize(Decimal("0.01"))
+        rental_cost_by_vendor = [
+            {"vendor": vendor, "monthly_cost": amount.quantize(Decimal("0.01"))}
+            for vendor, amount in sorted(cost_by_vendor.items(), key=lambda item: item[1], reverse=True)[:5]
+        ]
 
     context = {
         "now": now,
@@ -309,14 +390,23 @@ def dashboard(request):
         "reservation_total": upcoming_reservations.count(),
         "rental_window": rental_window,
         "rental_due_total": rental_obligations.count(),
-        "attention_items": attention_items[:12],
+        "attention_items": attention_items[:8],
         "attention_total": attention_total,
         "active_custody": custody.order_by("-created_at")[:15],
         "upcoming_reservations": upcoming_reservations[:10],
-        "register_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:20],
+        "register_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:10],
         "open_maintenance": open_maintenance[:8],
         "active_rentals": active_rentals[:8],
         "category_capacity": category_capacity,
+        "utilized_total": utilized_total,
+        "operational_pool_total": operational_pool_total,
+        "utilization_percent": utilization_percent,
+        "can_view_rental_costs": can_view_rental_costs,
+        "rental_monthly_cost": rental_monthly_cost,
+        "rental_uncosted_asset_total": rental_uncosted_asset_total,
+        "rental_cost_by_vendor": rental_cost_by_vendor,
+        "asset_statuses": Asset.Status,
+        "active_categories": EquipmentCategory.objects.filter(active=True),
         "recent_events": AssetEvent.objects.select_related("asset", "actor")[:12] if can_view_audit else AssetEvent.objects.none(),
         "can_view_custody": can_view_custody,
         "can_view_reservations": can_view_reservations,
@@ -336,24 +426,14 @@ def asset_list(request):
     status = request.GET.get("status", "").strip()
     ownership = request.GET.get("ownership", "").strip()
     review = request.GET.get("review", "").strip()
-    if query:
-        assets = assets.filter(
-            Q(asset_tag__icontains=query)
-            | Q(legacy_tag__icontains=query)
-            | Q(name__icontains=query)
-            | Q(manufacturer__icontains=query)
-            | Q(model_number__icontains=query)
-            | Q(identifiers__value__icontains=query)
-            | Q(current_party__display_name__icontains=query)
-        ).distinct()
-    if category:
-        assets = assets.filter(category_id=category)
-    if status:
-        assets = assets.filter(status=status)
-    if ownership:
-        assets = assets.filter(ownership=ownership)
-    if review == "1":
-        assets = assets.filter(review_required=True)
+    assets = _filter_assets(
+        assets,
+        query=query,
+        category=category,
+        status=status,
+        ownership=ownership,
+        review=review,
+    )
     page = Paginator(assets.order_by("asset_tag"), 50).get_page(request.GET.get("page"))
     return render(
         request,
@@ -366,6 +446,45 @@ def asset_list(request):
             "ownerships": Asset.Ownership,
             "filters": {"category": category, "status": status, "ownership": ownership, "review": review},
         },
+    )
+
+
+@require_safe
+@equipment_access
+@equipment_permission("view_asset")
+def asset_search_api(request):
+    query = request.GET.get("q", "").strip()
+    category = request.GET.get("category", "").strip()
+    status = request.GET.get("status", "").strip()
+    if len(query) < 2 and not category and not status:
+        return JsonResponse({"results": [], "truncated": False, "minimum_query": 2})
+
+    assets = Asset.objects.filter(archived_at__isnull=True).select_related(
+        "category", "current_party", "current_location"
+    )
+    assets = _filter_assets(assets, query=query, category=category, status=status).order_by("asset_tag")
+    result_assets = list(assets[:21])
+    results = [
+        {
+            "asset_tag": asset.asset_tag,
+            "name": asset.name,
+            "category": asset.category.name,
+            "status": asset.get_status_display(),
+            "status_code": asset.status,
+            "condition": asset.get_condition_display(),
+            "custodian": asset.current_party.display_name if asset.current_party else "Unassigned",
+            "location": asset.current_location.name if asset.current_location else "Not set",
+            "updated": timezone.localtime(asset.updated_at).strftime("%b %-d, %Y"),
+            "url": reverse("equipment_asset_detail", args=(asset.pk,)),
+        }
+        for asset in result_assets[:20]
+    ]
+    return JsonResponse(
+        {
+            "results": results,
+            "truncated": len(result_assets) > 20,
+            "register_url": f'{reverse("equipment_asset_list")}?{urlencode({"q": query, "category": category, "status": status})}',
+        }
     )
 
 
