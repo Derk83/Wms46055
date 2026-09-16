@@ -1,5 +1,6 @@
 import base64
 import csv
+from datetime import datetime, time, timedelta
 from functools import wraps
 from io import BytesIO
 
@@ -8,7 +9,8 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum
+from django.db.models.functions import Coalesce
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -35,6 +37,7 @@ from .models import (
     EquipmentCategory,
     EquipmentImportBatch,
     MaintenanceWorkOrder,
+    RentalAsset,
     RentalContract,
     Reservation,
 )
@@ -92,20 +95,189 @@ def _csv_safe(value):
 @equipment_permission("view_asset")
 def dashboard(request):
     now = timezone.now()
+    today = timezone.localdate()
+    rental_window = today + timedelta(days=14)
     assets = Asset.objects.filter(archived_at__isnull=True)
     status_counts = dict(assets.values_list("status").annotate(total=Count("id")))
-    active_custody = ActiveCustody.objects.select_related("asset", "borrower", "checkout_item__checkout") if request.user.has_perm("equipment.view_checkout") else ActiveCustody.objects.none()
+
+    can_view_custody = request.user.has_perm("equipment.view_checkout")
+    can_view_reservations = request.user.has_perm("equipment.view_reservation")
+    can_view_maintenance = request.user.has_perm("equipment.view_maintenanceworkorder")
+    can_view_rentals = request.user.has_perm("equipment.view_rentalcontract")
+    can_view_audit = request.user.has_perm("equipment.view_equipment_audit")
+
+    custody = (
+        ActiveCustody.objects.select_related(
+            "asset", "asset__category", "borrower", "checkout_item__checkout", "checkout_item__checkout__destination"
+        )
+        if can_view_custody
+        else ActiveCustody.objects.none()
+    )
+    overdue_custody = custody.filter(due_at__lt=now).order_by("due_at")
+    open_maintenance = (
+        MaintenanceWorkOrder.objects.exclude(
+            status__in=(MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED)
+        ).select_related("asset", "vendor").order_by(F("due_at").asc(nulls_last=True), "-priority")
+        if can_view_maintenance
+        else MaintenanceWorkOrder.objects.none()
+    )
+    upcoming_reservations = (
+        Reservation.objects.filter(
+            ends_at__gte=now,
+            status__in=(Reservation.Status.PENDING, Reservation.Status.APPROVED),
+        ).select_related("requestor", "destination").prefetch_related("assets").order_by("starts_at")
+        if can_view_reservations
+        else Reservation.objects.none()
+    )
+    if can_view_reservations and not request.user.has_perm("equipment.manage_reservations") and not request.user.is_superuser:
+        upcoming_reservations = upcoming_reservations.filter(requestor__user=request.user)
+    active_rentals = (
+        RentalContract.objects.filter(status=RentalContract.Status.ACTIVE)
+        .select_related("vendor")
+        .annotate(asset_count=Count("lines", filter=Q(lines__returned_on__isnull=True)))
+        .order_by(F("ends_on").asc(nulls_last=True), "contract_number")
+        if can_view_rentals
+        else RentalContract.objects.none()
+    )
+    rental_obligations = (
+        RentalAsset.objects.filter(contract__status=RentalContract.Status.ACTIVE, returned_on__isnull=True)
+        .filter(
+            Q(expected_return_on__lte=rental_window)
+            | Q(expected_return_on__isnull=True, contract__ends_on__lte=rental_window)
+        )
+        .select_related("asset", "contract", "contract__vendor")
+        if can_view_rentals
+        else RentalAsset.objects.none()
+    )
+
+    lost_assets = assets.filter(status=Asset.Status.LOST).select_related("category", "current_party")
+    review_assets_all = assets.filter(review_required=True).select_related("category", "current_party")
+    review_assets = review_assets_all.exclude(status=Asset.Status.LOST)
+    maintenance_attention = open_maintenance.filter(
+        Q(priority=MaintenanceWorkOrder.Priority.CRITICAL) | Q(due_at__lt=now)
+    )
+    attention_items = []
+    if can_view_custody:
+        for custody_item in overdue_custody[:5]:
+            attention_items.append(
+                {
+                    "priority": 0,
+                    "kind": "Overdue",
+                    "asset": custody_item.asset,
+                    "issue": "Return is past due",
+                    "owner": custody_item.borrower.display_name,
+                    "due": custody_item.due_at,
+                    "url": reverse("equipment_asset_detail", args=(custody_item.asset_id,)),
+                    "action": "Review custody",
+                }
+            )
+    for asset in lost_assets[:5]:
+        attention_items.append(
+            {
+                "priority": 0,
+                "kind": "Lost",
+                "asset": asset,
+                "issue": "Equipment is recorded as lost",
+                "owner": asset.current_party.display_name if asset.current_party else "Unassigned",
+                "due": None,
+                "url": reverse("equipment_asset_detail", args=(asset.pk,)),
+                "action": "Investigate asset",
+            }
+        )
+    for asset in review_assets[:5]:
+        attention_items.append(
+            {
+                "priority": 1,
+                "kind": "Review",
+                "asset": asset,
+                "issue": asset.review_notes or "Imported record requires reconciliation",
+                "owner": asset.current_party.display_name if asset.current_party else "Unassigned",
+                "due": None,
+                "url": reverse("equipment_asset_detail", args=(asset.pk,)),
+                "action": "Resolve record",
+            }
+        )
+    if can_view_maintenance:
+        for order in maintenance_attention[:5]:
+            attention_items.append(
+                {
+                    "priority": 0 if order.priority == MaintenanceWorkOrder.Priority.CRITICAL else 1,
+                    "kind": "Service",
+                    "asset": order.asset,
+                    "issue": f"{order.work_order_number} · {order.title}",
+                    "owner": order.vendor.name if order.vendor else "Internal service",
+                    "due": order.due_at,
+                    "url": reverse("equipment_asset_detail", args=(order.asset_id,)),
+                    "action": "Open work order",
+                }
+            )
+    if can_view_rentals:
+        for rental_line in rental_obligations.order_by(
+            Coalesce("expected_return_on", "contract__ends_on").asc(nulls_last=True),
+            "contract__contract_number",
+            "asset__asset_tag",
+        )[:5]:
+            due_on = rental_line.expected_return_on or rental_line.contract.ends_on
+            due_at = timezone.make_aware(datetime.combine(due_on, time.min))
+            attention_items.append(
+                {
+                    "priority": 1,
+                    "kind": "Rental",
+                    "asset": rental_line.asset,
+                    "issue": f"Rental return due under {rental_line.contract.contract_number}",
+                    "owner": rental_line.contract.vendor.name,
+                    "due": due_at,
+                    "url": reverse("equipment_rentals"),
+                    "action": "Review rental",
+                }
+            )
+    attention_items.sort(key=lambda item: (item["priority"], str(item.get("due") or "9999-12-31")))
+    attention_total = (
+        overdue_custody.count()
+        + lost_assets.count()
+        + review_assets.count()
+        + maintenance_attention.count()
+        + rental_obligations.count()
+    )
+
+    category_capacity = (
+        EquipmentCategory.objects.filter(active=True, assets__archived_at__isnull=True)
+        .annotate(
+            total=Count("assets"),
+            available=Count("assets", filter=Q(assets__status=Asset.Status.AVAILABLE)),
+            checked_out=Count("assets", filter=Q(assets__status=Asset.Status.CHECKED_OUT)),
+            reserved=Count("assets", filter=Q(assets__status=Asset.Status.RESERVED)),
+            service=Count("assets", filter=Q(assets__status__in=(Asset.Status.MAINTENANCE, Asset.Status.OUT_OF_SERVICE))),
+        )
+        .order_by("name")
+    )
+
     context = {
         "now": now,
         "asset_total": assets.count(),
         "available_total": status_counts.get(Asset.Status.AVAILABLE, 0),
         "checked_out_total": status_counts.get(Asset.Status.CHECKED_OUT, 0),
-        "attention_total": assets.filter(Q(review_required=True) | Q(status__in=(Asset.Status.MAINTENANCE, Asset.Status.OUT_OF_SERVICE, Asset.Status.LOST))).count(),
-        "overdue_total": active_custody.filter(due_at__lt=now).count(),
-        "recent_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:8],
-        "due_custody": active_custody.filter(due_at__isnull=False).order_by("due_at")[:8],
-        "open_maintenance": MaintenanceWorkOrder.objects.exclude(status__in=(MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED)).select_related("asset").order_by("due_at", "-priority")[:6] if request.user.has_perm("equipment.view_maintenanceworkorder") else MaintenanceWorkOrder.objects.none(),
-        "active_rentals": RentalContract.objects.filter(status=RentalContract.Status.ACTIVE).annotate(asset_count=Count("lines"))[:6] if request.user.has_perm("equipment.view_rentalcontract") else RentalContract.objects.none(),
+        "reserved_total": status_counts.get(Asset.Status.RESERVED, 0),
+        "service_total": status_counts.get(Asset.Status.MAINTENANCE, 0) + status_counts.get(Asset.Status.OUT_OF_SERVICE, 0),
+        "review_total": review_assets_all.count(),
+        "overdue_total": overdue_custody.count(),
+        "reservation_total": upcoming_reservations.count(),
+        "rental_window": rental_window,
+        "rental_due_total": rental_obligations.count(),
+        "attention_items": attention_items[:12],
+        "attention_total": attention_total,
+        "active_custody": custody.order_by("-created_at")[:15],
+        "upcoming_reservations": upcoming_reservations[:10],
+        "register_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:20],
+        "open_maintenance": open_maintenance[:8],
+        "active_rentals": active_rentals[:8],
+        "category_capacity": category_capacity,
+        "recent_events": AssetEvent.objects.select_related("asset", "actor")[:12] if can_view_audit else AssetEvent.objects.none(),
+        "can_view_custody": can_view_custody,
+        "can_view_reservations": can_view_reservations,
+        "can_view_maintenance": can_view_maintenance,
+        "can_view_rentals": can_view_rentals,
+        "can_view_audit": can_view_audit,
     }
     return render(request, "equipment/dashboard.html", context)
 

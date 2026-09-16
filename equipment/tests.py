@@ -25,7 +25,10 @@ from .models import (
     EquipmentImportRow,
     EquipmentLocation,
     EquipmentParty,
+    EquipmentVendor,
     MaintenanceWorkOrder,
+    RentalAsset,
+    RentalContract,
     Reservation,
     ReturnRecord,
 )
@@ -255,10 +258,157 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.client.force_login(self.user)
         dashboard = self.client.get("/")
         self.assertEqual(dashboard.status_code, 200)
-        self.assertContains(dashboard, "One register for custody")
+        self.assertContains(dashboard, "Equipment control center")
+        self.assertContains(dashboard, "Needs attention")
+        self.assertContains(dashboard, "Active custody")
+        self.assertContains(dashboard, "Upcoming reservations")
+        self.assertContains(dashboard, "Equipment register")
+        self.assertContains(dashboard, "Availability by category")
         register = self.client.get("/assets/?q=TEST01")
         self.assertEqual(register.status_code, 200)
         self.assertContains(register, self.asset.asset_tag)
+
+    def test_dashboard_scopes_self_service_reservations_to_linked_party(self):
+        requester = get_user_model().objects.create_user(
+            "equipment-requester", email="requester@example.com", password="safe-test-password"
+        )
+        requester.user_permissions.add(
+            Permission.objects.get(codename="access_equipment_portal", content_type__app_label="equipment"),
+            Permission.objects.get(codename="view_asset", content_type__app_label="equipment"),
+            Permission.objects.get(codename="view_reservation", content_type__app_label="equipment"),
+        )
+        own_party = EquipmentParty.objects.create(display_name="Own Requester", user=requester)
+        other_party = EquipmentParty.objects.create(display_name="Other Requester")
+        start = timezone.now() + timedelta(days=1)
+        Reservation.objects.create(
+            reservation_number="ER-OWN-001",
+            requestor=own_party,
+            starts_at=start,
+            ends_at=start + timedelta(hours=2),
+            purpose="Visible reservation",
+            created_by=requester,
+        )
+        Reservation.objects.create(
+            reservation_number="ER-OTHER-001",
+            requestor=other_party,
+            starts_at=start,
+            ends_at=start + timedelta(hours=2),
+            purpose="Private reservation",
+            created_by=self.user,
+        )
+
+        self.client.force_login(requester)
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "ER-OWN-001")
+        self.assertNotContains(response, "ER-OTHER-001")
+        self.assertEqual(response.context["reservation_total"], 1)
+
+    def test_dashboard_attention_total_is_unsampled_and_includes_lost_assets(self):
+        self.asset.status = Asset.Status.LOST
+        self.asset.review_required = True
+        self.asset.save(update_fields=("status", "review_required", "updated_at"))
+        for index in range(7):
+            Asset.objects.create(
+                asset_tag=f"RPL-EQ-REVIEW{index:02d}",
+                category=self.category,
+                name=f"Review asset {index}",
+                status=Asset.Status.AVAILABLE,
+                condition=Asset.Condition.GOOD,
+                review_required=True,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.get("/")
+
+        self.assertEqual(response.context["attention_total"], 8)
+        self.assertContains(response, "8 issues")
+        self.assertContains(response, "Equipment is recorded as lost")
+
+    def test_dashboard_rental_obligations_use_open_line_return_dates(self):
+        vendor = EquipmentVendor.objects.create(name="Rental Vendor")
+        contract = RentalContract.objects.create(
+            contract_number="RENT-TEST-001",
+            vendor=vendor,
+            starts_on=timezone.localdate(),
+            ends_on=timezone.localdate() + timedelta(days=60),
+            status=RentalContract.Status.ACTIVE,
+            created_by=self.user,
+        )
+        returned_asset = Asset.objects.create(
+            asset_tag="RPL-EQ-RETURNED",
+            category=self.category,
+            name="Returned rental",
+            status=Asset.Status.AVAILABLE,
+            condition=Asset.Condition.GOOD,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        RentalAsset.objects.create(
+            contract=contract,
+            asset=self.asset,
+            expected_return_on=timezone.localdate() + timedelta(days=2),
+        )
+        RentalAsset.objects.create(
+            contract=contract,
+            asset=returned_asset,
+            expected_return_on=timezone.localdate() + timedelta(days=1),
+            returned_on=timezone.localdate(),
+        )
+
+        self.client.force_login(self.user)
+        response = self.client.get("/")
+        rental_items = [item for item in response.context["attention_items"] if item["kind"] == "Rental"]
+
+        self.assertEqual(response.context["rental_due_total"], 1)
+        self.assertEqual([item["asset"] for item in rental_items], [self.asset])
+        self.assertContains(response, "Rental return due under RENT-TEST-001")
+
+    def test_dashboard_prioritizes_contract_fallback_deadline_before_rental_slice(self):
+        vendor = EquipmentVendor.objects.create(name="Priority Rental Vendor")
+        later_contract = RentalContract.objects.create(
+            contract_number="RENT-LATER",
+            vendor=vendor,
+            starts_on=timezone.localdate(),
+            ends_on=timezone.localdate() + timedelta(days=60),
+            status=RentalContract.Status.ACTIVE,
+            created_by=self.user,
+        )
+        for index in range(6):
+            asset = Asset.objects.create(
+                asset_tag=f"RPL-EQ-LATER{index}",
+                category=self.category,
+                name=f"Later rental {index}",
+                status=Asset.Status.AVAILABLE,
+                condition=Asset.Condition.GOOD,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+            RentalAsset.objects.create(
+                contract=later_contract,
+                asset=asset,
+                expected_return_on=timezone.localdate() + timedelta(days=14),
+            )
+        urgent_contract = RentalContract.objects.create(
+            contract_number="RENT-URGENT",
+            vendor=vendor,
+            starts_on=timezone.localdate(),
+            ends_on=timezone.localdate(),
+            status=RentalContract.Status.ACTIVE,
+            created_by=self.user,
+        )
+        RentalAsset.objects.create(contract=urgent_contract, asset=self.asset)
+
+        self.client.force_login(self.user)
+        response = self.client.get("/")
+        rental_items = [item for item in response.context["attention_items"] if item["kind"] == "Rental"]
+
+        self.assertEqual(response.context["rental_due_total"], 7)
+        self.assertEqual(rental_items[0]["asset"], self.asset)
+        self.assertContains(response, "Rental return due under RENT-URGENT")
 
     def test_user_without_portal_permission_is_forbidden(self):
         user = get_user_model().objects.create_user("no-equipment", password="safe-test-password")
@@ -272,6 +422,14 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
             Permission.objects.get(codename="view_asset", content_type__app_label="equipment"),
         )
         self.client.force_login(user)
+        dashboard = self.client.get("/")
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(dashboard, "Equipment register")
+        self.assertNotContains(dashboard, "Active custody")
+        self.assertNotContains(dashboard, "Upcoming reservations")
+        self.assertNotContains(dashboard, "Maintenance queue")
+        self.assertNotContains(dashboard, "Active rentals")
+        self.assertNotContains(dashboard, "Recent activity")
         self.assertEqual(self.client.get("/assets/").status_code, 200)
         self.assertEqual(self.client.get("/checkouts/").status_code, 403)
         self.assertEqual(self.client.get("/maintenance/").status_code, 403)

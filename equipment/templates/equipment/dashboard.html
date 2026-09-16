@@ -1,6 +1,107 @@
-{% extends "equipment/base.html" %}{% block content %}
-<section class="page-header equipment-page-header"><div><p class="equipment-eyebrow">Live operations</p><h1>Equipment</h1><p class="meta">One register for custody, availability, maintenance, rentals, and source reconciliation.</p></div><div class="actions">{% if perms.equipment.checkout_asset %}<a class="btn btn-primary" href="{% url 'equipment_checkout_create' %}">Check out equipment</a>{% endif %}<a class="btn secondary" href="{% url 'equipment_scan' %}">Scan a label</a></div></section>
-<section class="equipment-stats"><a href="{% url 'equipment_asset_list' %}"><span>Registered</span><strong>{{ asset_total }}</strong><small>Active equipment records</small></a><a href="{% url 'equipment_asset_list' %}?status=AVAILABLE"><span>Available</span><strong>{{ available_total }}</strong><small>Ready to issue</small></a><a href="{% url 'equipment_asset_list' %}?status=CHECKED_OUT"><span>Checked out</span><strong>{{ checked_out_total }}</strong><small>{{ overdue_total }} overdue</small></a><a href="{% url 'equipment_asset_list' %}?review=1"><span>Needs attention</span><strong>{{ attention_total }}</strong><small>Review or service required</small></a></section>
-<div class="equipment-dashboard-grid"><section class="card equipment-register"><div class="card-header"><div><h2>Recently updated</h2><p class="meta">Live register activity</p></div><a href="{% url 'equipment_asset_list' %}">View all equipment</a></div><div class="table-responsive"><table class="responsive-records"><thead><tr><th>Asset</th><th>Category</th><th>Custody</th><th>Status</th><th>Updated</th></tr></thead><tbody>{% for asset in recent_assets %}<tr class="responsive-record-card"><td data-label="Asset"><a class="asset-link" href="{% url 'equipment_asset_detail' asset.pk %}"><strong>{{ asset.asset_tag }}</strong><small>{{ asset.name }}</small></a></td><td data-label="Category">{{ asset.category.name }}</td><td data-label="Custody">{{ asset.current_party|default:"—" }}</td><td data-label="Status"><span class="equipment-status status-{{ asset.status|lower }}">{{ asset.get_status_display }}</span></td><td data-label="Updated">{{ asset.updated_at|timesince }} ago</td></tr>{% empty %}<tr><td colspan="5" class="empty-state">No equipment has been added yet.</td></tr>{% endfor %}</tbody></table></div></section>
-<aside class="equipment-side-stack"><section class="card"><div class="card-header"><div><h2>Upcoming returns</h2><p class="meta">Active custody due dates</p></div></div><div class="compact-list">{% for custody in due_custody %}<a href="{% url 'equipment_asset_detail' custody.asset.pk %}"><span><strong>{{ custody.asset.asset_tag }}</strong><small>{{ custody.borrower.display_name }}</small></span><time{% if custody.due_at < now %} class="text-danger"{% endif %}>{{ custody.due_at|date:"M j, g:i A" }}</time></a>{% empty %}<p class="empty-compact">No scheduled returns.</p>{% endfor %}</div></section>
-<section class="card"><div class="card-header"><div><h2>Maintenance queue</h2><p class="meta">Open work requiring attention</p></div><a href="{% url 'equipment_maintenance' %}">Open queue</a></div><div class="compact-list">{% for order in open_maintenance %}<a href="{% url 'equipment_asset_detail' order.asset.pk %}"><span><strong>{{ order.work_order_number }}</strong><small>{{ order.asset.asset_tag }} · {{ order.title }}</small></span><span class="equipment-status priority-{{ order.priority|lower }}">{{ order.get_priority_display }}</span></a>{% empty %}<p class="empty-compact">No open maintenance.</p>{% endfor %}</div></section></aside></div>{% endblock %}
+{% extends "equipment/base.html" %}
+{% block content %}
+<section class="page-header equipment-page-header">
+  <div>
+    <p class="equipment-eyebrow">Live operations</p>
+    <h1>Equipment control center</h1>
+    <p class="meta">Current custody, future commitments, service obligations, and the complete equipment register.</p>
+  </div>
+  <div class="actions equipment-quick-actions">
+    {% if perms.equipment.checkout_asset %}<a class="btn btn-primary" href="{% url 'equipment_checkout_create' %}">Check out</a>{% endif %}
+    {% if perms.equipment.return_asset %}<a class="btn secondary" href="{% url 'equipment_checkout_list' %}">Return</a>{% endif %}
+    <a class="btn secondary" href="{% url 'equipment_scan' %}">Scan</a>
+    {% if perms.equipment.add_reservation %}<a class="btn secondary" href="{% url 'equipment_reservations' %}">Reserve</a>{% endif %}
+  </div>
+</section>
+
+<section class="equipment-stats equipment-stats--wide" aria-label="Equipment status summary">
+  <a href="{% url 'equipment_asset_list' %}"><span>Registered</span><strong>{{ asset_total }}</strong><small>Active equipment records</small></a>
+  <a href="{% url 'equipment_asset_list' %}?status=AVAILABLE"><span>Available</span><strong>{{ available_total }}</strong><small>Ready for checkout</small></a>
+  {% if can_view_custody %}<a href="{% url 'equipment_checkout_list' %}"><span>Checked out</span><strong>{{ checked_out_total }}</strong><small>{{ overdue_total }} overdue</small></a>{% endif %}
+  {% if can_view_reservations %}<a href="{% url 'equipment_reservations' %}"><span>Reserved</span><strong>{{ reserved_total }}</strong><small>{{ reservation_total }} current or upcoming</small></a>{% endif %}
+  {% if can_view_maintenance %}<a href="{% url 'equipment_maintenance' %}"><span>Maintenance</span><strong>{{ service_total }}</strong><small>Unavailable for issue</small></a>{% endif %}
+  <a href="{% url 'equipment_asset_list' %}?review=1"><span>Review required</span><strong>{{ review_total }}</strong><small>Data or condition exceptions</small></a>
+  {% if can_view_rentals %}<a href="{% url 'equipment_rentals' %}"><span>Rental returns</span><strong>{{ rental_due_total }}</strong><small>Due by {{ rental_window|date:"M j" }}, including overdue</small></a>{% endif %}
+</section>
+
+<section class="card equipment-attention">
+  <div class="card-header">
+    <div><p class="equipment-eyebrow">Priority queue</p><h2>Needs attention</h2><p class="meta">Overdue custody, record exceptions, critical service, and approaching rental returns.</p></div>
+    <strong class="attention-count">{{ attention_total }} issue{{ attention_total|pluralize }}</strong>
+  </div>
+  <div class="table-responsive">
+    <table class="responsive-records equipment-detail-table">
+      <thead><tr><th>Priority</th><th>Asset / record</th><th>Issue</th><th>Responsible party</th><th>Due</th><th>Action</th></tr></thead>
+      <tbody>
+        {% for item in attention_items %}
+        <tr class="responsive-record-card">
+          <td data-label="Priority"><span class="equipment-status {% if item.priority == 0 %}priority-critical{% else %}priority-high{% endif %}">{{ item.kind }}</span></td>
+          <td data-label="Asset / record">{% if item.asset %}<a class="asset-link" href="{% url 'equipment_asset_detail' item.asset.pk %}"><strong>{{ item.asset.asset_tag }}</strong><small>{{ item.asset.name }}</small></a>{% else %}<strong>{{ item.label }}</strong>{% endif %}</td>
+          <td data-label="Issue">{{ item.issue }}</td>
+          <td data-label="Responsible party">{{ item.owner }}</td>
+          <td data-label="Due">{% if item.due %}{{ item.due|date:"M j, Y g:i A" }}{% elif item.due_date %}{{ item.due_date|date:"M j, Y" }}{% else %}—{% endif %}</td>
+          <td data-label="Action"><a href="{{ item.url }}">{{ item.action }}</a></td>
+        </tr>
+        {% empty %}<tr><td colspan="6" class="empty-state">No priority issues require attention.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if can_view_custody %}
+<section class="card equipment-section">
+  <div class="card-header"><div><h2>Active custody</h2><p class="meta">Who has each asset, why it was issued, and when it is expected back.</p></div><a href="{% url 'equipment_checkout_list' %}">View custody ledger</a></div>
+  <div class="table-responsive"><table class="responsive-records equipment-detail-table">
+    <thead><tr><th>Asset</th><th>Category</th><th>Custodian</th><th>Purpose</th><th>Destination</th><th>Checked out</th><th>Due</th><th>Status</th></tr></thead>
+    <tbody>{% for custody in active_custody %}<tr class="responsive-record-card">
+      <td data-label="Asset"><a class="asset-link" href="{% url 'equipment_asset_detail' custody.asset.pk %}"><strong>{{ custody.asset.asset_tag }}</strong><small>{{ custody.asset.name }}</small></a></td>
+      <td data-label="Category">{{ custody.asset.category.name }}</td><td data-label="Custodian">{{ custody.borrower.display_name }}</td>
+      <td data-label="Purpose">{{ custody.checkout_item.checkout.purpose|default:"—"|truncatechars:48 }}</td>
+      <td data-label="Destination">{{ custody.checkout_item.checkout.destination|default:"—" }}</td>
+      <td data-label="Checked out">{{ custody.checkout_item.checkout.checked_out_at|date:"M j, Y" }}</td>
+      <td data-label="Due">{{ custody.due_at|date:"M j, Y g:i A"|default:"No due date" }}</td>
+      <td data-label="Status"><span class="equipment-status {% if custody.due_at and custody.due_at < now %}priority-critical{% else %}status-checked_out{% endif %}">{% if custody.due_at and custody.due_at < now %}Overdue{% else %}Active{% endif %}</span></td>
+    </tr>{% empty %}<tr><td colspan="8" class="empty-state">No equipment is currently checked out.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+{% if can_view_reservations %}
+<section class="card equipment-section">
+  <div class="card-header"><div><h2>Upcoming reservations</h2><p class="meta">Approved holds and pending requests that affect future availability.</p></div><a href="{% url 'equipment_reservations' %}">Manage reservations</a></div>
+  <div class="table-responsive"><table class="responsive-records equipment-detail-table">
+    <thead><tr><th>Reservation</th><th>Window</th><th>Requested by</th><th>Assets</th><th>Destination</th><th>Purpose</th><th>Status</th></tr></thead>
+    <tbody>{% for reservation in upcoming_reservations %}<tr class="responsive-record-card">
+      <td data-label="Reservation"><strong>{{ reservation.reservation_number }}</strong></td>
+      <td data-label="Window">{{ reservation.starts_at|date:"M j, g:i A" }}<small class="table-subline">to {{ reservation.ends_at|date:"M j, g:i A" }}</small></td>
+      <td data-label="Requested by">{{ reservation.requestor.display_name }}</td><td data-label="Assets">{{ reservation.assets.count }}</td>
+      <td data-label="Destination">{{ reservation.destination|default:"—" }}</td><td data-label="Purpose">{{ reservation.purpose|default:"—"|truncatechars:52 }}</td>
+      <td data-label="Status"><span class="equipment-status status-{{ reservation.status|lower }}">{{ reservation.get_status_display }}</span></td>
+    </tr>{% empty %}<tr><td colspan="7" class="empty-state">No current or upcoming reservations.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endif %}
+
+<section class="card equipment-section equipment-register">
+  <div class="card-header"><div><h2>Equipment register</h2><p class="meta">The 20 most recently changed records with current custody and location.</p></div><a href="{% url 'equipment_asset_list' %}">Search full register</a></div>
+  <div class="table-responsive"><table class="responsive-records equipment-detail-table">
+    <thead><tr><th>Asset</th><th>Category</th><th>Manufacturer / model</th><th>Custody</th><th>Location</th><th>Condition</th><th>Status</th><th>Last activity</th></tr></thead>
+    <tbody>{% for asset in register_assets %}<tr class="responsive-record-card">
+      <td data-label="Asset"><a class="asset-link" href="{% url 'equipment_asset_detail' asset.pk %}"><strong>{{ asset.asset_tag }}</strong><small>{{ asset.name }}</small></a></td>
+      <td data-label="Category">{{ asset.category.name }}</td><td data-label="Manufacturer / model">{{ asset.manufacturer|default:"—" }}{% if asset.model_number %}<small class="table-subline">{{ asset.model_number }}</small>{% endif %}</td>
+      <td data-label="Custody">{{ asset.current_party|default:"—" }}</td><td data-label="Location">{{ asset.current_location|default:"—" }}</td><td data-label="Condition">{{ asset.get_condition_display }}</td>
+      <td data-label="Status"><span class="equipment-status status-{{ asset.status|lower }}">{{ asset.get_status_display }}</span></td><td data-label="Last activity">{{ asset.updated_at|timesince }} ago</td>
+    </tr>{% empty %}<tr><td colspan="8" class="empty-state">No equipment has been added yet.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<div class="equipment-operations-grid">
+  {% if can_view_maintenance %}<section class="card"><div class="card-header"><div><h2>Maintenance queue</h2><p class="meta">Open service work and equipment availability impact.</p></div><a href="{% url 'equipment_maintenance' %}">Open queue</a></div><div class="dashboard-list">{% for order in open_maintenance %}<a href="{% url 'equipment_asset_detail' order.asset.pk %}"><span><strong>{{ order.work_order_number }} · {{ order.asset.asset_tag }}</strong><small>{{ order.title }}{% if order.vendor %} · {{ order.vendor.name }}{% endif %}</small></span><span><span class="equipment-status priority-{{ order.priority|lower }}">{{ order.get_priority_display }}</span><small>{% if order.due_at %}Due {{ order.due_at|date:"M j" }}{% else %}No due date{% endif %}</small></span></a>{% empty %}<p class="empty-compact">No open maintenance.</p>{% endfor %}</div></section>{% endif %}
+  {% if can_view_rentals %}<section class="card"><div class="card-header"><div><h2>Active rentals</h2><p class="meta">Vendor obligations and expected return dates.</p></div><a href="{% url 'equipment_rentals' %}">Open rentals</a></div><div class="dashboard-list">{% for rental in active_rentals %}<a href="{% url 'equipment_rentals' %}"><span><strong>{{ rental.contract_number }}</strong><small>{{ rental.vendor.name }} · {{ rental.asset_count }} asset{{ rental.asset_count|pluralize }}</small></span><span><small>{% if rental.ends_on %}Ends {{ rental.ends_on|date:"M j, Y" }}{% else %}Open ended{% endif %}</small></span></a>{% empty %}<p class="empty-compact">No active rental contracts.</p>{% endfor %}</div></section>{% endif %}
+</div>
+
+<div class="equipment-operations-grid">
+  <section class="card"><div class="card-header"><div><h2>Availability by category</h2><p class="meta">Current capacity and service impact across the register.</p></div></div><div class="table-responsive"><table class="equipment-capacity-table"><thead><tr><th>Category</th><th>Total</th><th>Available</th><th>Checked out</th><th>Reserved</th><th>Service</th></tr></thead><tbody>{% for category in category_capacity %}<tr><td><a href="{% url 'equipment_asset_list' %}?category={{ category.pk }}">{{ category.name }}</a></td><td>{{ category.total }}</td><td>{{ category.available }}</td><td>{{ category.checked_out }}</td><td>{{ category.reserved }}</td><td>{{ category.service }}</td></tr>{% empty %}<tr><td colspan="6" class="empty-state">No category data.</td></tr>{% endfor %}</tbody></table></div></section>
+  {% if can_view_audit %}<section class="card"><div class="card-header"><div><h2>Recent activity</h2><p class="meta">Latest immutable equipment events.</p></div><a href="{% url 'equipment_history' %}">Full history</a></div><div class="dashboard-list dashboard-events">{% for event in recent_events %}<a href="{% if event.asset %}{% url 'equipment_asset_detail' event.asset.pk %}{% else %}{% url 'equipment_history' %}{% endif %}"><span><strong>{{ event.get_event_type_display }}{% if event.asset %} · {{ event.asset.asset_tag }}{% endif %}</strong><small>{{ event.summary }}</small></span><span><small>{{ event.occurred_at|timesince }} ago{% if event.actor %}<br>by {{ event.actor.get_full_name|default:event.actor.username }}{% endif %}</small></span></a>{% empty %}<p class="empty-compact">No equipment activity recorded.</p>{% endfor %}</div></section>{% endif %}
+</div>
+{% endblock %}
