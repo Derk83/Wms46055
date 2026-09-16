@@ -1,12 +1,12 @@
-{% load static %}
+{% load static inventory_extras %}
 "use strict";
 const CACHE_VERSION = "rpl-equipment-shell-v1";
 const OFFLINE_URL = "/offline/";
 const SHELL = [
   OFFLINE_URL,
-  "{% static 'inventory/css/app.css' %}",
-  "{% static 'equipment/css/equipment.css' %}",
-  "{% static 'equipment/js/equipment.js' %}",
+  "{% versioned_static 'inventory/css/app.css' %}",
+  "{% versioned_static 'equipment/css/equipment.css' %}",
+  "{% versioned_static 'equipment/js/equipment.js' %}",
   "{% static 'equipment/icons/equipment-192.png' %}"
 ];
 

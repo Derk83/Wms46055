@@ -278,6 +278,8 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.assertContains(login, 'href="/manifest.webmanifest"', html=False)
         self.assertContains(login, "equipment/branding/equipment-mark.svg")
         self.assertContains(login, "equipment/icons/equipment-apple-touch-icon.png")
+        self.assertContains(login, "equipment/css/equipment.css?v=")
+        self.assertContains(login, "equipment/js/equipment.js?v=")
         self.assertContains(login, "app-mark-symbol")
 
     def test_authorized_dashboard_and_register_render(self):

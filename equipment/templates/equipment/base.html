@@ -1,15 +1,15 @@
-{% load static %}<!doctype html>
+{% load static inventory_extras %}<!doctype html>
 <html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="dark light"><meta name="theme-color" content="#15171a">
   <title>{% block title %}RPL Equipment{% endblock %}</title>
-  <link rel="stylesheet" href="{% static 'inventory/css/app.css' %}">
-  <link rel="stylesheet" href="{% static 'equipment/css/equipment.css' %}">
+  <link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
+  <link rel="stylesheet" href="{% versioned_static 'equipment/css/equipment.css' %}">
   <link rel="manifest" href="/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="{% static 'equipment/branding/equipment-mark.svg' %}">
   <link rel="apple-touch-icon" href="{% static 'equipment/icons/equipment-apple-touch-icon.png' %}">
-  <script src="{% static 'equipment/js/equipment.js' %}" defer></script>
+  <script src="{% versioned_static 'equipment/js/equipment.js' %}" defer></script>
 </head>
 <body>
 <header class="site-header equipment-header">
