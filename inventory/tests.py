@@ -15,6 +15,11 @@ class TicketImprovementTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="creator", password="pw", is_staff=True, is_superuser=True)
         self.picker = User.objects.create_user(username="picker", first_name="Pat", last_name="Picker")
+        self.picker.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="inventory", codename="change_pickticket"
+            )
+        )
         self.client.login(username="creator", password="pw")
         self.item_a = InventoryItem.objects.create(part_number="WH-A", name="Gloves", description="Cut resistant gloves", category="Safety", quantity_on_hand=10, barcode_value="BCA")
         self.item_b = InventoryItem.objects.create(part_number="WH-B", name="Helmet", description="Hard hat helmet", category="PPE", quantity_on_hand=10, qr_code_value="QRB")
@@ -307,7 +312,7 @@ class TicketImprovementTests(TestCase):
         self.assertEqual(PickTicket.objects.count(), before)
         self.assertEqual(PickTicketLine.objects.filter(item__isnull=True).count(), 0)
 
-    def test_completed_pick_ticket_can_be_edited_and_inventory_is_rebalanced(self):
+    def test_completed_pick_ticket_cannot_be_edited_or_rebalanced(self):
         ticket = PickTicket.objects.create(
             status=PickTicket.Status.CLOSED,
             picked_by_name="Old",
@@ -338,15 +343,15 @@ class TicketImprovementTests(TestCase):
             "lines-0-item": str(self.item_b.pk),
             "lines-0-quantity": "3",
         })
-        self.assertRedirects(response, reverse("ticket_list"))
+        self.assertRedirects(response, reverse("ticket_detail", args=[ticket.pk]))
         ticket.refresh_from_db()
         self.item_a.refresh_from_db()
         self.item_b.refresh_from_db()
-        self.assertEqual(ticket.picked_by_name, "Pat Picker")
+        self.assertEqual(ticket.picked_by_name, "Old")
         self.assertEqual(ticket.lines.count(), 1)
-        self.assertEqual(ticket.lines.first().item, self.item_b)
-        self.assertEqual(self.item_a.quantity_on_hand, 10)
-        self.assertEqual(self.item_b.quantity_on_hand, 7)
+        self.assertEqual(ticket.lines.first().item, self.item_a)
+        self.assertEqual(self.item_a.quantity_on_hand, 8)
+        self.assertEqual(self.item_b.quantity_on_hand, 10)
 
     def test_receiving_ticket_can_be_edited_and_inventory_is_rebalanced(self):
         rt = ReceivingTicket.objects.create(po_number="PO1", notes="old", created_by=self.user)

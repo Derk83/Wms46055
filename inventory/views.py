@@ -1369,6 +1369,11 @@ def ticket_edit(request, pk):
         _visible_pick_tickets(request, PickTicket.objects.prefetch_related("lines__item")),
         pk=pk,
     )
+    if ticket.status != PickTicket.Status.OPEN or ticket.lines.filter(
+        picked_quantity__isnull=False
+    ).exists():
+        messages.error(request, "Picked tickets cannot be edited; the fulfillment audit is locked.")
+        return redirect("ticket_detail", pk=ticket.pk)
     linked_request = MaterialRequest.objects.filter(pick_ticket=ticket).first()
     if linked_request:
         messages.error(
@@ -1393,8 +1398,20 @@ def ticket_edit(request, pk):
             try:
                 with transaction.atomic():
                     locked_ticket = PickTicket.objects.select_for_update().get(pk=ticket.pk)
-                    form.save()
-                    _rebuild_pick_ticket_lines(locked_ticket, formset)
+                    if locked_ticket.status != PickTicket.Status.OPEN or locked_ticket.lines.filter(
+                        picked_quantity__isnull=False
+                    ).exists():
+                        raise ValidationError(
+                            "This ticket was fulfilled while it was being edited; no changes were saved."
+                        )
+                    locked_form = PickTicketForm(request.POST, instance=locked_ticket)
+                    locked_formset = PickTicketLineFormSet(request.POST, instance=locked_ticket)
+                    if not locked_form.is_valid() or not locked_formset.is_valid():
+                        raise ValidationError(
+                            "The ticket changed while it was being edited; review and submit it again."
+                        )
+                    locked_form.save()
+                    _rebuild_pick_ticket_lines(locked_ticket, locked_formset)
             except ValidationError as exc:
                 form.add_error(None, "; ".join(exc.messages))
             else:
@@ -1428,6 +1445,13 @@ def ticket_detail(request, pk):
     supplemental_fulfillment = BackorderFulfillment.objects.select_related(
         "backorder__line__material_request"
     ).filter(pick_ticket=ticket).first()
+    pick_workflow_users = [
+        user
+        for user in User.objects.filter(is_active=True).order_by(
+            "first_name", "last_name", "username"
+        )
+        if user.has_perm("inventory.change_pickticket")
+    ]
     return render(
         request,
         "inventory/ticket_detail.html",
@@ -1439,6 +1463,11 @@ def ticket_detail(request, pk):
             ),
             "supplemental_fulfillment": supplemental_fulfillment,
             "status_choices": PickTicket.Status.choices,
+            "requires_pick_entry": (
+                ticket.status == PickTicket.Status.OPEN
+                and ticket.lines.filter(picked_quantity__isnull=True).exists()
+            ),
+            "pick_workflow_users": pick_workflow_users,
         },
     )
 
@@ -1454,11 +1483,63 @@ def ticket_status_update(request, pk):
     if new_status in valid_statuses:
         from .services import update_pick_ticket_status
 
-        update_pick_ticket_status(ticket, new_status, actor=request.user)
-        ticket.refresh_from_db(fields=["status"])
-        messages.success(request, f"Updated {ticket.ticket_number} to {ticket.get_status_display()}.")
+        picked_lines = {
+            line.pk: {
+                "quantity": request.POST.get(f"picked_quantity_{line.pk}"),
+                "reason": request.POST.get(f"pick_variance_reason_{line.pk}", ""),
+            }
+            for line in ticket.lines.all()
+            if f"picked_quantity_{line.pk}" in request.POST
+        }
+        picked_by_id = request.POST.get("picked_by_user", "")
+        qa_checked_by_id = request.POST.get("qa_checked_by_user", "")
+        picked_by = (
+            User.objects.filter(pk=int(picked_by_id), is_active=True).first()
+            if picked_by_id.isdigit()
+            else None
+        )
+        qa_checked_by = (
+            User.objects.filter(pk=int(qa_checked_by_id), is_active=True).first()
+            if qa_checked_by_id.isdigit()
+            else None
+        )
+        try:
+            update_pick_ticket_status(
+                ticket,
+                new_status,
+                actor=request.user,
+                picked_lines=picked_lines,
+                picked_by=picked_by,
+                qa_checked_by=qa_checked_by,
+            )
+        except ValidationError as exc:
+            messages.error(request, " ".join(exc.messages))
+        else:
+            ticket.refresh_from_db(fields=["status"])
+            messages.success(request, f"Updated {ticket.ticket_number} to {ticket.get_status_display()}.")
     else:
         messages.error(request, "Invalid ticket status.")
+    return redirect("ticket_detail", pk=ticket.pk)
+
+
+@login_required
+@require_POST
+def ticket_acknowledge(request, pk):
+    ticket = get_object_or_404(PickTicket, pk=pk, assigned_to=request.user)
+    from .services import acknowledge_pick_ticket
+
+    try:
+        _ticket, changed = acknowledge_pick_ticket(ticket, user=request.user)
+    except ValidationError as exc:
+        messages.error(request, " ".join(exc.messages))
+    else:
+        if changed:
+            messages.success(request, f"Acknowledged assignment for {ticket.ticket_number}.")
+    next_url = request.POST.get("next", "")
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(next_url)
     return redirect("ticket_detail", pk=ticket.pk)
 
 
@@ -3741,6 +3822,7 @@ def material_request_board(request):
                 "first_name", "last_name", "username"
             )
             if user.has_perm("inventory.view_all_materialrequests")
+            and user.has_perm("inventory.change_pickticket")
         ]
         if assignment_filter == "mine":
             requests = requests.filter(assigned_to=request.user)
@@ -3835,7 +3917,10 @@ def material_request_assign(request, pk):
     assignee = None
     if assignee_id:
         assignee = get_object_or_404(User.objects.filter(is_active=True), pk=assignee_id)
-        if not assignee.has_perm("inventory.view_all_materialrequests"):
+        if not (
+            assignee.has_perm("inventory.view_all_materialrequests")
+            and assignee.has_perm("inventory.change_pickticket")
+        ):
             raise PermissionDenied
     material_request, changed = assign_material_request(
         material_request, assignee=assignee, actor=request.user

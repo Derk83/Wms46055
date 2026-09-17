@@ -131,6 +131,26 @@
   {% endif %}
   {% endif %}
 </header>
+{% if pending_pick_assignment %}
+<div class="assignment-ack-overlay no-print" role="dialog" aria-modal="true" aria-labelledby="assignment-ack-title" data-assignment-acknowledgement>
+  <section class="assignment-ack-dialog">
+    <span class="assignment-ack-eyebrow">New pick assignment{% if pending_pick_assignment_count > 1 %} · {{ pending_pick_assignment_count }} awaiting acknowledgement{% endif %}</span>
+    <h2 id="assignment-ack-title">Acknowledge {{ pending_pick_assignment.ticket_number }}</h2>
+    <p>You have been assigned this pick ticket. Review the destination and accept responsibility before continuing in Warehouse.</p>
+    <dl class="assignment-ack-details">
+      <div><dt>Requested by</dt><dd>{{ pending_pick_assignment.requested_by_name|default:"Not specified" }}</dd></div>
+      <div><dt>Destination</dt><dd>{{ pending_pick_assignment.building_room }} · {{ pending_pick_assignment.location }}</dd></div>
+      <div><dt>Lines</dt><dd>{{ pending_pick_assignment.lines.count }}</dd></div>
+      <div><dt>Created</dt><dd>{{ pending_pick_assignment.created_at|date:"M j, Y, g:i A" }}</dd></div>
+    </dl>
+    <form method="post" action="{% url 'ticket_acknowledge' pending_pick_assignment.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'ticket_detail' pending_pick_assignment.pk %}">
+      <button class="btn" type="submit">Acknowledge and open ticket</button>
+    </form>
+  </section>
+</div>
+{% endif %}
 <main>{% block content %}{% endblock %}</main>
 <div id="toast-region" class="toast-region no-print" aria-live="polite" aria-atomic="true"></div>
 <script src="{% versioned_static 'inventory/js/app.js' %}" defer></script>

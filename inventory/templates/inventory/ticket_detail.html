@@ -18,32 +18,64 @@
   <div class="grid">
     <p><strong>Status:</strong><br><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></p>
     <p><strong>Date:</strong><br>{{ ticket.date }}</p>
-    <p><strong>Picked By:</strong><br>{{ ticket.picked_by_name }}</p>
-    <p><strong>Received By:</strong><br>{{ ticket.received_by_name }}</p>
+    <p><strong>Assigned To:</strong><br>{% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}{% else %}Unassigned{% endif %}</p>
+    <p><strong>Acknowledged:</strong><br>{% if ticket.acknowledged_at %}{{ ticket.acknowledged_at|date:"M j, Y, g:i A" }}{% else %}Awaiting acknowledgement{% endif %}</p>
+    <p><strong>Picked By:</strong><br>{{ ticket.picked_by_name|default:"Not recorded" }}</p>
+    <p><strong>QA Checked By:</strong><br>{{ ticket.qa_checked_by_name|default:"Not recorded" }}</p>
+    <p><strong>Received By:</strong><br>{{ ticket.received_by_name|default:"Not recorded" }}</p>
     <p><strong>Requested By:</strong><br>{{ ticket.requested_by_name }}</p>
     <p><strong>BLDG/Room #:</strong><br>{{ ticket.building_room }}</p>
     <p><strong>Location:</strong><br>{{ ticket.location }}</p>
   </div>
   {% if ticket.notes %}<p><strong>Notes:</strong> {{ ticket.notes }}</p>{% endif %}
+
+  {% if requires_pick_entry and perms.inventory.change_pickticket %}
+  <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" class="pick-confirmation-form no-print" data-pick-confirmation-form>
+    {% csrf_token %}
+    <input type="hidden" name="status" value="PICKED">
+    <div class="table-responsive">
+      <table class="pick-quantity-table">
+        <thead><tr><th>Part #</th><th>Item</th><th>Requested</th><th>Quantity picked</th><th>Variance reason</th></tr></thead>
+        <tbody>
+        {% for line in ticket.lines.all %}
+          <tr>
+            <td><strong>{{ line.item.part_number }}</strong></td>
+            <td>{{ line.item.name }}</td>
+            <td>{{ line.quantity }}</td>
+            <td><label class="sr-only" for="picked-quantity-{{ line.pk }}">Quantity picked for {{ line.item.part_number }}</label><input id="picked-quantity-{{ line.pk }}" type="number" min="0" step="1" name="picked_quantity_{{ line.pk }}" value="{{ line.quantity }}" required data-requested-quantity="{{ line.quantity }}"></td>
+            <td><label class="sr-only" for="pick-reason-{{ line.pk }}">Variance reason for {{ line.item.part_number }}</label><textarea id="pick-reason-{{ line.pk }}" name="pick_variance_reason_{{ line.pk }}" rows="2" placeholder="Required if picked quantity differs" data-pick-variance-reason></textarea></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="pick-signoff-grid">
+      <div><label for="picked-by-user">Picked by</label><select id="picked-by-user" name="picked_by_user" required><option value="">Select picker…</option>{% for workflow_user in pick_workflow_users %}<option value="{{ workflow_user.pk }}"{% if ticket.assigned_to_id == workflow_user.pk %} selected{% endif %}>{{ workflow_user.get_full_name|default:workflow_user.username }}</option>{% endfor %}</select></div>
+      <div><label for="qa-checked-by-user">QA checked by</label><select id="qa-checked-by-user" name="qa_checked_by_user" required><option value="">Select QA checker…</option>{% for workflow_user in pick_workflow_users %}<option value="{{ workflow_user.pk }}">{{ workflow_user.get_full_name|default:workflow_user.username }}</option>{% endfor %}</select></div>
+    </div>
+    <p class="helptext">The picker and QA checker must be different warehouse users. A reason is required for every short or over-picked line.</p>
+    <button class="btn btn-success" type="submit">Confirm Quantities and Mark Picked</button>
+  </form>
+  {% else %}
   <div class="table-responsive">
-  <table>
-    <tr><th>Part #</th><th>Item</th><th>Quantity</th></tr>
-    {% for line in ticket.lines.all %}
-      <tr><td>{{ line.item.part_number }}</td><td>{{ line.item.name }}</td><td>{{ line.quantity }}</td></tr>
-    {% endfor %}
-  </table>
+    <table class="pick-quantity-table">
+      <thead><tr><th>Part #</th><th>Item</th><th>Requested</th><th>Picked</th><th>Variance reason</th></tr></thead>
+      <tbody>{% for line in ticket.lines.all %}<tr><td><strong>{{ line.item.part_number }}</strong></td><td>{{ line.item.name }}</td><td>{{ line.quantity }}</td><td>{{ line.picked_quantity|default_if_none:"Not recorded" }}</td><td>{{ line.pick_variance_reason|default:"—" }}</td></tr>{% endfor %}</tbody>
+    </table>
   </div>
+  {% endif %}
 
   {% if perms.inventory.change_pickticket %}
-  <div class="actions no-print" style="margin-top:20px;"{% if ticket.status == 'OPEN' %} data-next-status="PICKED"{% elif ticket.status == 'PICKED' %} data-next-status="RECEIVED"{% elif ticket.status == 'RECEIVED' %} data-next-status="CLOSED"{% endif %}>
-    {% if ticket.status == 'OPEN' %}
+  <p class="helptext no-print">Workflow: Mark Picked → Ready for Delivery → Mark Closed/Delivered.</p>
+  <div class="actions no-print ticket-status-actions"{% if ticket.status == 'OPEN' %} data-next-status="PICKED"{% elif ticket.status == 'PICKED' %} data-next-status="RECEIVED"{% elif ticket.status == 'RECEIVED' %} data-next-status="CLOSED"{% endif %}>
+    {% if ticket.status == 'OPEN' and not requires_pick_entry %}
     <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="PICKED"><button class="btn btn-success" type="submit">Mark Picked</button></form>
     {% elif ticket.status == 'PICKED' %}
     <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="RECEIVED"><button class="btn btn-success" type="submit">Ready for Delivery</button></form>
     {% elif ticket.status == 'RECEIVED' %}
     <form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="CLOSED"><button class="btn btn-success" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Mark Closed/Delivered</button></form>
     {% endif %}
-
+    {% if ticket.status != 'OPEN' %}
     <details class="secondary-status-actions">
       <summary class="btn btn-secondary">Other status changes</summary>
       <div class="actions" style="margin-top:8px;">
@@ -53,19 +85,10 @@
         {% if ticket.status != 'CLOSED' and ticket.status != 'RECEIVED' %}<form method="post" action="{% url 'ticket_status_update' ticket.pk %}">{% csrf_token %}<input type="hidden" name="status" value="CLOSED"><button class="btn btn-secondary" type="submit" onclick="return confirm('Mark this ticket closed/delivered?')">Mark Closed/Delivered</button></form>{% endif %}
       </div>
     </details>
+    {% endif %}
   </div>
   {% endif %}
 
-  {% if linked_request %}
-    {% if can_cascade_delete %}
-    <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
-      <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
-    </div>
-    {% endif %}
-  {% elif not supplemental_fulfillment and perms.inventory.delete_pickticket %}
-  <div class="actions no-print" style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
-    <a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a>
-  </div>
-  {% endif %}
+  {% if linked_request %}{% if can_cascade_delete %}<div class="actions no-print destructive-ticket-actions"><a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a></div>{% endif %}{% elif not supplemental_fulfillment and perms.inventory.delete_pickticket %}<div class="actions no-print destructive-ticket-actions"><a class="btn btn-danger" href="{% url 'ticket_delete' ticket.pk %}">Delete Ticket</a></div>{% endif %}
 </div>
 {% endblock %}

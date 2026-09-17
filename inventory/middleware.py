@@ -21,6 +21,11 @@ class HostURLConfMiddleware:
     hub_hosts = frozenset({"rplwms.com", "www.rplwms.com"})
     request_host = "requests.rplwms.com"
     equipment_host = "equipment.rplwms.com"
+    warehouse_hosts = frozenset({
+        "bbx.rplwms.com",
+        "wms.bonksystems.com",
+        "warehouse.bonksystems.com",
+    })
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -30,7 +35,7 @@ class HostURLConfMiddleware:
         request.is_hub_host = host in self.hub_hosts
         request.is_request_portal = host == self.request_host
         request.is_equipment_portal = host == self.equipment_host
-        request.is_wms_host = host == "bbx.rplwms.com"
+        request.is_wms_host = host in self.warehouse_hosts
         if request.is_hub_host:
             request.urlconf = "config.hub_urls"
         elif request.is_request_portal:

@@ -7,6 +7,7 @@ from django.utils import timezone
 from .models import (
     BackorderFulfillment,
     InventoryItem,
+    InventoryTransaction,
     MaterialBackorder,
     MaterialRequest,
     MaterialRequestEvent,
@@ -90,6 +91,14 @@ def assign_material_request(material_request, *, assignee, actor):
 
     locked.assigned_to = assignee
     locked.save(update_fields=["assigned_to", "updated_at"])
+    ticket = locked.pick_ticket
+    ticket.assigned_to = assignee
+    ticket.assigned_at = timezone.now() if assignee else None
+    ticket.acknowledged_at = None
+    ticket.acknowledged_by = None
+    ticket.save(update_fields=[
+        "assigned_to", "assigned_at", "acknowledged_at", "acknowledged_by", "updated_at"
+    ])
     event = MaterialRequestEvent.objects.create(
         material_request=locked,
         event_type=MaterialRequestEvent.EventType.UPDATED,
@@ -238,8 +247,10 @@ def create_material_request(
 
 
 @transaction.atomic
-def update_pick_ticket_status(ticket, new_status, *, actor):
-    """Persist a real status transition and queue its requester notification once."""
+def update_pick_ticket_status(
+    ticket, new_status, *, actor, picked_lines=None, picked_by=None, qa_checked_by=None
+):
+    """Persist a status transition and atomically record/reconcile an initial pick."""
     valid_statuses = {value for value, _label in PickTicket.Status.choices}
     if new_status not in valid_statuses:
         raise ValidationError("Invalid pick-ticket status.")
@@ -262,9 +273,102 @@ def update_pick_ticket_status(ticket, new_status, *, actor):
     old_status = ticket.status
     if old_status == new_status:
         return None
+    if old_status == PickTicket.Status.OPEN and new_status != PickTicket.Status.PICKED:
+        raise ValidationError(
+            "Record picked quantities and signoff before advancing this open ticket."
+        )
+
+    lines = list(
+        PickTicketLine.objects.select_for_update()
+        .select_related("item")
+        .filter(ticket=ticket)
+        .order_by("item_id", "id")
+    )
+    needs_pick_record = (
+        old_status == PickTicket.Status.OPEN
+        and new_status == PickTicket.Status.PICKED
+        and any(line.picked_quantity is None for line in lines)
+    )
+    if needs_pick_record:
+        if not lines:
+            raise ValidationError("Add at least one line before marking this ticket picked.")
+        if not picked_by or not picked_by.is_active or not picked_by.has_perm("inventory.change_pickticket"):
+            raise ValidationError("Choose an active warehouse user who picked the order.")
+        if not qa_checked_by or not qa_checked_by.is_active or not qa_checked_by.has_perm("inventory.change_pickticket"):
+            raise ValidationError("Choose an active warehouse user who QA checked the order.")
+        if picked_by.pk == qa_checked_by.pk:
+            raise ValidationError("The picker and QA checker must be different users.")
+        if ticket.assigned_to_id:
+            if (
+                not ticket.acknowledged_at
+                or ticket.acknowledged_by_id != ticket.assigned_to_id
+            ):
+                raise ValidationError(
+                    "The assigned picker must acknowledge this ticket before picking it."
+                )
+            if picked_by.pk != ticket.assigned_to_id:
+                raise ValidationError("The assigned picker must be recorded as the picker.")
+
+        picked_lines = picked_lines or {}
+        normalized = []
+        for line in lines:
+            values = picked_lines.get(line.pk)
+            if values is None:
+                raise ValidationError(f"Enter the quantity picked for {line.item.part_number}.")
+            try:
+                picked_quantity = int(values.get("quantity", ""))
+            except (TypeError, ValueError):
+                raise ValidationError(
+                    f"Enter a whole-number quantity picked for {line.item.part_number}."
+                )
+            if picked_quantity < 0:
+                raise ValidationError(
+                    f"Quantity picked cannot be negative for {line.item.part_number}."
+                )
+            reason = (values.get("reason") or "").strip()
+            if picked_quantity != line.quantity and not reason:
+                raise ValidationError(
+                    f"Explain why {line.item.part_number} was not picked at the requested quantity."
+                )
+            normalized.append((line, picked_quantity, reason))
+
+        for line, picked_quantity, reason in normalized:
+            reconciliation_delta = line.quantity - picked_quantity
+            variance_transaction = None
+            if reconciliation_delta:
+                variance_kind = "Short pick" if reconciliation_delta > 0 else "Over-pick"
+                transaction_type = (
+                    InventoryTransaction.TransactionType.ADJUSTMENT
+                    if reconciliation_delta > 0
+                    else InventoryTransaction.TransactionType.PICK
+                )
+                variance_transaction = line.item.adjust_quantity(
+                    reconciliation_delta,
+                    transaction_type,
+                    user=actor,
+                    pick_ticket=ticket,
+                    notes=(
+                        f"{variance_kind} reconciliation for {ticket.ticket_number}: "
+                        f"requested {line.quantity}, picked {picked_quantity}. Reason: {reason}"
+                    ),
+                )
+            line.picked_quantity = picked_quantity
+            line.pick_variance_reason = reason
+            line.pick_variance_transaction = variance_transaction
+            line.save(update_fields=[
+                "picked_quantity", "pick_variance_reason", "pick_variance_transaction"
+            ])
+
+        ticket.picked_by_user = picked_by
+        ticket.picked_by_name = picked_by.get_full_name() or picked_by.get_username()
+        ticket.qa_checked_by_user = qa_checked_by
+        ticket.qa_checked_by_name = qa_checked_by.get_full_name() or qa_checked_by.get_username()
 
     ticket.status = new_status
-    ticket.save(update_fields=["status", "updated_at"])
+    ticket.save(update_fields=[
+        "status", "picked_by_user", "picked_by_name", "qa_checked_by_user",
+        "qa_checked_by_name", "updated_at"
+    ])
     if material_request is None:
         return None
 
@@ -294,6 +398,34 @@ def update_pick_ticket_status(ticket, new_status, *, actor):
 
         queue_ready_for_delivery_email(event)
     return event
+
+
+@transaction.atomic
+def acknowledge_pick_ticket(ticket, *, user):
+    """Record the assigned user's explicit acceptance of a pick ticket."""
+    ticket = PickTicket.objects.select_for_update().get(pk=ticket.pk)
+    if ticket.assigned_to_id != user.pk:
+        raise ValidationError("Only the assigned picker can acknowledge this ticket.")
+    if ticket.acknowledged_at:
+        return ticket, False
+    ticket.acknowledged_at = timezone.now()
+    ticket.acknowledged_by = user
+    ticket.save(update_fields=["acknowledged_at", "acknowledged_by", "updated_at"])
+    try:
+        material_request = ticket.material_request
+    except MaterialRequest.DoesNotExist:
+        material_request = None
+    if material_request is not None:
+        MaterialRequestEvent.objects.create(
+            material_request=material_request,
+            event_type=MaterialRequestEvent.EventType.UPDATED,
+            request_number_snapshot=material_request.request_number,
+            ticket_number_snapshot=ticket.ticket_number,
+            requestor_snapshot=material_request.requestor_name,
+            change_summary=f"Pick ticket acknowledged by: {user.get_full_name() or user.username}",
+            actor=user,
+        )
+    return ticket, True
 
 
 @transaction.atomic
@@ -415,6 +547,13 @@ def update_material_request(
     material_request = MaterialRequest.objects.select_for_update().select_related("pick_ticket").get(
         pk=material_request.pk
     )
+    ticket = PickTicket.objects.select_for_update().get(pk=material_request.pick_ticket_id)
+    if ticket.status != PickTicket.Status.OPEN or ticket.lines.filter(
+        picked_quantity__isnull=False
+    ).exists():
+        raise ValidationError(
+            "This request cannot be edited after picking has been recorded."
+        )
     _, requisitions, fulfillments = _lock_request_shortage_records(material_request)
     if fulfillments or requisitions:
         raise ValidationError(
@@ -433,7 +572,6 @@ def update_material_request(
         },
         rows,
     )
-    ticket = PickTicket.objects.select_for_update().get(pk=material_request.pick_ticket_id)
 
     material_request.requestor_name = requestor_name
     material_request.requestor_email = requestor_email

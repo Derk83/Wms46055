@@ -424,6 +424,11 @@ class MaterialRequestStatusNotificationTests(TestCase):
         self.warehouse.user_permissions.add(
             Permission.objects.get(codename="view_materialrequest"),
             Permission.objects.get(codename="view_all_materialrequests"),
+            Permission.objects.get(codename="change_pickticket"),
+        )
+        self.qa_checker = User.objects.create_user("warehouse-status-qa", password="pw")
+        self.qa_checker.user_permissions.add(
+            Permission.objects.get(codename="change_pickticket")
         )
         self.requester_client = Client()
         self.requester_client.force_login(self.requester)
@@ -447,6 +452,17 @@ class MaterialRequestStatusNotificationTests(TestCase):
                 location="Dock", notes="", lines=[{"item": item, "quantity": 1, "notes": ""}],
             )
 
+    def _prepare_picked_ticket(self):
+        ticket = self.material_request.pick_ticket
+        ticket.refresh_from_db()
+        if ticket.status == PickTicket.Status.OPEN:
+            for line in ticket.lines.all():
+                line.picked_quantity = line.quantity
+                line.save(update_fields=["picked_quantity"])
+            ticket.status = PickTicket.Status.PICKED
+            ticket.save(update_fields=["status"])
+        return ticket
+
     @patch("inventory.push.deliver_push_deliveries")
     def test_each_real_status_transition_queues_one_requester_notification(self, deliver):
         from .services import update_pick_ticket_status
@@ -456,8 +472,23 @@ class MaterialRequestStatusNotificationTests(TestCase):
             (PickTicket.Status.PICKED, PickTicket.Status.RECEIVED),
             (PickTicket.Status.RECEIVED, PickTicket.Status.CLOSED),
         ):
+            pick_kwargs = {}
+            if new_status == PickTicket.Status.PICKED:
+                line = self.material_request.pick_ticket.lines.get()
+                pick_kwargs = {
+                    "picked_lines": {
+                        line.pk: {"quantity": str(line.quantity), "reason": ""}
+                    },
+                    "picked_by": self.warehouse,
+                    "qa_checked_by": self.qa_checker,
+                }
             with self.captureOnCommitCallbacks(execute=True):
-                event = update_pick_ticket_status(self.material_request.pick_ticket, new_status, actor=self.warehouse)
+                event = update_pick_ticket_status(
+                    self.material_request.pick_ticket,
+                    new_status,
+                    actor=self.warehouse,
+                    **pick_kwargs,
+                )
             self.assertEqual((event.old_status, event.new_status), (old_status, new_status))
             self.assertEqual(
                 list(PushDelivery.objects.filter(event=event).values_list("subscription_id", flat=True)),
@@ -485,7 +516,7 @@ class MaterialRequestStatusNotificationTests(TestCase):
 
         with patch("inventory.push.deliver_push_deliveries"):
             event = update_pick_ticket_status(
-                self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                self._prepare_picked_ticket(), PickTicket.Status.RECEIVED, actor=self.warehouse
             )
         delivery = PushDelivery.objects.get(event=event, subscription=self.requester_subscription)
         deliver_push_deliveries([delivery.pk])
@@ -504,7 +535,7 @@ class MaterialRequestStatusNotificationTests(TestCase):
 
         with patch("inventory.push.deliver_push_deliveries"):
             ready_event = update_pick_ticket_status(
-                self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                self._prepare_picked_ticket(), PickTicket.Status.RECEIVED, actor=self.warehouse
             )
         payload = _payload(PushDelivery.objects.get(
             event=ready_event, subscription=self.requester_subscription
@@ -540,7 +571,7 @@ class MaterialRequestStatusNotificationTests(TestCase):
 
         with patch("inventory.push.deliver_push_deliveries"):
             first_ready = update_pick_ticket_status(
-                self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                self._prepare_picked_ticket(), PickTicket.Status.RECEIVED, actor=self.warehouse
             )
             first_payload = _payload(PushDelivery.objects.get(
                 event=first_ready, subscription=self.requester_subscription
@@ -549,7 +580,7 @@ class MaterialRequestStatusNotificationTests(TestCase):
                 self.material_request.pick_ticket, PickTicket.Status.CLOSED, actor=self.warehouse
             )
             second_ready = update_pick_ticket_status(
-                self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                self._prepare_picked_ticket(), PickTicket.Status.RECEIVED, actor=self.warehouse
             )
             second_payload = _payload(PushDelivery.objects.get(
                 event=second_ready, subscription=self.requester_subscription
@@ -582,7 +613,7 @@ class MaterialRequestStatusNotificationTests(TestCase):
         self.requester_subscription.delete()
         with patch("inventory.push.deliver_push_deliveries"):
             ready_event = update_pick_ticket_status(
-                self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                self._prepare_picked_ticket(), PickTicket.Status.RECEIVED, actor=self.warehouse
             )
         self.assertFalse(PushDelivery.objects.filter(event=ready_event).exists())
 
@@ -655,8 +686,14 @@ class MaterialRequestStatusNotificationTests(TestCase):
         cursor = MaterialRequestEvent.objects.order_by("-pk").values_list("pk", flat=True).first() or 0
         from .services import update_pick_ticket_status
 
+        line = self.material_request.pick_ticket.lines.get()
         event = update_pick_ticket_status(
-            self.material_request.pick_ticket, PickTicket.Status.PICKED, actor=self.warehouse
+            self.material_request.pick_ticket,
+            PickTicket.Status.PICKED,
+            actor=self.warehouse,
+            picked_lines={line.pk: {"quantity": str(line.quantity), "reason": ""}},
+            picked_by=self.warehouse,
+            qa_checked_by=self.qa_checker,
         )
         response = self.warehouse_client.get(
             reverse("material_request_events"), {"cursor": cursor}, HTTP_HOST="bbx.rplwms.com"

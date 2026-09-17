@@ -15,11 +15,6 @@
             {% for error in form.date.errors %}<div class="negative">{{ error }}</div>{% endfor %}
           </div>
           <div>
-            <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
-            {{ form.status }}
-            {% for error in form.status.errors %}<div class="negative">{{ error }}</div>{% endfor %}
-          </div>
-          <div>
             <label for="{{ form.picked_by_name.id_for_label }}">{{ form.picked_by_name.label }}</label>
             {{ form.picked_by_name }}
             {% for error in form.picked_by_name.errors %}<div class="negative">{{ error }}</div>{% endfor %}

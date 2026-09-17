@@ -27,6 +27,7 @@ class WarehouseWorkQueueTests(TestCase):
                 "change_materialrequest",
                 "view_all_materialrequests",
                 "assign_materialrequest",
+                "change_pickticket",
             },
         )
         self.warehouse.user_permissions.add(*warehouse_permissions)

@@ -69,10 +69,18 @@ class DeliveryEmailWorkflowTests(TestCase):
             )
 
     def _mark_ready(self):
+        ticket = self.material_request.pick_ticket
+        ticket.refresh_from_db()
+        if ticket.status == PickTicket.Status.OPEN:
+            for line in ticket.lines.all():
+                line.picked_quantity = line.quantity
+                line.save(update_fields=["picked_quantity"])
+            ticket.status = PickTicket.Status.PICKED
+            ticket.save(update_fields=["status"])
         with patch("inventory.push.deliver_push_deliveries"):
             with self.captureOnCommitCallbacks(execute=True):
                 return update_pick_ticket_status(
-                    self.material_request.pick_ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
+                    ticket, PickTicket.Status.RECEIVED, actor=self.warehouse
                 )
 
     def test_request_form_includes_required_requester_email(self):

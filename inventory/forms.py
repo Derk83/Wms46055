@@ -407,13 +407,12 @@ class InventoryItemForm(forms.ModelForm):
 
 
 class PickTicketForm(forms.ModelForm):
-    picked_by_name = forms.ChoiceField(label="Picked by")
+    picked_by_name = forms.ChoiceField(label="Assigned picker")
 
     class Meta:
         model = PickTicket
         fields = [
             "date",
-            "status",
             "picked_by_name",
             "received_by_name",
             "requested_by_name",
@@ -437,13 +436,19 @@ class PickTicketForm(forms.ModelForm):
                 selected_value = self.instance.picked_by_name
                 self.fields["picked_by_name"].choices.append((selected_value, self.instance.picked_by_name))
             self.fields["picked_by_name"].initial = selected_value
-        if not self.instance.pk:
-            # Default new tickets to OPEN status
-            self.fields["status"].initial = PickTicket.Status.OPEN
-
     def _user_choices(self):
         choices = [("", "Select user…")]
-        users = User.objects.filter(is_active=True).order_by("first_name", "last_name", "username")
+        users = User.objects.filter(is_active=True).filter(
+            Q(is_superuser=True)
+            | Q(
+                user_permissions__content_type__app_label="inventory",
+                user_permissions__codename="change_pickticket",
+            )
+            | Q(
+                groups__permissions__content_type__app_label="inventory",
+                groups__permissions__codename="change_pickticket",
+            )
+        ).distinct().order_by("first_name", "last_name", "username")
         for user in users:
             choices.append((str(user.pk), user.get_full_name() or user.get_username()))
         return choices
@@ -459,8 +464,32 @@ class PickTicketForm(forms.ModelForm):
         try:
             user = User.objects.get(pk=value, is_active=True)
         except (User.DoesNotExist, ValueError):
+            self._picked_by_user = None
             return value
+        if not user.has_perm("inventory.change_pickticket"):
+            raise forms.ValidationError(
+                "The assigned picker must be an active user who can fulfill pick tickets."
+            )
+        self._picked_by_user = user
         return user.get_full_name() or user.get_username()
+
+    def save(self, commit=True):
+        previous_assignee_id = self.instance.assigned_to_id if self.instance.pk else None
+        instance = super().save(commit=False)
+        assigned_user = getattr(self, "_picked_by_user", None)
+        instance.assigned_to = assigned_user
+        if assigned_user and assigned_user.pk != previous_assignee_id:
+            instance.assigned_at = timezone.now()
+            instance.acknowledged_at = None
+            instance.acknowledged_by = None
+        elif assigned_user is None:
+            instance.assigned_at = None
+            instance.acknowledged_at = None
+            instance.acknowledged_by = None
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
 
 class PickTicketLineForm(forms.ModelForm):

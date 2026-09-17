@@ -47,8 +47,6 @@ class MaterialRequestWorkflowTests(TestCase):
             creator=self.user, requestor_name="Rae", building_room="B1", location="L1",
             notes="", lines=[{"item": self.item_a, "quantity": 4, "notes": "old"}],
         )
-        request_obj.pick_ticket.status = PickTicket.Status.PICKED
-        request_obj.pick_ticket.save(update_fields=["status"])
         update_material_request(
             request_obj,
             requestor_name="Rae Updated", building_room="B2", location="L2", notes="new",
@@ -57,7 +55,7 @@ class MaterialRequestWorkflowTests(TestCase):
         self.item_a.refresh_from_db(); self.item_b.refresh_from_db()
         request_obj.refresh_from_db(); request_obj.pick_ticket.refresh_from_db()
         self.assertEqual((self.item_a.quantity_on_hand, self.item_b.quantity_on_hand), (19, 25))
-        self.assertEqual(request_obj.pick_ticket.status, PickTicket.Status.PICKED)
+        self.assertEqual(request_obj.pick_ticket.status, PickTicket.Status.OPEN)
         self.assertEqual(request_obj.pick_ticket.requested_by_name, "Rae Updated")
         self.assertEqual(request_obj.pick_ticket.lines.count(), 2)
 
@@ -452,8 +450,25 @@ class MaterialRequestAccessAndHostTests(TestCase):
             creator=other, requestor_name="Other User", building_room="B2",
             location="Room 3", notes="", lines=[{"item": foreign_item, "quantity": 9, "notes": ""}],
         )
-        update_pick_ticket_status(own.pick_ticket, PickTicket.Status.PICKED, actor=self.user)
-        update_pick_ticket_status(foreign.pick_ticket, PickTicket.Status.PICKED, actor=other)
+        picker = User.objects.create_user(
+            "dashboard-picker", password="pw", is_superuser=True
+        )
+        qa_checker = User.objects.create_user(
+            "dashboard-qa", password="pw", is_superuser=True
+        )
+        for material_request in (own, foreign):
+            lines = material_request.pick_ticket.lines.all()
+            update_pick_ticket_status(
+                material_request.pick_ticket,
+                PickTicket.Status.PICKED,
+                actor=material_request.creator,
+                picked_lines={
+                    line.pk: {"quantity": str(line.quantity), "reason": ""}
+                    for line in lines
+                },
+                picked_by=picker,
+                qa_checked_by=qa_checker,
+            )
 
         response = self.client.get(reverse("dashboard"), HTTP_HOST="bbx.rplwms.com")
         self.assertEqual(response.status_code, 200)
@@ -610,6 +625,11 @@ class MaterialRequestAccessAndHostTests(TestCase):
             notes="", lines=[{"item": self.item, "quantity": 1, "notes": ""}],
             delivery_at=datetime(2026, 9, 16, 10, 15, tzinfo=datetime_timezone.utc),
         )
+        for line in obj.pick_ticket.lines.all():
+            line.picked_quantity = line.quantity
+            line.save(update_fields=["picked_quantity"])
+        obj.pick_ticket.status = PickTicket.Status.PICKED
+        obj.pick_ticket.save(update_fields=["status"])
         update_pick_ticket_status(obj.pick_ticket, PickTicket.Status.RECEIVED, actor=self.user)
         obj.refresh_from_db()
         return obj

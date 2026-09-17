@@ -386,12 +386,43 @@ class PickTicket(models.Model):
     date = models.DateTimeField(default=timezone.now)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
     picked_by_name = models.CharField(max_length=120)
+    picked_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="picked_tickets",
+    )
+    qa_checked_by_name = models.CharField(max_length=120, blank=True)
+    qa_checked_by_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="qa_checked_tickets",
+    )
     received_by_name = models.CharField(max_length=120)
     requested_by_name = models.CharField(max_length=120)
     building_room = models.CharField("BLDG/Room #", max_length=120)
     location = models.CharField(max_length=160)
     notes = models.TextField(blank=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="assigned_pick_tickets",
+    )
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="acknowledged_pick_tickets",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -423,27 +454,60 @@ class PickTicketLine(models.Model):
     ticket = models.ForeignKey(PickTicket, related_name="lines", on_delete=models.CASCADE)
     item = models.ForeignKey(InventoryItem, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
+    picked_quantity = models.PositiveIntegerField(null=True, blank=True)
+    pick_variance_reason = models.TextField(blank=True)
+    pick_variance_transaction = models.OneToOneField(
+        "InventoryTransaction",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pick_variance_line",
+    )
+    reservation_transaction = models.OneToOneField(
+        "InventoryTransaction",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reserved_pick_line",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(picked_quantity__isnull=True)
+                    | models.Q(picked_quantity=models.F("quantity"))
+                    | ~models.Q(pick_variance_reason="")
+                ),
+                name="pick_variance_requires_reason",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.ticket.ticket_number}: {self.item.name} x {self.quantity}"
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        if is_new and self.picked_quantity is None and self.ticket.status != PickTicket.Status.OPEN:
+            self.picked_quantity = self.quantity
         with transaction.atomic():
             super().save(*args, **kwargs)
             if is_new:
-                self.item.adjust_quantity(
+                reservation_transaction = self.item.adjust_quantity(
                     -self.quantity,
                     InventoryTransaction.TransactionType.PICK,
                     user=self.ticket.created_by,
                     pick_ticket=self.ticket,
                     notes=f"Picked on {self.ticket.ticket_number}",
                 )
+                PickTicketLine.objects.filter(pk=self.pk).update(
+                    reservation_transaction=reservation_transaction
+                )
+                self.reservation_transaction = reservation_transaction
 
+    @transaction.atomic
     def delete(self, *args, **kwargs):
         """Delete the line and restore stock without overwriting concurrent changes.
 
@@ -451,13 +515,38 @@ class PickTicketLine(models.Model):
         allowed via the audited `_audit_wipe_token` bypass, mirroring the same
         pattern as `inventory_clear`.
         """
-        InventoryTransaction.objects._audit_wipe_query().filter(
-            item=self.item,
-            transaction_type=InventoryTransaction.TransactionType.PICK,
-            pick_ticket=self.ticket,
-        ).delete()
+        self = PickTicketLine.objects.select_for_update().select_related(
+            "item", "ticket"
+        ).get(pk=self.pk)
+        InventoryItem.objects.select_for_update().get(pk=self.item_id)
+        transaction_ids = []
+        if self.reservation_transaction_id:
+            transaction_ids.append(self.reservation_transaction_id)
+        else:
+            # Legacy safety fallback. The migration backfills normal historical
+            # rows; if one escaped it, remove only one matching reservation.
+            legacy_reservation_id = (
+                InventoryTransaction.objects.filter(
+                    item=self.item,
+                    transaction_type=InventoryTransaction.TransactionType.PICK,
+                    pick_ticket=self.ticket,
+                    notes=f"Picked on {self.ticket.ticket_number}",
+                )
+                .order_by("created_at", "pk")
+                .values_list("pk", flat=True)
+                .first()
+            )
+            if legacy_reservation_id:
+                transaction_ids.append(legacy_reservation_id)
+        if self.pick_variance_transaction_id:
+            transaction_ids.append(self.pick_variance_transaction_id)
+        if transaction_ids:
+            InventoryTransaction.objects._audit_wipe_query().filter(
+                pk__in=transaction_ids
+            ).delete()
         InventoryItem.objects.filter(pk=self.item_id).update(
-            quantity_on_hand=models.F("quantity_on_hand") + self.quantity,
+            quantity_on_hand=models.F("quantity_on_hand")
+            + (self.picked_quantity if self.picked_quantity is not None else self.quantity),
             updated_at=timezone.now(),
         )
         super().delete(*args, **kwargs)
@@ -595,6 +684,30 @@ class InventoryTransaction(models.Model):
 
     def __str__(self):
         return f"{self.item.part_number} {self.quantity_delta:+d} ({self.transaction_type})"
+
+    @property
+    def activity_description(self):
+        quantity = abs(self.quantity_delta)
+        units = "unit" if quantity == 1 else "units"
+        item_label = f"{self.item.part_number} — {self.item.name}"
+        ticket_label = self.pick_ticket.ticket_number if self.pick_ticket_id else ""
+        if self.transaction_type == self.TransactionType.PICK:
+            action = "Removed" if self.quantity_delta < 0 else "Returned"
+            description = f"{action} {quantity} {units} {'from' if self.quantity_delta < 0 else 'to'} inventory for {item_label}"
+            if ticket_label:
+                description += f" on pick ticket {ticket_label}"
+            return description + "."
+        if self.transaction_type == self.TransactionType.RECEIPT:
+            return f"Received {quantity} {units} into inventory for {item_label}."
+        if self.transaction_type == self.TransactionType.REVERSAL:
+            return f"Reversed a receipt by removing {quantity} {units} from {item_label}."
+        if self.transaction_type == self.TransactionType.IMPORT:
+            return f"Imported an opening balance of {self.quantity_delta:+d} {units} for {item_label}."
+        direction = "Increased" if self.quantity_delta > 0 else "Reduced"
+        description = f"{direction} inventory by {quantity} {units} for {item_label}"
+        if ticket_label:
+            description += f" while reconciling pick ticket {ticket_label}"
+        return description + "."
 
     def save(self, *args, **kwargs):
         ledger_write_token = kwargs.pop("_ledger_write_token", None)

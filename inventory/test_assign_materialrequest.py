@@ -98,6 +98,11 @@ class MaterialRequestAssignmentPermissionTests(TestCase):
         self.worker = _make_user(
             "perm-worker", groups=[self.logistics_specialist_group]
         )
+        self.worker.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="inventory", codename="change_pickticket"
+            )
+        )
 
     def _post_assign(self, user, assignee_pk):
         c = Client()

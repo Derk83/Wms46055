@@ -71,10 +71,10 @@
                             <th>Date/Time</th>
                             <th>Type</th>
                             <th>Item</th>
-                            <th>Qty Δ</th>
+                            <th>Quantity change</th>
                             <th>User</th>
                             <th>Pick Ticket</th>
-                            <th>Notes</th>
+                            <th>Activity</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -82,7 +82,7 @@
                         <tr>
                             <td class="text-nowrap">{{ tx.created_at|date:"M j, Y, g:i A" }}</td>
                             <td>
-                                <span class="tx-type-badge tx-type-{{ tx.transaction_type|lower }}">
+                                <span class="transaction-type tx-type-badge transaction-type-{{ tx.transaction_type|lower }} tx-type-{{ tx.transaction_type|lower }}">
                                     {{ tx.get_transaction_type_display }}
                                 </span>
                             </td>
@@ -92,12 +92,12 @@
                                 <br><small class="text-muted">{{ tx.item.part_number }}</small>
                                 {% else %}—{% endif %}
                             </td>
-                            <td class="{% if tx.quantity_delta < 0 %}text-danger{% elif tx.quantity_delta > 0 %}text-success{% endif %} fw-bold">
-                                {{ tx.quantity_delta|default_if_none:"0"|yesno:"+,-" }}
+                            <td class="transaction-quantity {% if tx.quantity_delta < 0 %}is-negative{% elif tx.quantity_delta > 0 %}is-positive{% endif %}">
+                                {% if tx.quantity_delta > 0 %}+{% endif %}{{ tx.quantity_delta }}
                             </td>
                             <td>{{ tx.created_by.username|default:"System" }}</td>
                             <td>{% if tx.pick_ticket %}<a href="{% url 'ticket_detail' tx.pick_ticket.pk %}">{{ tx.pick_ticket.ticket_number }}</a>{% else %}—{% endif %}</td>
-                            <td>{{ tx.notes|default:"—"|truncatechars:50 }}</td>
+                            <td class="transaction-activity"><strong>{{ tx.activity_description }}</strong>{% if tx.notes %}<span>{{ tx.notes }}</span>{% endif %}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -131,22 +131,4 @@
         </div>
     </div>
 </div>
-<style>
-.tx-type-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 86px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 12px;
-  letter-spacing: .02em;
-  border: 1px solid transparent;
-}
-.tx-type-pick { background: rgba(248, 113, 113, .18); color: #fecaca; border-color: rgba(248, 113, 113, .55); }
-.tx-type-receipt { background: rgba(74, 222, 128, .18); color: #bbf7d0; border-color: rgba(74, 222, 128, .55); }
-.tx-type-adjustment { background: rgba(250, 204, 21, .18); color: #fde68a; border-color: rgba(250, 204, 21, .6); }
-.tx-type-import { background: rgba(96, 165, 250, .18); color: #bfdbfe; border-color: rgba(96, 165, 250, .55); }
-</style>
 {% endblock %}

@@ -679,6 +679,11 @@ def test_ticket_detail_can_update_status_workflow(client):
         location="Warehouse",
         created_by=user,
     )
+    qa_user = User.objects.create_user(username="status-qa", password="testpass123", is_superuser=True)
+    item = InventoryItem.objects.create(
+        part_number="STATUS-ITEM", name="Status workflow item", quantity_on_hand=10
+    )
+    line = PickTicketLine.objects.create(ticket=ticket, item=item, quantity=2)
     client.force_login(user)
 
     detail = client.get(reverse("ticket_detail", args=[ticket.pk]))
@@ -689,7 +694,16 @@ def test_ticket_detail_can_update_status_workflow(client):
     assert b"Ready for Delivery" in detail.content
     assert b"Closed/Delivered" in detail.content
 
-    response = client.post(reverse("ticket_status_update", args=[ticket.pk]), {"status": "PICKED"})
+    response = client.post(
+        reverse("ticket_status_update", args=[ticket.pk]),
+        {
+            "status": "PICKED",
+            f"picked_quantity_{line.pk}": "2",
+            f"pick_variance_reason_{line.pk}": "",
+            "picked_by_user": str(user.pk),
+            "qa_checked_by_user": str(qa_user.pk),
+        },
+    )
 
     assert response.status_code == 302
     ticket.refresh_from_db()
