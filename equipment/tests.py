@@ -292,8 +292,9 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.assertContains(dashboard, "Active custody")
         self.assertContains(dashboard, "Upcoming reservations")
         self.assertContains(dashboard, "Live equipment")
-        self.assertContains(dashboard, "Availability by category")
-        self.assertContains(dashboard, "Current utilization")
+        self.assertContains(dashboard, "Availability")
+        self.assertContains(dashboard, "Utilization")
+        self.assertContains(dashboard, "Action center")
         self.assertContains(dashboard, 'data-pwa-install', count=2, html=False)
         self.assertContains(dashboard, 'data-equipment-theme-toggle', count=2, html=False)
         self.assertContains(dashboard, 'class="equipment-sidebar"', count=1, html=False)
@@ -308,6 +309,38 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         register = self.client.get("/assets/?q=TEST01")
         self.assertEqual(register.status_code, 200)
         self.assertContains(register, self.asset.asset_tag)
+
+    def test_dashboard_uses_bounded_clean_preview(self):
+        for index in range(7):
+            Asset.objects.create(
+                asset_tag=f"RPL-EQ-PREVIEW{index:02d}",
+                category=self.category,
+                name=f"Preview asset {index}",
+                status=Asset.Status.AVAILABLE,
+                condition=Asset.Condition.GOOD,
+                created_by=self.user,
+                updated_by=self.user,
+            )
+        unavailable_category = EquipmentCategory.objects.create(name="Unavailable pool")
+        Asset.objects.create(
+            asset_tag="RPL-EQ-NOPOOL01",
+            category=unavailable_category,
+            name="Unavailable equipment",
+            status=Asset.Status.OUT_OF_SERVICE,
+            condition=Asset.Condition.UNSERVICEABLE,
+            created_by=self.user,
+            updated_by=self.user,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get("/")
+
+        self.assertEqual(len(response.context["register_assets"]), 6)
+        self.assertEqual(response.context["category_capacity_tight"][0].pk, unavailable_category.pk)
+        self.assertContains(response, "Action center")
+        self.assertContains(response, "View all category capacity")
+        self.assertContains(response, "No operational assets")
+        self.assertNotContains(response, "<th>Condition</th>", html=False)
 
     def test_dashboard_scopes_self_service_reservations_to_linked_party(self):
         requester = get_user_model().objects.create_user(
@@ -366,7 +399,8 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         response = self.client.get("/")
 
         self.assertEqual(response.context["attention_total"], 8)
-        self.assertContains(response, "8 issues")
+        self.assertContains(response, 'class="equipment-attention-count">8</strong>', html=False)
+        self.assertContains(response, "Showing 5 highest-priority of 8.")
         self.assertContains(response, "Equipment is recorded as lost")
 
     def test_dashboard_rental_obligations_use_open_line_return_dates(self):

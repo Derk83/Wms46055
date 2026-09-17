@@ -340,6 +340,20 @@ def dashboard(request):
             else 0
         )
 
+    category_utilization = sorted(
+        (item for item in category_capacity if item.operational_pool),
+        key=lambda item: (-item.utilization_percent, -item.operational_pool, item.name),
+    )[:5]
+    category_capacity_tight = sorted(
+        category_capacity,
+        key=lambda item: (
+            0 if item.operational_pool == 0 else 1,
+            (item.available / item.operational_pool) if item.operational_pool else 0,
+            -item.operational_pool,
+            item.name,
+        ),
+    )[:5]
+
     utilized_total = status_counts.get(Asset.Status.CHECKED_OUT, 0) + status_counts.get(Asset.Status.IN_TRANSIT, 0)
     operational_pool_total = (
         status_counts.get(Asset.Status.AVAILABLE, 0)
@@ -390,14 +404,16 @@ def dashboard(request):
         "reservation_total": upcoming_reservations.count(),
         "rental_window": rental_window,
         "rental_due_total": rental_obligations.count(),
-        "attention_items": attention_items[:8],
+        "attention_items": attention_items[:5],
         "attention_total": attention_total,
         "active_custody": custody.order_by("-created_at")[:15],
         "upcoming_reservations": upcoming_reservations[:10],
-        "register_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:10],
+        "register_assets": assets.select_related("category", "current_party", "current_location").order_by("-updated_at")[:6],
         "open_maintenance": open_maintenance[:8],
         "active_rentals": active_rentals[:8],
         "category_capacity": category_capacity,
+        "category_utilization": category_utilization,
+        "category_capacity_tight": category_capacity_tight,
         "utilized_total": utilized_total,
         "operational_pool_total": operational_pool_total,
         "utilization_percent": utilization_percent,
@@ -407,7 +423,7 @@ def dashboard(request):
         "rental_cost_by_vendor": rental_cost_by_vendor,
         "asset_statuses": Asset.Status,
         "active_categories": EquipmentCategory.objects.filter(active=True),
-        "recent_events": AssetEvent.objects.select_related("asset", "actor")[:12] if can_view_audit else AssetEvent.objects.none(),
+        "recent_events": AssetEvent.objects.select_related("asset", "actor")[:3] if can_view_audit else AssetEvent.objects.none(),
         "can_view_custody": can_view_custody,
         "can_view_reservations": can_view_reservations,
         "can_view_maintenance": can_view_maintenance,

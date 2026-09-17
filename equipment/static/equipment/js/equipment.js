@@ -201,14 +201,13 @@
         row.appendChild(statusCell);
         addCell(row, "Assigned to", result.custodian);
         addCell(row, "Location", result.location);
-        addCell(row, "Condition", result.condition);
-        addCell(row, "Last activity", result.updated);
+        addCell(row, "Updated", result.updated);
         resultBody.appendChild(row);
       });
       if (!payload.results.length) {
         const row = document.createElement("tr");
         const cell = addCell(row, "Results", "No equipment matches those filters.");
-        cell.colSpan = 6;
+        cell.colSpan = 5;
         cell.className = "empty-state";
         resultBody.appendChild(row);
       }
