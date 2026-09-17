@@ -114,6 +114,56 @@ def assign_material_request(material_request, *, assignee, actor):
     return locked, True
 
 
+@transaction.atomic
+def claim_material_request(material_request, *, actor):
+    """Atomically award an unassigned open request to the first eligible user."""
+    if not actor.is_active or not actor.has_perm("inventory.view_all_materialrequests"):
+        raise ValidationError("You are not authorized to claim material requests.")
+    if not actor.has_perm("inventory.change_pickticket"):
+        raise ValidationError("You are not authorized to fulfill pick tickets.")
+
+    claimed = MaterialRequest.objects.filter(
+        pk=material_request.pk,
+        assigned_to__isnull=True,
+        pick_ticket__status=PickTicket.Status.OPEN,
+    ).update(assigned_to=actor)
+    locked = MaterialRequest.objects.select_for_update().select_related(
+        "assigned_to", "pick_ticket"
+    ).get(pk=material_request.pk)
+    if not claimed:
+        if locked.assigned_to_id == actor.pk:
+            return locked, False
+        if locked.assigned_to_id:
+            name = locked.assigned_to.get_full_name() or locked.assigned_to.get_username()
+            raise ValidationError(f"This request was already accepted by {name}.")
+        raise ValidationError("This request is no longer available to accept.")
+
+    ticket = PickTicket.objects.select_for_update().get(pk=locked.pick_ticket_id)
+    if ticket.status != PickTicket.Status.OPEN or ticket.assigned_to_id not in (None, actor.pk):
+        raise ValidationError("This request is no longer available to accept.")
+    ticket.assigned_to = actor
+    ticket.assigned_at = timezone.now()
+    ticket.acknowledged_at = None
+    ticket.acknowledged_by = None
+    ticket.save(update_fields=[
+        "assigned_to", "assigned_at", "acknowledged_at", "acknowledged_by", "updated_at"
+    ])
+    actor_name = actor.get_full_name() or actor.get_username()
+    event = MaterialRequestEvent.objects.create(
+        material_request=locked,
+        event_type=MaterialRequestEvent.EventType.UPDATED,
+        request_number_snapshot=locked.request_number,
+        ticket_number_snapshot=ticket.ticket_number,
+        requestor_snapshot=locked.requestor_name,
+        change_summary=f"Accepted by {actor_name}",
+        actor=actor,
+    )
+    from .push import queue_material_request_push
+
+    queue_material_request_push(event)
+    return locked, True
+
+
 def _material_request_change_summary(material_request, new_values, rows):
     changes = []
     labels = {

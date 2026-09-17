@@ -52,7 +52,7 @@ class PWAInstallabilityTests(TestCase):
             self.assertNotIn("/api/", source)
             self.assertIn("request.mode === 'navigate'", source)
             self.assertIn("/offline/", source)
-            self.assertIn("const CACHE_VERSION = 'bbx-shell-v6';", source)
+            self.assertIn("const CACHE_VERSION = 'bbx-shell-v7';", source)
             self.assertIn(f"/static/inventory/icons/{icon_name}-192.png", source)
             self.assertIn("new Request(asset, {cache: 'reload'})", source)
             self.assertIn("fetch(request, {cache: 'no-store'})", source)

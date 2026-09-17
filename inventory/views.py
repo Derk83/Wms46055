@@ -344,6 +344,61 @@ def material_request_confirm_ready(request, pk):
         return JsonResponse({"error": exc.message}, status=409)
     return JsonResponse({"confirmed": True})
 
+
+@csrf_exempt
+@require_POST
+def material_request_claim_push(request, pk):
+    """Accept a signed first-claim action from a warehouse Web Push alert."""
+    from .services import claim_material_request
+
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "Sign in to accept this request."}, status=401)
+    if not request.is_wms_host or not (
+        request.user.has_perm("inventory.view_all_materialrequests")
+        and request.user.has_perm("inventory.change_pickticket")
+    ):
+        return JsonResponse({"error": "Not authorized."}, status=403)
+    payload = _push_json(request)
+    token = payload.get("token") if payload else None
+    if not isinstance(token, str) or not token:
+        return JsonResponse({"error": "Invalid acceptance."}, status=400)
+    try:
+        claims = signing.loads(
+            token, salt="material-request-warehouse-claim", max_age=24 * 60 * 60
+        )
+    except signing.BadSignature:
+        return JsonResponse({"error": "Invalid or expired acceptance."}, status=400)
+    if claims.get("request_id") != pk or claims.get("user_id") != request.user.pk:
+        return JsonResponse({"error": "Not authorized."}, status=403)
+    event = MaterialRequestEvent.objects.filter(
+        pk=claims.get("event_id"),
+        material_request_id=pk,
+        event_type=MaterialRequestEvent.EventType.CREATED,
+    ).first()
+    if event is None:
+        return JsonResponse({"error": "Invalid acceptance."}, status=400)
+    material_request = get_object_or_404(MaterialRequest, pk=pk)
+    try:
+        material_request, claimed = claim_material_request(
+            material_request, actor=request.user
+        )
+    except ValidationError as exc:
+        material_request.refresh_from_db()
+        assigned = material_request.assigned_to
+        return JsonResponse({
+            "error": exc.message,
+            "claimed_by": (
+                assigned.get_full_name() or assigned.get_username()
+                if assigned else ""
+            ),
+        }, status=409)
+    return JsonResponse({
+        "claimed": claimed,
+        "request_id": material_request.pk,
+        "assigned_to": request.user.get_full_name() or request.user.get_username(),
+        "url": reverse("material_request_detail", args=[material_request.pk]),
+    })
+
 from .forms import (
     BulkAdjustForm,
     InventoryBulkEditForm,
@@ -3937,6 +3992,41 @@ def material_request_assign(request, pk):
 
 @login_required
 @request_portal_access_required
+@any_perm_required("inventory.view_all_materialrequests")
+@require_POST
+def material_request_claim(request, pk):
+    """Atomically assign an available request to the first eligible specialist."""
+    from .services import claim_material_request
+
+    if not request.is_wms_host:
+        raise Http404
+    if not request.user.has_perm("inventory.change_pickticket"):
+        raise PermissionDenied
+    material_request = get_object_or_404(MaterialRequest, pk=pk)
+    try:
+        material_request, claimed = claim_material_request(
+            material_request, actor=request.user
+        )
+    except ValidationError as exc:
+        material_request.refresh_from_db()
+        assigned = material_request.assigned_to
+        return JsonResponse({
+            "error": exc.message,
+            "claimed_by": (
+                assigned.get_full_name() or assigned.get_username()
+                if assigned else ""
+            ),
+        }, status=409)
+    return JsonResponse({
+        "claimed": claimed,
+        "request_id": material_request.pk,
+        "assigned_to": request.user.get_full_name() or request.user.get_username(),
+        "url": reverse("material_request_detail", args=[material_request.pk]),
+    })
+
+
+@login_required
+@request_portal_access_required
 @any_perm_required("inventory.view_materialrequest")
 def material_request_archive(request):
     archived = _visible_material_requests(
@@ -4452,11 +4542,19 @@ def procurement_requisition_detail(request, pk):
 @login_required
 @any_perm_required("inventory.view_all_materialrequests")
 def material_request_events(request):
-    """Return a shared, ordered cursor stream; no cursor means initialize silently."""
-    if request.get_host().split(":", 1)[0].lower() != "bbx.rplwms.com":
+    """Return the ordered event stream plus the newest unclaimed request on first load."""
+    if not request.is_wms_host:
         raise Http404
     cursor_value = request.GET.get("cursor")
     latest = MaterialRequestEvent.objects.order_by("-id").values_list("id", flat=True).first() or 0
+    if cursor_value is None and request.user.has_perm("inventory.change_pickticket"):
+        newest_available = MaterialRequestEvent.objects.filter(
+            event_type=MaterialRequestEvent.EventType.CREATED,
+            material_request__assigned_to__isnull=True,
+            material_request__pick_ticket__status=PickTicket.Status.OPEN,
+        ).order_by("-id").values_list("id", flat=True).first()
+        if newest_available is not None:
+            cursor_value = str(max(0, newest_available - 1))
     events = []
     cursor = latest
     if cursor_value is not None:
@@ -4474,7 +4572,8 @@ def material_request_events(request):
                 MaterialRequestEvent.EventType.DELIVERY_NOT_READY,
             ],
         ).select_related(
-            "material_request", "material_request__pick_ticket"
+            "material_request", "material_request__pick_ticket",
+            "material_request__creator", "material_request__assigned_to"
         ).order_by("id")[:50])
         for event in rows:
             if event.event_type == MaterialRequestEvent.EventType.DELETED:
@@ -4498,6 +4597,14 @@ def material_request_events(request):
                 # Historical non-deletion events may outlive a request. They cannot be
                 # rendered safely, but must not poison the shared polling cursor.
                 continue
+            if (
+                event.event_type == MaterialRequestEvent.EventType.CREATED
+                and (
+                    mr.assigned_to_id is not None
+                    or mr.pick_ticket.status != PickTicket.Status.OPEN
+                )
+            ):
+                continue
             if event.event_type == MaterialRequestEvent.EventType.CREATED:
                 title = f"New material request {mr.request_number}"
                 body = f"{mr.request_number}: {mr.requestor_name or mr.creator.get_username()} submitted {mr.pick_ticket.ticket_number}."
@@ -4516,6 +4623,17 @@ def material_request_events(request):
                 title = f"{mr.request_number} status updated"
                 status_labels = dict(PickTicket.Status.choices)
                 body = f"{status_labels.get(event.old_status, event.old_status)} → {status_labels.get(event.new_status, event.new_status)}"
+            claimable = (
+                event.event_type == MaterialRequestEvent.EventType.CREATED
+                and mr.assigned_to_id is None
+                and mr.pick_ticket.status == PickTicket.Status.OPEN
+                and request.user.has_perm("inventory.change_pickticket")
+            )
+            assigned_to_name = ""
+            if mr.assigned_to_id:
+                assigned_to_name = (
+                    mr.assigned_to.get_full_name() or mr.assigned_to.get_username()
+                )
             events.append({
                 "id": event.id,
                 "event_type": event.event_type,
@@ -4524,10 +4642,16 @@ def material_request_events(request):
                 "request_number": mr.request_number,
                 "ticket_number": mr.pick_ticket.ticket_number,
                 "requestor": mr.requestor_name,
+                "request_id": mr.pk,
                 "url": reverse("material_request_detail", kwargs={"pk": mr.pk}),
+                "claim_url": (
+                    reverse("material_request_claim", kwargs={"pk": mr.pk})
+                    if claimable else ""
+                ),
+                "claimed_by": assigned_to_name,
                 "created_at": event.created_at.isoformat(),
                 "urgent": mr.urgent,
-                "require_interaction": mr.urgent,
+                "require_interaction": mr.urgent or claimable,
             })
         cursor = rows[-1].id if len(rows) == 50 else latest
     response = JsonResponse({"cursor": cursor, "events": events})

@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from pywebpush import webpush
 
-from .models import MaterialRequestEvent, PushDelivery, PushSubscription
+from .models import MaterialRequest, MaterialRequestEvent, PickTicket, PushDelivery, PushSubscription
 
 logger = logging.getLogger(__name__)
 MAX_DELIVERY_ATTEMPTS = 5
@@ -124,14 +124,50 @@ def _payload(delivery):
         "body": f"{material_request.request_number} from {material_request.requestor_name or 'a requestor'}",
         "url": reverse("material_request_detail", args=[material_request.pk]),
         "eventId": delivery.event_id,
+        "requestId": material_request.pk,
+        "urgent": material_request.urgent,
         "tag": f"material-request-{material_request.pk}",
     }
+    claim_available = (
+        event.event_type == MaterialRequestEvent.EventType.CREATED
+        and MaterialRequest.objects.filter(
+            pk=material_request.pk,
+            assigned_to__isnull=True,
+            pick_ticket__status=PickTicket.Status.OPEN,
+        ).exists()
+    )
+    if (
+        claim_available
+        and delivery.subscription.user.has_perm("inventory.change_pickticket")
+    ):
+        payload.update({
+            "actions": [{"action": "accept-request", "title": "Accept request"}],
+            "claimUrl": reverse("material_request_claim_push", args=[material_request.pk]),
+            "claimToken": signing.dumps(
+                {
+                    "request_id": material_request.pk,
+                    "user_id": delivery.subscription.user_id,
+                    "event_id": event.pk,
+                },
+                salt="material-request-warehouse-claim",
+                compress=True,
+            ),
+            "requireInteraction": True,
+        })
     if event.event_type == MaterialRequestEvent.EventType.UPDATED:
         payload.update({
             "title": f"{material_request.request_number} updated",
             "body": event.change_summary[:500],
             "tag": f"material-request-{material_request.pk}-update-{event.pk}",
         })
+        if material_request.assigned_to_id:
+            payload.update({
+                "claimedBy": (
+                    material_request.assigned_to.get_full_name()
+                    or material_request.assigned_to.get_username()
+                ),
+                "tag": f"material-request-{material_request.pk}",
+            })
     elif event.event_type == MaterialRequestEvent.EventType.STATUS_CHANGED:
         status_label = dict(material_request.pick_ticket.Status.choices).get(
             event.new_status, event.new_status

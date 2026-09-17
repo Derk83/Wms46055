@@ -1,7 +1,7 @@
 {% load static inventory_extras %}
 'use strict';
 
-const CACHE_VERSION = 'bbx-shell-v6';
+const CACHE_VERSION = 'bbx-shell-v7';
 const OFFLINE_URL = '/offline/';
 const APP_ICON = '{% if request.is_request_portal %}{% static "inventory/icons/requests-192.png" %}{% else %}{% static "inventory/icons/warehouse-192.png" %}{% endif %}';
 const SHELL_ASSETS = [
@@ -76,6 +76,11 @@ self.addEventListener('push', (event) => {
     const candidate = new URL(data.confirmUrl, self.location.origin);
     if (candidate.origin === self.location.origin) confirmUrl = candidate.pathname + candidate.search;
   }
+  let claimUrl = null;
+  if (data.claimUrl) {
+    const candidate = new URL(data.claimUrl, self.location.origin);
+    if (candidate.origin === self.location.origin) claimUrl = candidate.pathname + candidate.search;
+  }
   const options = {
     body: data.body || 'A warehouse update is available.',
     icon: APP_ICON,
@@ -87,8 +92,11 @@ self.addEventListener('push', (event) => {
     data: {
       url: url.pathname + url.search,
       eventId: data.eventId || null,
+      requestId: data.requestId || null,
       confirmUrl,
-      confirmationToken: data.confirmationToken || null
+      confirmationToken: data.confirmationToken || null,
+      claimUrl,
+      claimToken: data.claimToken || null
     }
   };
   event.waitUntil(
@@ -102,6 +110,49 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+  if (event.action === 'accept-request' && data.claimUrl && data.claimToken) {
+    event.waitUntil((async () => {
+      const tag = data.requestId ? `material-request-${data.requestId}` : 'material-request-claim';
+      try {
+        const response = await fetch(data.claimUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({token: data.claimToken})
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok) {
+          return self.registration.showNotification('Request assigned to you', {
+            body: 'Open the ticket to acknowledge and begin picking.',
+            icon: APP_ICON,
+            tag,
+            data: {url: payload.url || data.url || '/'}
+          });
+        }
+        const alreadyClaimed = response.status === 409;
+        const claimedBy = payload.claimed_by ? ` by ${payload.claimed_by}` : '';
+        return self.registration.showNotification(
+          alreadyClaimed ? 'Request already assigned' : 'Could not accept request',
+          {
+            body: alreadyClaimed
+              ? `Another specialist accepted this request${claimedBy}.`
+              : (payload.error || 'Sign in to the warehouse and try again.'),
+            icon: APP_ICON,
+            tag,
+            data: {url: data.url || '/'}
+          }
+        );
+      } catch (_) {
+        return self.registration.showNotification('Could not accept request', {
+          body: 'Check your connection, then open the request and try again.',
+          icon: APP_ICON,
+          tag,
+          data: {url: data.url || '/'}
+        });
+      }
+    })());
+    return;
+  }
   if (event.action === 'confirm-delivery' && data.confirmUrl && data.confirmationToken) {
     event.waitUntil(
       fetch(data.confirmUrl, {

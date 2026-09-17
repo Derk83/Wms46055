@@ -136,7 +136,12 @@
           title: payload.title || 'Material request update',
           body: payload.body || '',
           url: payload.url || '',
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          urgent: Boolean(payload.urgent),
+          require_interaction: Boolean(payload.requireInteraction),
+          request_id: payload.requestId || null,
+          claim_url: payload.claimUrl || '',
+          claimed_by: payload.claimedBy || ''
         });
       }
     }

@@ -247,7 +247,7 @@
   };
   const renderUrgentAlerts = () => {
     let container = document.querySelector('[data-urgent-alerts]');
-    const urgentItems = notificationState.items.filter(item => item.urgent);
+    const urgentItems = notificationState.items.filter(item => item.urgent && !item.claim_url);
     if (!urgentItems.length) { container?.remove(); return; }
     if (!container) {
       container = document.createElement('aside'); container.className = 'urgent-alert-stack'; container.dataset.urgentAlerts = '';
@@ -265,6 +265,79 @@
       alert.append(content, dismiss); container.appendChild(alert);
     });
   };
+  const updateClaimState = (requestId, claimedBy) => {
+    let changed = false;
+    notificationState.items.forEach(item => {
+      if (String(item.request_id || '') !== String(requestId)) return;
+      item.claim_url = '';
+      item.claimed_by = claimedBy || 'another specialist';
+      changed = true;
+    });
+    if (changed) { saveNotifications(); renderNotifications(); }
+  };
+  const announceClaim = (message, kind = 'error') => {
+    const region = document.getElementById('toast-region');
+    if (!region) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${kind}`;
+    toast.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+    toast.textContent = message;
+    region.appendChild(toast);
+    window.setTimeout(() => toast.remove(), 4200);
+  };
+  const claimRequest = async (item, button) => {
+    if (!item.claim_url || button.disabled) return;
+    button.disabled = true;
+    button.textContent = 'Accepting…';
+    try {
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrftoken='))?.split('=')[1] || '';
+      const response = await fetch(item.claim_url, {
+        method: 'POST', credentials: 'same-origin', cache: 'no-store',
+        headers: {'Accept': 'application/json', 'X-CSRFToken': decodeURIComponent(csrfToken)}
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (response.status === 409) {
+          const claimedBy = payload.claimed_by || 'another specialist';
+          updateClaimState(item.request_id, claimedBy);
+          announceClaim(`This request was already accepted by ${claimedBy}.`);
+          return;
+        }
+        throw new Error(payload.error || 'Unable to accept request.');
+      }
+      updateClaimState(item.request_id, payload.assigned_to || 'you');
+      channel?.postMessage({type: 'claimed', request_id: item.request_id, claimed_by: payload.assigned_to || 'another specialist'});
+      if (payload.url) window.location.assign(payload.url);
+    } catch (error) {
+      button.disabled = false;
+      button.textContent = 'Accept request';
+      const message = error instanceof Error ? error.message : 'Unable to accept request.';
+      button.title = message;
+      announceClaim(message);
+      button.focus();
+    }
+  };
+  const renderClaimAlerts = () => {
+    let container = document.querySelector('[data-claim-alerts]');
+    const claimableItems = notificationState.items.filter(item => item.claim_url && !item.claimed_by);
+    if (!claimableItems.length) { container?.remove(); return; }
+    if (!container) {
+      container = document.createElement('aside'); container.className = 'claim-alert-stack'; container.dataset.claimAlerts = '';
+      container.setAttribute('aria-live', 'assertive'); document.body.appendChild(container);
+    }
+    container.replaceChildren();
+    claimableItems.slice(0, 3).forEach(item => {
+      const alert = document.createElement('div'); alert.className = `claim-alert${item.urgent ? ' is-urgent' : ''}`; alert.setAttribute('role', 'alert');
+      const text = document.createElement('div'); text.className = 'claim-alert__content';
+      const strong = document.createElement('strong'); strong.textContent = item.title; text.appendChild(strong);
+      if (item.body) { const body = document.createElement('small'); body.textContent = item.body; text.appendChild(body); }
+      const actions = document.createElement('div'); actions.className = 'claim-alert__actions';
+      const view = document.createElement('a'); view.className = 'btn btn-secondary btn-sm'; view.href = item.url || '#'; view.textContent = 'View';
+      const accept = document.createElement('button'); accept.type = 'button'; accept.className = 'btn btn-primary btn-sm'; accept.textContent = 'Accept request';
+      accept.addEventListener('click', () => claimRequest(item, accept));
+      actions.append(view, accept); alert.append(text, actions); container.appendChild(alert);
+    });
+  };
   const renderNotifications = () => {
     if (!notificationList || !notificationCount) return;
     notificationList.replaceChildren();
@@ -277,6 +350,7 @@
       if (item.url) content.href = item.url;
       const strong = document.createElement('strong'); strong.textContent = item.title; content.appendChild(strong);
       if (item.body) { const body = document.createElement('small'); body.textContent = item.body; content.appendChild(body); }
+      if (item.claimed_by) { const claimed = document.createElement('small'); claimed.className = 'notification-claimed'; claimed.textContent = `Accepted by ${item.claimed_by}`; content.appendChild(claimed); }
       li.appendChild(content);
       const time = document.createElement('time'); time.textContent = new Date(item.at).toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}); li.appendChild(time);
       notificationList.appendChild(li);
@@ -285,11 +359,35 @@
     notificationCount.hidden = notificationState.unread < 1;
     notificationToggle?.setAttribute('aria-label', notificationState.unread ? `Notifications, ${notificationState.unread} unread` : 'Notifications');
     renderUrgentAlerts();
+    renderClaimAlerts();
   };
   const addNotification = item => {
     const id = String(item.id || `${Date.now()}-${Math.random()}`);
-    if (notificationState.items.some(entry => String(entry.id) === id)) return;
-    notificationState.items.unshift({id, title: item.title || 'Notification', body: item.body || '', url: item.url || '', at: item.created_at || new Date().toISOString(), urgent: Boolean(item.urgent || item.require_interaction || item.requireInteraction)});
+    const existing = notificationState.items.find(entry => String(entry.id) === id);
+    if (existing) {
+      existing.title = item.title || existing.title;
+      existing.body = item.body || existing.body;
+      existing.url = item.url || existing.url;
+      existing.at = item.created_at || existing.at;
+      existing.urgent = Boolean(item.urgent || existing.urgent);
+      existing.require_interaction = Boolean(
+        item.require_interaction || item.requireInteraction || existing.require_interaction
+      );
+      existing.request_id = item.request_id || item.requestId || existing.request_id || null;
+      existing.claim_url = item.claim_url || item.claimUrl || existing.claim_url || '';
+      existing.claimed_by = item.claimed_by || item.claimedBy || existing.claimed_by || '';
+      if (existing.claimed_by) existing.claim_url = '';
+      saveNotifications(); renderNotifications();
+      return;
+    }
+    notificationState.items.unshift({
+      id, title: item.title || 'Notification', body: item.body || '', url: item.url || '',
+      at: item.created_at || new Date().toISOString(),
+      urgent: Boolean(item.urgent), require_interaction: Boolean(item.require_interaction || item.requireInteraction),
+      request_id: item.request_id || item.requestId || null,
+      claim_url: item.claim_url || item.claimUrl || '',
+      claimed_by: item.claimed_by || item.claimedBy || ''
+    });
     notificationState.unread += 1; saveNotifications(); renderNotifications();
   };
   window.BBXNotifications = {add: addNotification};
@@ -319,14 +417,20 @@
   const endpoint = document.body.dataset.eventsUrl;
   if (!endpoint) return; // Request portal pages deliberately never poll.
 
-  const cursorKey = 'bbx-material-request-cursor-v1';
+  const userScope = document.body.dataset.notificationUser || 'guest';
+  const cursorKey = `bbx-material-request-cursor-v1:${location.host}:${userScope}`;
   const seen = new Set();
-  const channel = 'BroadcastChannel' in window ? new BroadcastChannel('bbx-material-requests') : null;
+  const channelName = `bbx-material-requests:${location.host}:${userScope}`;
+  const channel = 'BroadcastChannel' in window ? new BroadcastChannel(channelName) : null;
   let cursor = localStorage.getItem(cursorKey);
   let timer;
+  let polling = false;
 
   const saveCursor = (value) => {
-    cursor = String(value);
+    const next = Number(value);
+    const current = Number(cursor || 0);
+    if (!Number.isFinite(next) || next < current) return;
+    cursor = String(next);
     localStorage.setItem(cursorKey, cursor);
     channel?.postMessage({type: 'cursor', cursor});
   };
@@ -336,17 +440,23 @@
   };
   channel?.addEventListener('message', ({data}) => {
     if (data?.type === 'seen') seen.add(String(data.id));
-    if (data?.type === 'cursor' && Number(data.cursor) > Number(cursor || 0)) cursor = String(data.cursor);
+    if (data?.type === 'cursor' && Number(data.cursor) > Number(cursor || 0)) {
+      cursor = String(data.cursor);
+      localStorage.setItem(cursorKey, cursor);
+    }
+    if (data?.type === 'claimed') updateClaimState(data.request_id, data.claimed_by);
   });
 
   const showToast = (event) => {
+    if (event.request_id && event.claimed_by) updateClaimState(event.request_id, event.claimed_by);
     if (seen.has(String(event.id))) return;
     markSeen(event.id);
     addNotification(event);
   };
 
   const poll = async () => {
-    if (document.hidden) return;
+    if (document.hidden || polling) return;
+    polling = true;
     try {
       const url = cursor === null ? endpoint : `${endpoint}?cursor=${encodeURIComponent(cursor)}`;
       const response = await fetch(url, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}});
@@ -355,12 +465,13 @@
       payload.events.forEach(showToast);
       saveCursor(payload.cursor);
     } catch (_) { /* transient network failures are retried */ }
+    finally { polling = false; }
   };
   const schedule = () => {
     clearInterval(timer);
     if (!document.hidden) {
       poll();
-      timer = window.setInterval(poll, 10000);
+      timer = window.setInterval(poll, 3000);
     }
   };
   document.addEventListener('visibilitychange', schedule);
