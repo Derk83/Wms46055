@@ -23,11 +23,11 @@ class HubHostTests(SimpleTestCase):
             ],
         )
 
-    def test_www_domain_serves_same_hub(self):
+    def test_www_domain_redirects_to_canonical_hub(self):
         response = self.client.get("/", HTTP_HOST="www.rplwms.com", secure=True)
 
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, "inventory/hub.html")
+        self.assertEqual(response.status_code, 301)
+        self.assertEqual(response["Location"], "https://rplwms.com/")
 
     def test_hub_supports_head_requests(self):
         response = self.client.head("/", HTTP_HOST="rplwms.com", secure=True)
