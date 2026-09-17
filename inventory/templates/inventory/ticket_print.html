@@ -40,7 +40,7 @@ th{padding:.05in .035in;border:1px solid #555;background:#dedede;color:#222;font
 td{height:.22in;padding:.02in .035in;border:1px solid var(--line);vertical-align:middle;line-height:1.08;overflow-wrap:anywhere}
 tbody tr:nth-child(even) td{background:var(--soft)}
 tr{page-break-inside:avoid}
-.col-num{width:4%;text-align:center}.col-bin{width:15%}.col-part{width:18%}.col-description{width:auto}.col-qty{width:12%;text-align:center}
+.col-num{width:4%;text-align:center}.col-bin{width:12%}.col-part{width:14%}.col-fb-part{width:14%}.col-description{width:auto}.col-qty{width:10%;text-align:center}
 .receipt{position:absolute;left:.38in;right:.38in;bottom:.30in;page-break-inside:avoid}
 .receipt-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.07in}
 .receipt .info-box{min-height:.40in}
@@ -93,12 +93,12 @@ tr{page-break-inside:avoid}
 
   <div class="section-title">ITEMS TO PICK <span>{{ ticket.lines.count }} line{{ ticket.lines.count|pluralize }}</span></div>
   <table>
-    <thead><tr><th class="col-num">#</th><th class="col-bin">BIN LOCATION</th><th class="col-part">PART #</th><th class="col-description">ITEM DESCRIPTION</th><th class="col-qty">QTY REQUESTED</th><th class="col-qty">QTY FILLED</th></tr></thead>
+    <thead><tr><th class="col-num">#</th><th class="col-bin">BIN LOCATION</th><th class="col-part">PART #</th><th class="col-fb-part">FB PART #</th><th class="col-description">ITEM DESCRIPTION</th><th class="col-qty">QTY REQUESTED</th><th class="col-qty">QTY FILLED</th></tr></thead>
     <tbody>
     {% for row in page.rows %}
-      <tr><td class="col-num">{{ row.number }}</td><td>{{ row.line.item.storage_location|default:"" }}</td><td>{{ row.line.item.part_number }}</td><td>{{ row.line.item.name }}</td><td class="col-qty">{{ row.line.quantity }}</td><td class="col-qty"></td></tr>
+      <tr><td class="col-num">{{ row.number }}</td><td>{{ row.line.item.storage_location|default:"" }}</td><td>{{ row.line.item.part_number }}</td><td>{{ row.line.item.fb_part_number|default:"" }}</td><td>{{ row.line.item.name }}</td><td class="col-qty">{{ row.line.quantity }}</td><td class="col-qty"></td></tr>
     {% empty %}
-      <tr><td class="col-num">1</td><td></td><td></td><td></td><td class="col-qty"></td><td class="col-qty"></td></tr>
+      <tr><td class="col-num">1</td><td></td><td></td><td></td><td></td><td class="col-qty"></td><td class="col-qty"></td></tr>
     {% endfor %}
     </tbody>
   </table>

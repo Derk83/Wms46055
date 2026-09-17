@@ -225,3 +225,40 @@ html,body{max-width:100%}body{overflow-x:hidden}main,.page-header,.card,.row,.ro
 .assignment-ack-overlay{position:fixed;inset:0;z-index:300;display:grid;place-items:center;padding:18px;background:rgba(3,7,12,.82);backdrop-filter:blur(5px)}.assignment-ack-dialog{width:min(620px,100%);max-height:calc(100dvh - 36px);overflow:auto;padding:clamp(22px,4vw,34px);border:1px solid color-mix(in srgb,var(--accent) 55%,var(--border));border-radius:16px;background:var(--surface);color:var(--ink);box-shadow:0 30px 90px rgba(0,0,0,.55)}.assignment-ack-dialog h2{margin:5px 0 10px}.assignment-ack-dialog>p{color:var(--muted)}.assignment-ack-eyebrow{color:var(--accent-hover);font-size:11px;font-weight:900;letter-spacing:.13em;text-transform:uppercase}.assignment-ack-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;margin:20px 0;overflow:hidden;border:1px solid var(--border);border-radius:10px;background:var(--border)}.assignment-ack-details>div{padding:12px;background:var(--surface-2)}.assignment-ack-details dt{color:var(--muted);font-size:11px;font-weight:850;letter-spacing:.06em;text-transform:uppercase}.assignment-ack-details dd{margin:4px 0 0;font-weight:800}.assignment-ack-dialog form,.assignment-ack-dialog .btn{width:100%}
 .transaction-type{display:inline-flex;align-items:center;justify-content:center;min-width:112px;padding:6px 10px;border:1px solid transparent;border-radius:8px;color:#fff;font-size:12px;font-weight:850;letter-spacing:.02em}.transaction-type-pick{border-color:#ef4444;background:#7f1d1d}.transaction-type-receipt{border-color:#22c55e;background:#166534}.transaction-type-reversal{border-color:#a78bfa;background:#4c1d95}.transaction-type-adjustment{border-color:#f59e0b;background:#78350f}.transaction-type-import{border-color:#60a5fa;background:#1e3a8a}.transaction-quantity{font-size:15px;font-weight:900;white-space:nowrap}.transaction-quantity.is-positive{color:#22c55e}.transaction-quantity.is-negative{color:#f87171}.transaction-activity{min-width:320px}.transaction-activity strong,.transaction-activity span{display:block}.transaction-activity strong{color:var(--ink);line-height:1.35}.transaction-activity span{margin-top:5px;color:var(--muted);font-size:12px;line-height:1.4}
 @media(max-width:700px){.pick-signoff-grid,.assignment-ack-details{grid-template-columns:1fr}.pick-confirmation-form{padding:13px}.assignment-ack-overlay{padding:10px}.assignment-ack-dialog{max-height:calc(100dvh - 20px);padding:20px}.assignment-ack-dialog .btn{min-height:48px}}
+
+/* Pick-ticket detail hierarchy and compact mobile workflow. */
+.ticket-title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0}.ticket-title-row h1{margin:0}.ticket-status-badge{background:color-mix(in srgb,currentColor 10%,var(--surface-2))}.ticket-header-actions{margin:0}.ticket-action-short{display:none}.ticket-meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:0}.ticket-meta-grid>div{min-width:0;padding:11px 12px;border:1px solid var(--border);border-radius:9px;background:var(--surface-2)}.ticket-meta-grid dt{color:var(--muted);font-size:10px;font-weight:850;letter-spacing:.07em;text-transform:uppercase}.ticket-meta-grid dd{margin:3px 0 0;color:var(--ink);font-weight:750;line-height:1.3;overflow-wrap:anywhere}.ticket-more-details{margin-top:10px}.ticket-more-details summary{color:var(--link);font-weight:800;cursor:pointer}.ticket-meta-secondary{margin-top:10px}.ticket-notes{margin:12px 0 0;padding:10px 12px;border-left:3px solid var(--accent);background:var(--surface-2)}
+@media(min-width:761px){.ticket-more-details>summary{display:none}.ticket-more-details:not([open])>.ticket-meta-grid{display:grid}}
+
+/* Mobile pick-ticket workflow: compact controls and native cards instead of horizontal scrolling. */
+@media(max-width:760px){
+  main:has(.ticket-page-header){width:calc(100% - 16px);padding-top:12px}
+  .ticket-page-header{display:grid;gap:12px;margin-bottom:10px;padding:14px;border-left-width:4px}
+  .ticket-title-row{justify-content:space-between;gap:8px}
+  .ticket-title-row h1{font-size:clamp(23px,7vw,29px);white-space:nowrap}
+  .ticket-status-badge{flex:0 0 auto}
+  .ticket-header-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(62px,1fr));gap:7px;width:100%;margin:0}
+  .ticket-header-actions>.btn{width:100%;min-width:0;min-height:42px;padding:7px 5px;font-size:12px;line-height:1;white-space:nowrap}
+  .ticket-action-long{display:none}.ticket-action-short{display:inline}
+  .ticket-detail-card{padding:12px;margin-bottom:12px}
+  .ticket-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+  .ticket-meta-grid>div{padding:9px 10px}
+  .ticket-meta-grid dt{font-size:9px}.ticket-meta-grid dd{font-size:13px}
+  .ticket-more-details{margin:8px 0 0;padding-top:8px;border-top:1px solid var(--border)}
+  .ticket-more-details summary{min-height:40px;padding:9px 2px}
+  .ticket-meta-secondary{margin-top:7px}
+  .pick-confirmation-form{min-width:0;gap:12px;margin-top:12px}
+  .table-responsive:has(>.pick-ticket-lines){min-width:0;overflow:visible}
+  .table-responsive>.pick-ticket-lines{display:block;width:100%;min-width:0;border:0;background:transparent}
+  .pick-ticket-lines thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  .pick-ticket-lines tbody{display:grid;gap:10px}
+  .pick-ticket-lines tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;padding:10px;border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:10px;background:var(--surface);box-shadow:var(--shadow-sm)}
+  .pick-ticket-lines td{display:grid;align-content:start;min-width:0;padding:6px;border:0;background:transparent!important;overflow-wrap:anywhere}
+  .pick-ticket-lines td::before{display:block;margin-bottom:2px;color:var(--muted);font-size:9px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;content:attr(data-label)}
+  .pick-ticket-lines td[data-field="quantity"],.pick-ticket-lines td[data-field="reason"]{grid-column:1/-1}
+  .pick-ticket-lines input,.pick-ticket-lines textarea{min-width:0;width:100%;font-size:16px}
+  .pick-ticket-lines textarea{min-height:72px}
+  .pick-confirmation-form{gap:12px;margin-top:12px}.pick-confirmation-form>.btn{width:100%;min-height:48px}
+  .ticket-status-actions{align-items:stretch;flex-direction:column}
+  .ticket-status-actions>form,.ticket-status-actions>form>.btn,.ticket-status-actions>details,.ticket-status-actions>details>summary{width:100%}
+}

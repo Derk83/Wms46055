@@ -151,6 +151,20 @@ class MaterialRequestAssignmentPermissionTests(TestCase):
         self.request_obj.refresh_from_db()
         self.assertEqual(self.request_obj.assigned_to, self.worker)
 
+    def test_non_manager_locked_reassignment_is_controlled_and_preserves_owner(self):
+        self._post_assign(self.procurement, self.worker.pk)
+        # Simulate an accepted ticket created before picked_by_user was synchronized.
+        PickTicket.objects.filter(pk=self.request_obj.pick_ticket_id).update(
+            picked_by_user=None, picked_by_name=""
+        )
+        response = self._post_assign(self.procurement, "")
+        self.assertEqual(response.status_code, 302)
+        self.request_obj.refresh_from_db()
+        self.request_obj.pick_ticket.refresh_from_db()
+        self.assertEqual(self.request_obj.assigned_to, self.worker)
+        self.assertEqual(self.request_obj.pick_ticket.assigned_to, self.worker)
+        self.assertIsNone(self.request_obj.pick_ticket.picked_by_user)
+
     def test_board_hides_assign_form_for_specialist_but_shows_readonly_label(self):
         c = Client()
         c.force_login(self.specialist)

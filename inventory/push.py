@@ -12,6 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from pywebpush import webpush
 
+from .access import MANAGER_GROUP_NAMES, user_is_manager
 from .models import MaterialRequest, MaterialRequestEvent, PickTicket, PushDelivery, PushSubscription
 
 logger = logging.getLogger(__name__)
@@ -79,9 +80,14 @@ def _authorized_subscriptions(event):
             user_id=event.material_request.creator_id,
             audience=PushSubscription.Audience.REQUEST_PORTAL,
         )
-    return _permission_subscriptions("view_all_materialrequests").filter(
+    subscriptions = _permission_subscriptions("view_all_materialrequests").filter(
         audience=PushSubscription.Audience.WMS
     )
+    if event.event_type == MaterialRequestEvent.EventType.CREATED:
+        subscriptions = subscriptions.filter(user__is_superuser=False).exclude(
+            user__groups__name__in=MANAGER_GROUP_NAMES
+        )
+    return subscriptions.distinct()
 
 
 def queue_material_request_push(event):
@@ -139,6 +145,7 @@ def _payload(delivery):
     if (
         claim_available
         and delivery.subscription.user.has_perm("inventory.change_pickticket")
+        and not user_is_manager(delivery.subscription.user)
     ):
         payload.update({
             "actions": [{"action": "accept-request", "title": "Accept request"}],
@@ -219,6 +226,11 @@ def _payload(delivery):
 
 
 def _still_authorized(subscription, event):
+    if (
+        event.event_type == MaterialRequestEvent.EventType.CREATED
+        and user_is_manager(subscription.user)
+    ):
+        return False
     if event.event_type == MaterialRequestEvent.EventType.STATUS_CHANGED:
         permission = "inventory.access_material_request_portal"
         intended_recipient = (

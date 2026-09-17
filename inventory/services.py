@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
+from .access import user_is_manager
 from .models import (
     BackorderFulfillment,
     InventoryItem,
@@ -89,15 +90,27 @@ def assign_material_request(material_request, *, assignee, actor):
     def display_user(user):
         return (user.get_full_name() or user.username) if user else "Unassigned"
 
+    ticket = locked.pick_ticket
+    locked_owner_id = ticket.picked_by_user_id or ticket.assigned_to_id
+    if (
+        locked_owner_id
+        and locked_owner_id != new_id
+        and not user_is_manager(actor)
+    ):
+        raise ValidationError(
+            "This ticket is locked to its picker. Only a manager can reassign it."
+        )
     locked.assigned_to = assignee
     locked.save(update_fields=["assigned_to", "updated_at"])
-    ticket = locked.pick_ticket
     ticket.assigned_to = assignee
+    ticket.picked_by_user = assignee
+    ticket.picked_by_name = display_user(assignee) if assignee else ""
     ticket.assigned_at = timezone.now() if assignee else None
     ticket.acknowledged_at = None
     ticket.acknowledged_by = None
     ticket.save(update_fields=[
-        "assigned_to", "assigned_at", "acknowledged_at", "acknowledged_by", "updated_at"
+        "assigned_to", "picked_by_user", "picked_by_name", "assigned_at",
+        "acknowledged_at", "acknowledged_by", "updated_at"
     ])
     event = MaterialRequestEvent.objects.create(
         material_request=locked,
@@ -142,11 +155,14 @@ def claim_material_request(material_request, *, actor):
     if ticket.status != PickTicket.Status.OPEN or ticket.assigned_to_id not in (None, actor.pk):
         raise ValidationError("This request is no longer available to accept.")
     ticket.assigned_to = actor
+    ticket.picked_by_user = actor
+    ticket.picked_by_name = actor.get_full_name() or actor.get_username()
     ticket.assigned_at = timezone.now()
     ticket.acknowledged_at = None
     ticket.acknowledged_by = None
     ticket.save(update_fields=[
-        "assigned_to", "assigned_at", "acknowledged_at", "acknowledged_by", "updated_at"
+        "assigned_to", "picked_by_user", "picked_by_name", "assigned_at",
+        "acknowledged_at", "acknowledged_by", "updated_at"
     ])
     actor_name = actor.get_full_name() or actor.get_username()
     event = MaterialRequestEvent.objects.create(
@@ -349,6 +365,12 @@ def update_pick_ticket_status(
         if picked_by.pk == qa_checked_by.pk:
             raise ValidationError("The picker and QA checker must be different users.")
         if ticket.assigned_to_id:
+            if picked_by.pk != ticket.assigned_to_id:
+                if user_is_manager(actor):
+                    raise ValidationError(
+                        "Reassign this ticket from the material request before recording picked quantities."
+                    )
+                raise ValidationError("The assigned picker must be recorded as the picker.")
             if (
                 not ticket.acknowledged_at
                 or ticket.acknowledged_by_id != ticket.assigned_to_id
@@ -356,8 +378,6 @@ def update_pick_ticket_status(
                 raise ValidationError(
                     "The assigned picker must acknowledge this ticket before picking it."
                 )
-            if picked_by.pk != ticket.assigned_to_id:
-                raise ValidationError("The assigned picker must be recorded as the picker.")
 
         picked_lines = picked_lines or {}
         normalized = []
@@ -416,7 +436,8 @@ def update_pick_ticket_status(
 
     ticket.status = new_status
     ticket.save(update_fields=[
-        "status", "picked_by_user", "picked_by_name", "qa_checked_by_user",
+        "status", "assigned_to", "assigned_at", "acknowledged_at", "acknowledged_by",
+        "picked_by_user", "picked_by_name", "qa_checked_by_user",
         "qa_checked_by_name", "updated_at"
     ])
     if material_request is None:

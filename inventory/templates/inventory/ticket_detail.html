@@ -1,56 +1,80 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
-<div class="page-header">
-  <h1>Pick Ticket {{ ticket.ticket_number }}</h1>
-  <div class="actions no-print">
+<div class="page-header ticket-page-header">
+  <div class="ticket-title-row">
+    <h1>Pick Ticket {{ ticket.ticket_number }}</h1>
+    <span class="badge ticket-status-badge status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span>
+  </div>
+  <div class="actions no-print ticket-header-actions">
     {% if linked_request %}
-      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' linked_request.pk %}">Open Material Request</a>{% endif %}
-      {% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn btn-warning" href="{% url 'material_request_edit' linked_request.pk %}">Edit Material Request</a>{% endif %}
+      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' linked_request.pk %}"><span class="ticket-action-long">Open Material Request</span><span class="ticket-action-short">Request</span></a>{% endif %}
+      {% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn btn-warning" href="{% url 'material_request_edit' linked_request.pk %}"><span class="ticket-action-long">Edit Material Request</span><span class="ticket-action-short">Edit</span></a>{% endif %}
     {% elif supplemental_fulfillment %}
-      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' supplemental_fulfillment.backorder.line.material_request.pk %}">Open Material Request</a>{% endif %}
-    {% elif perms.inventory.change_pickticket %}<a class="btn btn-warning" href="{% url 'ticket_edit' ticket.pk %}">Edit Pick Ticket</a>{% endif %}
-    {% if perms.inventory.print_pickticket %}<a class="btn btn-info" href="{% url 'ticket_print' ticket.pk %}" target="_blank" rel="noopener">Print Ticket</a>{% endif %}
-    {% if perms.inventory.add_pickticket %}<a class="btn btn-primary" href="{% url 'ticket_create' %}">New Pick Ticket</a>{% endif %}
+      {% if perms.inventory.view_materialrequest %}<a class="btn btn-secondary" href="{% url 'material_request_detail' supplemental_fulfillment.backorder.line.material_request.pk %}"><span class="ticket-action-long">Open Material Request</span><span class="ticket-action-short">Request</span></a>{% endif %}
+    {% elif perms.inventory.change_pickticket %}<a class="btn btn-warning" href="{% url 'ticket_edit' ticket.pk %}"><span class="ticket-action-long">Edit Pick Ticket</span><span class="ticket-action-short">Edit</span></a>{% endif %}
+    {% if perms.inventory.print_pickticket %}<a class="btn btn-info" href="{% url 'ticket_print' ticket.pk %}" target="_blank" rel="noopener"><span class="ticket-action-long">Print Ticket</span><span class="ticket-action-short">Print</span></a>{% endif %}
+    {% if perms.inventory.add_pickticket %}<a class="btn btn-primary" href="{% url 'ticket_create' %}"><span class="ticket-action-long">New Pick Ticket</span><span class="ticket-action-short">+ New</span></a>{% endif %}
   </div>
 </div>
 {% if supplemental_fulfillment %}<div class="alert info"><strong>Supplemental backorder fulfillment:</strong> This ticket fulfills {{ supplemental_fulfillment.quantity }} for {{ supplemental_fulfillment.backorder.backorder_number }} and its lines cannot be edited or deleted.</div>{% endif %}
-<div class="card">
-  <div class="grid">
-    <p><strong>Status:</strong><br><span class="status-{{ ticket.status|lower }}">{{ ticket.get_status_display }}</span></p>
-    <p><strong>Date:</strong><br>{{ ticket.date }}</p>
-    <p><strong>Assigned To:</strong><br>{% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}{% else %}Unassigned{% endif %}</p>
-    <p><strong>Acknowledged:</strong><br>{% if ticket.acknowledged_at %}{{ ticket.acknowledged_at|date:"M j, Y, g:i A" }}{% else %}Awaiting acknowledgement{% endif %}</p>
-    <p><strong>Picked By:</strong><br>{{ ticket.picked_by_name|default:"Not recorded" }}</p>
-    <p><strong>QA Checked By:</strong><br>{{ ticket.qa_checked_by_name|default:"Not recorded" }}</p>
-    <p><strong>Received By:</strong><br>{{ ticket.received_by_name|default:"Not recorded" }}</p>
-    <p><strong>Requested By:</strong><br>{{ ticket.requested_by_name }}</p>
-    <p><strong>BLDG/Room #:</strong><br>{{ ticket.building_room }}</p>
-    <p><strong>Location:</strong><br>{{ ticket.location }}</p>
-  </div>
-  {% if ticket.notes %}<p><strong>Notes:</strong> {{ ticket.notes }}</p>{% endif %}
+<div class="card ticket-detail-card">
+  <dl class="ticket-meta-grid ticket-meta-primary">
+    <div><dt>Assigned to</dt><dd>{% if ticket.assigned_to %}{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}{% else %}Unassigned{% endif %}</dd></div>
+    <div><dt>Acknowledged</dt><dd>{% if ticket.acknowledged_at %}{{ ticket.acknowledged_at|date:"M j, Y, g:i A" }}{% else %}Awaiting acknowledgement{% endif %}</dd></div>
+    <div><dt>Date</dt><dd>{{ ticket.date }}</dd></div>
+    <div><dt>Destination</dt><dd>{{ ticket.building_room }}{% if ticket.location %} · {{ ticket.location }}{% endif %}</dd></div>
+  </dl>
+  <details class="ticket-more-details">
+    <summary>More ticket details</summary>
+    <dl class="ticket-meta-grid ticket-meta-secondary">
+      <div><dt>Picked by</dt><dd>{{ ticket.picked_by_name|default:"Not recorded" }}</dd></div>
+      <div><dt>QA checked by</dt><dd>{{ ticket.qa_checked_by_name|default:"Not recorded" }}</dd></div>
+      <div><dt>Received by</dt><dd>{{ ticket.received_by_name|default:"Not recorded" }}</dd></div>
+      <div><dt>Requested by</dt><dd>{{ ticket.requested_by_name }}</dd></div>
+      <div><dt>BLDG/Room #</dt><dd>{{ ticket.building_room }}</dd></div>
+      <div><dt>Location</dt><dd>{{ ticket.location }}</dd></div>
+    </dl>
+  </details>
+  {% if ticket.notes %}<p class="ticket-notes"><strong>Notes:</strong> {{ ticket.notes }}</p>{% endif %}
 
   {% if requires_pick_entry and perms.inventory.change_pickticket %}
   <form method="post" action="{% url 'ticket_status_update' ticket.pk %}" class="pick-confirmation-form no-print" data-pick-confirmation-form>
     {% csrf_token %}
     <input type="hidden" name="status" value="PICKED">
     <div class="table-responsive">
-      <table class="pick-quantity-table">
-        <thead><tr><th>Part #</th><th>Item</th><th>Requested</th><th>Quantity picked</th><th>Variance reason</th></tr></thead>
+      <table class="pick-quantity-table pick-ticket-lines">
+        <thead><tr><th>Part #</th><th>FB Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Quantity picked</th><th>Variance reason</th></tr></thead>
         <tbody>
         {% for line in ticket.lines.all %}
           <tr>
-            <td><strong>{{ line.item.part_number }}</strong></td>
-            <td>{{ line.item.name }}</td>
-            <td>{{ line.quantity }}</td>
-            <td><label class="sr-only" for="picked-quantity-{{ line.pk }}">Quantity picked for {{ line.item.part_number }}</label><input id="picked-quantity-{{ line.pk }}" type="number" min="0" step="1" name="picked_quantity_{{ line.pk }}" value="{{ line.quantity }}" required data-requested-quantity="{{ line.quantity }}"></td>
-            <td><label class="sr-only" for="pick-reason-{{ line.pk }}">Variance reason for {{ line.item.part_number }}</label><textarea id="pick-reason-{{ line.pk }}" name="pick_variance_reason_{{ line.pk }}" rows="2" placeholder="Required if picked quantity differs" data-pick-variance-reason></textarea></td>
+            <td data-label="Part #"><strong>{{ line.item.part_number }}</strong></td>
+            <td data-label="FB Part #">{{ line.item.fb_part_number|default:"—" }}</td>
+            <td data-label="Bin location">{{ line.item.storage_location|default:"Unassigned" }}</td>
+            <td data-label="Item">{{ line.item.name }}</td>
+            <td data-label="Requested">{{ line.quantity }}</td>
+            <td data-label="Quantity picked" data-field="quantity"><label class="sr-only" for="picked-quantity-{{ line.pk }}">Quantity picked for {{ line.item.part_number }}</label><input id="picked-quantity-{{ line.pk }}" type="number" min="0" step="1" name="picked_quantity_{{ line.pk }}" value="{{ line.quantity }}" required data-requested-quantity="{{ line.quantity }}"></td>
+            <td data-label="Variance reason" data-field="reason"><label class="sr-only" for="pick-reason-{{ line.pk }}">Variance reason for {{ line.item.part_number }}</label><textarea id="pick-reason-{{ line.pk }}" name="pick_variance_reason_{{ line.pk }}" rows="2" placeholder="Required if picked quantity differs" data-pick-variance-reason></textarea></td>
           </tr>
         {% endfor %}
         </tbody>
       </table>
     </div>
     <div class="pick-signoff-grid">
-      <div><label for="picked-by-user">Picked by</label><select id="picked-by-user" name="picked_by_user" required><option value="">Select picker…</option>{% for workflow_user in pick_workflow_users %}<option value="{{ workflow_user.pk }}"{% if ticket.assigned_to_id == workflow_user.pk %} selected{% endif %}>{{ workflow_user.get_full_name|default:workflow_user.username }}</option>{% endfor %}</select></div>
+      <div>
+        <label for="picked-by-user">Picked by</label>
+        {% if ticket.assigned_to %}
+          <input type="hidden" name="picked_by_user" value="{{ ticket.assigned_to_id }}">
+          <input id="picked-by-user" value="{{ ticket.assigned_to.get_full_name|default:ticket.assigned_to.username }}" disabled>
+          {% if can_override_picker %}
+            <small class="field-help">Locked to the accepted specialist. Managers can reassign it from the material request assignment control before picking.</small>
+          {% else %}
+            <small class="field-help">Locked to the specialist who accepted this ticket.</small>
+          {% endif %}
+        {% else %}
+          <select id="picked-by-user" name="picked_by_user" required><option value="">Select picker…</option>{% for workflow_user in pick_workflow_users %}<option value="{{ workflow_user.pk }}"{% if ticket.assigned_to_id == workflow_user.pk %} selected{% endif %}>{{ workflow_user.get_full_name|default:workflow_user.username }}</option>{% endfor %}</select>
+          {% if ticket.assigned_to and can_override_picker %}<small class="helptext">Manager override: changing the accepted picker will be recorded in request history.</small>{% endif %}
+        {% endif %}
+      </div>
       <div><label for="qa-checked-by-user">QA checked by</label><select id="qa-checked-by-user" name="qa_checked_by_user" required><option value="">Select QA checker…</option>{% for workflow_user in pick_workflow_users %}<option value="{{ workflow_user.pk }}">{{ workflow_user.get_full_name|default:workflow_user.username }}</option>{% endfor %}</select></div>
     </div>
     <p class="helptext">The picker and QA checker must be different warehouse users. A reason is required for every short or over-picked line.</p>
@@ -58,9 +82,9 @@
   </form>
   {% else %}
   <div class="table-responsive">
-    <table class="pick-quantity-table">
-      <thead><tr><th>Part #</th><th>Item</th><th>Requested</th><th>Picked</th><th>Variance reason</th></tr></thead>
-      <tbody>{% for line in ticket.lines.all %}<tr><td><strong>{{ line.item.part_number }}</strong></td><td>{{ line.item.name }}</td><td>{{ line.quantity }}</td><td>{{ line.picked_quantity|default_if_none:"Not recorded" }}</td><td>{{ line.pick_variance_reason|default:"—" }}</td></tr>{% endfor %}</tbody>
+    <table class="pick-quantity-table pick-ticket-lines">
+      <thead><tr><th>Part #</th><th>FB Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Picked</th><th>Variance reason</th></tr></thead>
+      <tbody>{% for line in ticket.lines.all %}<tr><td data-label="Part #"><strong>{{ line.item.part_number }}</strong></td><td data-label="FB Part #">{{ line.item.fb_part_number|default:"—" }}</td><td data-label="Bin location">{{ line.item.storage_location|default:"Unassigned" }}</td><td data-label="Item">{{ line.item.name }}</td><td data-label="Requested">{{ line.quantity }}</td><td data-label="Picked">{{ line.picked_quantity|default_if_none:"Not recorded" }}</td><td data-label="Variance reason">{{ line.pick_variance_reason|default:"—" }}</td></tr>{% endfor %}</tbody>
     </table>
   </div>
   {% endif %}

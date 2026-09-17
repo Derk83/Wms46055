@@ -399,6 +399,7 @@ def material_request_claim_push(request, pk):
         "url": reverse("material_request_detail", args=[material_request.pk]),
     })
 
+from .access import user_is_manager
 from .forms import (
     BulkAdjustForm,
     InventoryBulkEditForm,
@@ -1523,6 +1524,7 @@ def ticket_detail(request, pk):
                 and ticket.lines.filter(picked_quantity__isnull=True).exists()
             ),
             "pick_workflow_users": pick_workflow_users,
+            "can_override_picker": user_is_manager(request.user),
         },
     )
 
@@ -3977,12 +3979,18 @@ def material_request_assign(request, pk):
             and assignee.has_perm("inventory.change_pickticket")
         ):
             raise PermissionDenied
-    material_request, changed = assign_material_request(
-        material_request, assignee=assignee, actor=request.user
-    )
+    assignment_error = False
+    try:
+        material_request, changed = assign_material_request(
+            material_request, assignee=assignee, actor=request.user
+        )
+    except ValidationError as exc:
+        assignment_error = True
+        changed = False
+        messages.error(request, exc.messages[0])
     if changed:
         messages.success(request, f"Assignment updated for {material_request.request_number}.")
-    else:
+    elif not assignment_error:
         messages.info(request, f"{material_request.request_number} was already assigned that way; no change was needed.")
     next_url = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
@@ -4545,9 +4553,14 @@ def material_request_events(request):
     """Return the ordered event stream plus the newest unclaimed request on first load."""
     if not request.is_wms_host:
         raise Http404
+    is_manager = user_is_manager(request.user)
     cursor_value = request.GET.get("cursor")
     latest = MaterialRequestEvent.objects.order_by("-id").values_list("id", flat=True).first() or 0
-    if cursor_value is None and request.user.has_perm("inventory.change_pickticket"):
+    if (
+        cursor_value is None
+        and request.user.has_perm("inventory.change_pickticket")
+        and not is_manager
+    ):
         newest_available = MaterialRequestEvent.objects.filter(
             event_type=MaterialRequestEvent.EventType.CREATED,
             material_request__assigned_to__isnull=True,
@@ -4576,6 +4589,8 @@ def material_request_events(request):
             "material_request__creator", "material_request__assigned_to"
         ).order_by("id")[:50])
         for event in rows:
+            if is_manager and event.event_type == MaterialRequestEvent.EventType.CREATED:
+                continue
             if event.event_type == MaterialRequestEvent.EventType.DELETED:
                 events.append({
                     "id": event.id,
@@ -4628,6 +4643,7 @@ def material_request_events(request):
                 and mr.assigned_to_id is None
                 and mr.pick_ticket.status == PickTicket.Status.OPEN
                 and request.user.has_perm("inventory.change_pickticket")
+                and not is_manager
             )
             assigned_to_name = ""
             if mr.assigned_to_id:

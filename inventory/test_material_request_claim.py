@@ -2,7 +2,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import Group, Permission, User
+from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -13,8 +14,8 @@ from .models import (
     PushDelivery,
     PushSubscription,
 )
-from .push import _payload
-from .services import create_material_request
+from .push import _authorized_subscriptions, _payload
+from .services import assign_material_request, create_material_request
 
 
 class MaterialRequestClaimTests(TestCase):
@@ -59,6 +60,8 @@ class MaterialRequestClaimTests(TestCase):
         self.material_request.pick_ticket.refresh_from_db()
         self.assertEqual(self.material_request.assigned_to, self.first)
         self.assertEqual(self.material_request.pick_ticket.assigned_to, self.first)
+        self.assertEqual(self.material_request.pick_ticket.picked_by_user, self.first)
+        self.assertEqual(self.material_request.pick_ticket.picked_by_name, "First")
         self.assertIsNotNone(self.material_request.pick_ticket.assigned_at)
         self.assertIsNone(self.material_request.pick_ticket.acknowledged_at)
         accepted = self.material_request.events.filter(
@@ -134,6 +137,71 @@ class MaterialRequestClaimTests(TestCase):
         self.material_request.refresh_from_db()
         self.assertEqual(self.material_request.assigned_to, self.first)
 
+    def test_managers_do_not_receive_claim_popup_or_push_action(self):
+        manager = User.objects.create_user("claim-manager", password="pw")
+        manager.user_permissions.add(*Permission.objects.filter(
+            codename__in=["view_materialrequest", "view_all_materialrequests", "change_pickticket"]
+        ))
+        manager.groups.add(Group.objects.get(name="Logistics Manager"))
+        client = self._client(manager)
+        response = client.get(
+            reverse("material_request_events"), {"cursor": 0}, HTTP_HOST="bbx.rplwms.com"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["events"], [])
+
+        specialist_subscription = PushSubscription.objects.create(
+            user=self.first,
+            endpoint="https://push.example.test/send/specialist",
+            p256dh="specialist-key",
+            auth="specialist-auth",
+        )
+        manager_subscription = PushSubscription.objects.create(
+            user=manager,
+            endpoint="https://push.example.test/send/manager",
+            p256dh="manager-key",
+            auth="manager-auth",
+        )
+        recipients = list(_authorized_subscriptions(self.material_request.creation_event))
+        self.assertIn(specialist_subscription, recipients)
+        self.assertNotIn(manager_subscription, recipients)
+        delivery = PushDelivery.objects.create(
+            event=self.material_request.creation_event,
+            subscription=manager_subscription,
+        )
+        self.assertNotIn("actions", _payload(delivery))
+
+    @patch("inventory.push.deliver_push_deliveries")
+    def test_only_manager_can_override_accepted_picker_and_override_is_audited(self, _deliver):
+        self._client(self.first).post(
+            reverse("material_request_claim", args=[self.material_request.pk]),
+            HTTP_HOST="bbx.rplwms.com",
+        )
+        ticket = self.material_request.pick_ticket
+        ticket.refresh_from_db()
+        with self.assertRaisesMessage(ValidationError, "Only a manager"):
+            assign_material_request(
+                self.material_request, assignee=self.second, actor=self.first
+            )
+
+        manager = User.objects.create_user("picker-manager", password="pw")
+        manager.groups.add(Group.objects.get(name="Sr. Logistics Manager"))
+        assign_material_request(
+            self.material_request, assignee=self.second, actor=manager
+        )
+        ticket.refresh_from_db()
+        self.material_request.refresh_from_db()
+        self.assertEqual(ticket.status, PickTicket.Status.OPEN)
+        self.assertEqual(ticket.assigned_to, self.second)
+        self.assertEqual(ticket.picked_by_user, self.second)
+        self.assertIsNone(ticket.acknowledged_at)
+        self.assertEqual(self.material_request.assigned_to, self.second)
+        self.assertTrue(self.material_request.events.filter(
+            event_type=MaterialRequestEvent.EventType.UPDATED,
+            change_summary="Assigned to: First → Second",
+            actor=manager,
+        ).exists())
+
     def test_service_worker_handles_accept_action(self):
         source = self._client(self.first).get(
             "/service-worker.js", HTTP_HOST="bbx.rplwms.com"
@@ -142,6 +210,8 @@ class MaterialRequestClaimTests(TestCase):
         self.assertIn("claimToken", source)
         self.assertIn("credentials: 'same-origin'", source)
         self.assertIn("Request already assigned", source)
+        self.assertIn("silent: false", source)
+        self.assertIn("vibrate: [180, 80, 180]", source)
 
     def test_claim_and_event_endpoints_reject_non_warehouse_host(self):
         client = self._client(self.first)
@@ -181,7 +251,22 @@ class MaterialRequestClaimTests(TestCase):
         self.assertIn("item.claim_url || item.claimUrl || existing.claim_url", app_source)
         self.assertIn("location.host}:${userScope}", app_source)
         self.assertIn("document.hidden || polling", app_source)
+        self.assertIn("playClaimAlert", app_source)
+        self.assertIn("navigator.vibrate([140, 70, 140])", app_source)
         self.assertIn("claim_url: payload.claimUrl", push_source)
+
+    def test_pick_ticket_ui_includes_mobile_cards_fb_part_and_bin_location(self):
+        root = Path(__file__).resolve().parent
+        detail_source = (root / "templates/inventory/ticket_detail.html").read_text()
+        print_source = (root / "templates/inventory/ticket_print.html").read_text()
+        css_source = (root / "static/inventory/css/app.css").read_text()
+        self.assertIn("pick-ticket-lines", detail_source)
+        self.assertIn("line.item.fb_part_number", detail_source)
+        self.assertIn("line.item.storage_location", detail_source)
+        self.assertIn("Locked to the specialist who accepted", detail_source)
+        self.assertIn("row.line.item.fb_part_number", print_source)
+        self.assertIn("BIN LOCATION", print_source)
+        self.assertIn("Mobile pick-ticket workflow", css_source)
 
     @patch("inventory.push.deliver_push_deliveries")
     def test_delayed_push_does_not_offer_accept_after_request_is_claimed(self, deliver):

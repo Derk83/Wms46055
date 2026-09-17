@@ -87,6 +87,8 @@ self.addEventListener('push', (event) => {
     badge: '{% static "inventory/icons/badge-96.png" %}',
     tag: data.tag || 'black-box-warehouse',
     renotify: true,
+    silent: false,
+    vibrate: [180, 80, 180],
     requireInteraction: Boolean(data.requireInteraction),
     actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
     data: {

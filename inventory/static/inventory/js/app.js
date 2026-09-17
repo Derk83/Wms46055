@@ -361,6 +361,46 @@
     renderUrgentAlerts();
     renderClaimAlerts();
   };
+  const playClaimAlert = () => {
+    if (navigator.vibrate) navigator.vibrate([140, 70, 140]);
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      alertAudioContext ||= new AudioContextClass();
+      if (alertAudioContext.state !== 'running') return;
+      const now = alertAudioContext.currentTime;
+      const gain = alertAudioContext.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.48);
+      gain.connect(alertAudioContext.destination);
+      [880, 1175].forEach((frequency, index) => {
+        const oscillator = alertAudioContext.createOscillator();
+        oscillator.type = 'sine';
+        oscillator.frequency.value = frequency;
+        oscillator.connect(gain);
+        oscillator.start(now + (index * 0.2));
+        oscillator.stop(now + (index * 0.2) + 0.18);
+      });
+    } catch (error) {
+      console.debug('Foreground notification sound is unavailable.', error);
+    }
+  };
+
+  let alertAudioContext = null;
+  const unlockClaimAudio = () => {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+    try {
+      alertAudioContext ||= new AudioContextClass();
+      if (alertAudioContext.state === 'suspended') alertAudioContext.resume();
+    } catch (error) {
+      console.debug('Notification audio could not be enabled.', error);
+    }
+  };
+  document.addEventListener('pointerdown', unlockClaimAudio, {passive: true});
+  document.addEventListener('keydown', unlockClaimAudio);
+
   const addNotification = item => {
     const id = String(item.id || `${Date.now()}-${Math.random()}`);
     const existing = notificationState.items.find(entry => String(entry.id) === id);
@@ -388,6 +428,9 @@
       claim_url: item.claim_url || item.claimUrl || '',
       claimed_by: item.claimed_by || item.claimedBy || ''
     });
+    if ((item.claim_url || item.claimUrl) && !(item.claimed_by || item.claimedBy)) {
+      playClaimAlert();
+    }
     notificationState.unread += 1; saveNotifications(); renderNotifications();
   };
   window.BBXNotifications = {add: addNotification};
