@@ -295,8 +295,9 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         self.assertContains(dashboard, "Availability")
         self.assertContains(dashboard, "Utilization")
         self.assertContains(dashboard, "Action center")
-        self.assertContains(dashboard, 'data-pwa-install', count=2, html=False)
-        self.assertContains(dashboard, 'data-equipment-theme-toggle', count=2, html=False)
+        self.assertContains(dashboard, 'data-pwa-install', count=1, html=False)
+        self.assertContains(dashboard, 'data-equipment-theme-toggle', count=1, html=False)
+        self.assertNotContains(dashboard, "Users &amp; access", html=False)
         self.assertContains(dashboard, 'class="equipment-sidebar"', count=1, html=False)
         self.assertContains(dashboard, 'data-equipment-live-search', count=1, html=False)
         self.assertContains(dashboard, 'data-account-toggle', count=1, html=False)
@@ -309,6 +310,21 @@ class EquipmentHostAndViewTests(EquipmentTestMixin, TestCase):
         register = self.client.get("/assets/?q=TEST01")
         self.assertEqual(register.status_code, 200)
         self.assertContains(register, self.asset.asset_tag)
+
+    def test_user_manager_is_linked_only_for_authorized_equipment_users(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="inventory", codename="manage_users")
+        )
+        self.client.force_login(self.user)
+
+        dashboard = self.client.get("/")
+
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertContains(
+            dashboard, 'href="https://bbx.rplwms.com/settings/users/"', count=2, html=False
+        )
+        self.assertContains(dashboard, "Users &amp; access", count=2, html=False)
+        self.assertContains(dashboard, "sign-in may be required", count=2, html=False)
 
     def test_dashboard_uses_bounded_clean_preview(self):
         for index in range(7):

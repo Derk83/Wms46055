@@ -42,10 +42,13 @@
         <a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_history' %} is-active{% endif %}" href="{% url 'equipment_history' %}"{% if request.resolver_match.url_name == 'equipment_history' %} aria-current="page"{% endif %}>Audit history</a>
       </section>
       {% endif %}
-      {% if perms.equipment.import_equipment %}
+      {% if perms.equipment.import_equipment or perms.inventory.manage_users %}
       <section class="equipment-nav-group">
         <span class="equipment-nav-label">Management</span>
+        {% if perms.inventory.manage_users %}<a class="equipment-nav-link" href="https://bbx.rplwms.com/settings/users/" title="Open Warehouse user administration; sign-in may be required">Users &amp; access</a>{% endif %}
+        {% if perms.equipment.import_equipment %}
         <a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_import' or request.resolver_match.url_name == 'equipment_import_batch' %} is-active{% endif %}" href="{% url 'equipment_import' %}"{% if request.resolver_match.url_name == 'equipment_import' or request.resolver_match.url_name == 'equipment_import_batch' %} aria-current="page"{% endif %}>Import center</a>
+        {% endif %}
       </section>
       {% endif %}
     </nav>
@@ -54,7 +57,7 @@
         <button class="equipment-sidebar-utility pwa-install-button" type="button" data-pwa-install hidden><span aria-hidden="true">↓</span><span>Install app</span></button>
         <button class="equipment-sidebar-utility" type="button" data-equipment-theme-toggle><span aria-hidden="true">◐</span><span>Theme</span></button>
       </div>
-      <div class="equipment-sidebar-account"><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary w-100" type="submit">Sign out</button></form></div>
+      <div class="equipment-sidebar-account"><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="equipment-signout" type="submit">Sign out</button></form></div>
     </div>
   </aside>
   <button class="equipment-sidebar-backdrop" type="button" data-sidebar-backdrop aria-label="Close navigation" hidden></button>
@@ -67,11 +70,9 @@
         <input id="equipment-global-q" type="search" name="q" autocomplete="off" placeholder="Search tag, serial, model, or custodian">
       </form>
       <div class="equipment-topbar-utilities">
-        <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install RPL Equipment" title="Install app"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg></button>
-        <button class="icon-button" type="button" data-equipment-theme-toggle aria-label="Switch color theme" title="Change color theme"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 9 9 0 1 0 20.7 15.1Z"/></svg></button>
         <div class="account-menu">
           <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="equipment-account-menu"><span class="account-menu-name">{{ user.get_full_name|default:user.username }}</span><span class="account-avatar" aria-hidden="true">{{ user.first_name|first|default:user.username|first|upper }}{{ user.last_name|first|upper }}</span><span class="account-chevron" aria-hidden="true">▾</span></button>
-          <div id="equipment-account-menu" class="account-menu-panel" data-account-menu hidden><strong>{{ user.get_full_name|default:user.username }}</strong><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form></div>
+          <div id="equipment-account-menu" class="account-menu-panel" data-account-menu hidden><strong>{{ user.get_full_name|default:user.username }}</strong>{% if perms.inventory.manage_users %}<a href="https://bbx.rplwms.com/settings/users/" title="Open Warehouse user administration; sign-in may be required">Users &amp; access</a>{% endif %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form></div>
         </div>
       </div>
     </header>

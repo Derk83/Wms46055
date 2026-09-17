@@ -1,4 +1,4 @@
-from datetime import datetime, timezone as datetime_timezone
+from datetime import datetime, timedelta, timezone as datetime_timezone
 from pathlib import Path
 
 from django.contrib.auth.models import Group, Permission, User
@@ -636,11 +636,14 @@ class MaterialRequestAccessAndHostTests(TestCase):
 
     def test_creator_can_mark_not_ready_and_optionally_reschedule(self):
         obj = self._ready_request()
+        future_slot = (datetime.now(datetime_timezone.utc) + timedelta(days=1)).replace(
+            minute=0, second=0, microsecond=0
+        )
         response = self.client.post(
             reverse("material_request_delivery_response", args=[obj.pk]),
             {
-                "response": "not_ready", "delivery_at_0": "2026-09-17",
-                "delivery_at_1": "14:30", "note": "Available tomorrow afternoon",
+                "response": "not_ready", "delivery_at_0": future_slot.strftime("%Y-%m-%d"),
+                "delivery_at_1": future_slot.strftime("%H:%M"), "note": "Available tomorrow afternoon",
             }, HTTP_HOST="requests.rplwms.com",
         )
         self.assertEqual(response.status_code, 302)
@@ -648,7 +651,7 @@ class MaterialRequestAccessAndHostTests(TestCase):
         self.assertIsNotNone(obj.delivery_not_ready_at)
         self.assertEqual(obj.delivery_not_ready_by, self.user)
         self.assertEqual(obj.delivery_response_note, "Available tomorrow afternoon")
-        self.assertEqual(obj.delivery_at.astimezone(datetime_timezone.utc).strftime("%Y-%m-%d %H:%M"), "2026-09-17 14:30")
+        self.assertEqual(obj.delivery_at.astimezone(datetime_timezone.utc), future_slot)
         self.assertEqual(obj.pick_ticket.status, PickTicket.Status.RECEIVED)
         self.assertEqual(obj.events.order_by("-id").first().event_type, MaterialRequestEvent.EventType.DELIVERY_NOT_READY)
         board = self.client.get(reverse("material_request_board"), HTTP_HOST="requests.rplwms.com")

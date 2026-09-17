@@ -68,6 +68,31 @@ def test_request_portal_shows_links_when_endpoint_permissions_are_complete(clien
     assert response.status_code == 200
     assert f'href="{reverse("material_request_board")}"' in body
     assert f'href="{reverse("material_request_create")}"' in body
+    assert "Users &amp; access" not in body
+
+
+@pytest.mark.django_db
+def test_user_manager_is_reachable_from_warehouse_and_request_apps_when_authorized(client):
+    user = User.objects.create_user(username="cross-app-user-manager", password="pw")
+    user.user_permissions.add(
+        _perm("manage_users"),
+        _perm("access_material_request_portal"),
+        _perm("view_inventoryitem"),
+    )
+    client.force_login(user)
+
+    warehouse = client.get(reverse("inventory_list"), HTTP_HOST="bbx.rplwms.com")
+    request_portal = client.get(reverse("inventory_list"), HTTP_HOST="requests.rplwms.com")
+    user_manager = client.get(reverse("user_management"), HTTP_HOST="bbx.rplwms.com")
+
+    assert warehouse.status_code == 200
+    assert request_portal.status_code == 200
+    assert user_manager.status_code == 200
+    assert f'href="{reverse("user_management")}">Users &amp; access</a>' in warehouse.content.decode()
+    request_body = request_portal.content.decode()
+    assert 'href="https://bbx.rplwms.com/settings/users/"' in request_body
+    assert "Users &amp; access" in request_body
+    assert "sign-in may be required" in request_body
 
 
 def test_option_a_mobile_navigation_css_targets_real_nested_links():
