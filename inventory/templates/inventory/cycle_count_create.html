@@ -37,7 +37,7 @@
 
   <div class="card">
     <div class="table-responsive">
-      <table>
+      <table class="responsive-records">
         <thead>
           <tr>
             <th>Include?</th>
@@ -48,7 +48,7 @@
         </thead>
         <tbody>
           {% for cat in categories %}
-            <tr>
+            <tr class="responsive-record-card">
               <td data-label="Include">
                 <input type="checkbox" data-percentage-toggle="percent_{{ cat.name }}" {% if cat.checked %}checked{% endif %}>
               </td>
@@ -59,7 +59,7 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td colspan="4" class="empty-row">No categories found in active inventory.</td></tr>
+            <tr><td colspan="4" class="empty-row responsive-record-empty">No categories found in active inventory.</td></tr>
           {% endfor %}
         </tbody>
       </table>

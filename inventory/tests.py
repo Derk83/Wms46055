@@ -425,7 +425,8 @@ class TicketImprovementTests(TestCase):
     def test_inventory_page_includes_rear_camera_scanner_controls(self):
         response = self.client.get(reverse("inventory_list"))
         self.assertContains(response, "Start Camera Scan")
-        self.assertContains(response, "facingMode: { exact: 'environment' }")
+        self.assertContains(response, "facingMode: 'environment'")
+        self.assertContains(response, "qrbox: function(viewfinderWidth, viewfinderHeight)")
         self.assertContains(response, "inventory-camera-reader")
         self.assertContains(response, "Camera starting")
         self.assertContains(response, "Camera active")

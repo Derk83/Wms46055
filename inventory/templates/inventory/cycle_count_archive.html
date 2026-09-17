@@ -43,7 +43,7 @@
 
 <div class="card">
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead>
         <tr>
           <th>Name</th>
@@ -57,7 +57,7 @@
       </thead>
       <tbody>
         {% for cc in cycle_counts %}
-          <tr>
+          <tr class="responsive-record-card">
             <td data-label="Name">{{ cc.display_name }}</td>
             <td data-label="Status"><span class="status-pill status-{{ cc.status }}">{{ cc.get_status_display }}</span></td>
             <td data-label="Items">{{ cc.total_items }}</td>
@@ -77,7 +77,7 @@
             </td>
           </tr>
         {% empty %}
-          <tr><td colspan="7" class="empty-row">No archived cycle counts yet. Completed counts can be archived from their detail page.</td></tr>
+          <tr><td colspan="7" class="empty-row responsive-record-empty">No archived cycle counts yet. Completed counts can be archived from their detail page.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -53,7 +53,7 @@
     </p>
     {{ formset.management_form }}
     <div class="table-responsive">
-      <table>
+      <table class="mobile-form-table line-items-table">
         <thead>
           <tr>
             <th>Scan</th>
@@ -65,7 +65,7 @@
         <tbody>
           {% for line_form in formset %}
             <tr class="line-row">
-              <td>
+              <td data-label="Scan">
                 {% for hidden in line_form.hidden_fields %}{% if hidden.name != 'scan_code' %}{{ hidden }}{% endif %}{% endfor %}
                 {{ line_form.scan_code }}
                 <button type="button" class="btn btn-info scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
@@ -73,14 +73,14 @@
                 {% if line_form.non_field_errors %}<div class="negative">{{ line_form.non_field_errors }}</div>{% endif %}
                 {% for error in line_form.scan_code.errors %}<div class="negative">{{ error }}</div>{% endfor %}
               </td>
-              <td class="item-picker-cell">
+              <td class="item-picker-cell" data-label="Item" data-mobile-span="full">
                 <input type="text" class="item-search-input" placeholder="Search by part #, name, category, or bin…" aria-label="Search items">
                 {{ line_form.item }}
                 <div class="helptext item-picker-help">Type to narrow the dropdown, then choose the matching item.</div>
                 {% for error in line_form.item.errors %}<div class="negative">{{ error }}</div>{% endfor %}
               </td>
-              <td>{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
-              <td>
+              <td data-label="Quantity">{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+              <td data-label="Remove">
                 {% if line_form.instance.pk %}
                   <label class="btn btn-danger" style="padding: 4px 8px; font-size: 0.8rem;">{{ line_form.DELETE }} Remove</label>
                 {% endif %}
@@ -101,18 +101,18 @@
     <table id="empty-form-template" style="display: none;">
       <tbody>
         <tr class="line-row">
-          <td>
+          <td data-label="Scan">
             {{ formset.empty_form.scan_code }}
             <button type="button" class="btn btn-info scan-emoji-btn" aria-label="Scan barcode or QR code" title="Scan barcode or QR code">📷</button>
             <div class="scan-status" aria-live="polite"></div>
           </td>
-          <td>
+          <td class="item-picker-cell" data-label="Item" data-mobile-span="full">
             <input type="text" class="item-search-input" placeholder="Search by part #, name, category, or bin…" aria-label="Search items">
             {{ formset.empty_form.item }}
             <div class="helptext item-picker-help">Type to narrow the dropdown, then choose the matching item.</div>
           </td>
-          <td>{{ formset.empty_form.quantity }}</td>
-          <td></td>
+          <td data-label="Quantity">{{ formset.empty_form.quantity }}</td>
+          <td data-label="Remove"></td>
         </tr>
       </tbody>
     </table>
@@ -255,8 +255,11 @@
     result.textContent = 'Camera starting… Point the rear camera at the product barcode or QR code.';
     ticketScanner = new Html5Qrcode('ticket-camera-reader');
     ticketScanner.start(
-      { facingMode: { exact: 'environment' } },
-      { fps: 10, qrbox: { width: 250, height: 250 } },
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: function(viewfinderWidth, viewfinderHeight) {
+        var size = Math.max(160, Math.min(250, viewfinderWidth - 24, viewfinderHeight - 24));
+        return { width: size, height: size };
+      } },
       async function(text) {
         playTicketScanBeep();
         result.textContent = 'Scanned. Adding item to this ticket row…\nCode: ' + text;

@@ -94,9 +94,12 @@ class UIConsistencyTests(TestCase):
             template,
         )
         self.assertIn(
-            ".mobile-card-top.has-selection { grid-template-columns: 24px minmax(0, 1fr) auto; }",
+            ".mobile-card-top.has-selection { grid-template-columns: 40px minmax(0, 1fr) auto; }",
             template,
         )
+        self.assertIn('class="mobile-selection-control"', template)
+        self.assertIn("min-width: 24px !important", template)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", template)
 
     def test_inventory_mobile_part_numbers_do_not_wrap(self):
         template = (TEMPLATE_ROOT / "inventory" / "inventory_list.html").read_text()

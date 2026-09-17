@@ -4,8 +4,26 @@
 <section class="page-header"><div><h1>Material Backorders</h1><p>Open material demand that was not deducted from inventory.</p></div></section>
 <section class="card">
   <form method="get" class="toolbar"><label for="status">Status</label><select id="status" name="status"><option value="">All statuses</option>{% for value, label in status_choices %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn secondary sm" type="submit">Filter</button></form>
-  <div class="table-responsive"><table><thead><tr><th>Backorder</th><th>Request</th><th>Item</th><th>Needed</th><th>Fulfilled</th><th>Available now</th><th>Status</th><th></th></tr></thead><tbody>
-  {% for row in backorders %}<tr id="backorder-{{ row.pk }}"><td><strong>{{ row.backorder_number }}</strong></td><td><a href="{% url 'material_request_detail' row.line.material_request.pk %}">{{ row.line.material_request.request_number }}</a></td><td>{{ row.line.item.part_number }}{% if row.line.item.fb_part_number %}<br><small>FB {{ row.line.item.fb_part_number }}</small>{% endif %}<br><small>{{ row.line.item.name }}</small></td><td>{{ row.quantity }}</td><td>{{ row.fulfilled_quantity }}</td><td>{{ row.available_quantity }}</td><td><span class="badge status-{{ row.status|lower }}">{{ row.get_status_display }}</span></td><td>{% if perms.inventory.manage_backorders and perms.inventory.add_pickticket and perms.inventory.add_pickticketline and row.eligible_quantity > 0 and row.status != "FULFILLED" and row.status != "CANCELLED" %}<a class="btn sm" href="{% url 'backorder_fulfill' row.pk %}">Fulfill</a>{% else %}<span class="meta">—</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="8"><div class="empty-state"><strong>No backorders found</strong><p>Shortages selected for backorder or procurement will appear here.</p></div></td></tr>{% endfor %}
-  </tbody></table></div>
+  <div class="table-responsive">
+    <table class="responsive-records">
+      <thead><tr><th>Backorder</th><th>Request</th><th>Item</th><th>Needed</th><th>Fulfilled</th><th>Available now</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for row in backorders %}
+        <tr id="backorder-{{ row.pk }}" class="responsive-record-card">
+          <td data-label="Backorder"><strong>{{ row.backorder_number }}</strong></td>
+          <td data-label="Request"><a href="{% url 'material_request_detail' row.line.material_request.pk %}">{{ row.line.material_request.request_number }}</a></td>
+          <td data-label="Item">{{ row.line.item.part_number }}{% if row.line.item.fb_part_number %}<br><small>FB {{ row.line.item.fb_part_number }}</small>{% endif %}<br><small>{{ row.line.item.name }}</small></td>
+          <td data-label="Needed">{{ row.quantity }}</td>
+          <td data-label="Fulfilled">{{ row.fulfilled_quantity }}</td>
+          <td data-label="Available now">{{ row.available_quantity }}</td>
+          <td data-label="Status"><span class="badge status-{{ row.status|lower }}">{{ row.get_status_display }}</span></td>
+          <td data-label="Actions">{% if perms.inventory.manage_backorders and perms.inventory.add_pickticket and perms.inventory.add_pickticketline and row.eligible_quantity > 0 and row.status != "FULFILLED" and row.status != "CANCELLED" %}<a class="btn sm" href="{% url 'backorder_fulfill' row.pk %}">Fulfill</a>{% else %}<span class="meta">—</span>{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="responsive-record-empty"><div class="empty-state"><strong>No backorders found</strong><p>Shortages selected for backorder or procurement will appear here.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}

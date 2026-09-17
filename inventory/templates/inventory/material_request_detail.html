@@ -32,6 +32,26 @@
   </form>
 </section>
 {% endif %}
-<section class="card"><h2>Requested material</h2><div class="table-responsive"><table><thead><tr><th>Part</th><th>Description</th><th>Requested</th><th>Allocated now</th><th>Short</th><th>Shortage decision</th><th>Notes</th></tr></thead><tbody>{% for line in material_request.lines.all %}<tr><td>{{ line.item.part_number }}{% if line.item.fb_part_number %}<br><small>FB {{ line.item.fb_part_number }}</small>{% endif %}</td><td>{{ line.item.name }}</td><td>{{ line.quantity }}</td><td>{{ line.allocated_quantity }}</td><td>{{ line.shortage_quantity }}</td><td>{% if line.shortage_quantity %}{{ line.get_shortage_action_display }}{% if line.backorder %}<br><strong>{{ line.backorder.backorder_number }}</strong>{% if not request.is_request_portal and perms.inventory.view_materialbackorder %} · <a href="{% url 'backorder_list' %}">Open queue</a>{% endif %}{% endif %}{% else %}Fully allocated{% endif %}</td><td>{{ line.notes|default:"—" }}</td></tr>{% endfor %}</tbody></table></div></section>
+<section class="card">
+  <h2>Requested material</h2>
+  <div class="table-responsive">
+    <table class="responsive-records">
+      <thead><tr><th>Part</th><th>Description</th><th>Requested</th><th>Allocated now</th><th>Short</th><th>Shortage decision</th><th>Notes</th></tr></thead>
+      <tbody>
+        {% for line in material_request.lines.all %}
+        <tr class="responsive-record-card">
+          <td data-label="Part">{{ line.item.part_number }}{% if line.item.fb_part_number %}<br><small>FB {{ line.item.fb_part_number }}</small>{% endif %}</td>
+          <td data-label="Description">{{ line.item.name }}</td>
+          <td data-label="Requested">{{ line.quantity }}</td>
+          <td data-label="Allocated now">{{ line.allocated_quantity }}</td>
+          <td data-label="Short">{{ line.shortage_quantity }}</td>
+          <td data-label="Shortage decision">{% if line.shortage_quantity %}{{ line.get_shortage_action_display }}{% if line.backorder %}<br><strong>{{ line.backorder.backorder_number }}</strong>{% if not request.is_request_portal and perms.inventory.view_materialbackorder %} · <a href="{% url 'backorder_list' %}">Open queue</a>{% endif %}{% endif %}{% else %}Fully allocated{% endif %}</td>
+          <td data-label="Notes">{{ line.notes|default:"—" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 <div class="actions no-print"><a class="btn secondary" href="{% url 'material_request_board' %}">Back to board</a>{% if perms.inventory.change_materialrequest and perms.inventory.change_materialrequestline and perms.inventory.view_inventoryitem %}<a class="btn" href="{% url 'material_request_edit' material_request.pk %}">Edit request</a>{% endif %}{% if can_cascade_delete %}<a class="btn danger" href="{% url 'material_request_delete' material_request.pk %}">Delete</a>{% endif %}</div>
 {% endblock %}

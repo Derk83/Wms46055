@@ -61,8 +61,11 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.Html5Qrcode) {
       scanner = new Html5Qrcode('inventory-camera-reader');
       scanner.start(
-        { facingMode: { exact: 'environment' } },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: function(viewfinderWidth, viewfinderHeight) {
+          var size = Math.max(160, Math.min(250, viewfinderWidth - 24, viewfinderHeight - 24));
+          return { width: size, height: size };
+        } },
         function(text) {
           playScanBeep();
           result.textContent = 'Scanned. Opening matching item…\nCode: ' + text;
@@ -239,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
     {% for item in items %}
       <article class="mobile-inventory-card" data-item-id="{{ item.id }}" data-item-url="{{ item.get_absolute_url }}">
         <div class="mobile-card-top{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %} has-selection{% endif %}">
-          {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">{% endif %}
+          {% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}<label class="mobile-selection-control"><input type="checkbox" value="{{ item.id }}" class="item-checkbox mobile-item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}"><span class="sr-only">Select {{ item.part_number }}</span></label>{% endif %}
           <div class="mobile-item-main">
             <a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a>
             <span class="name-link" data-column="name">{{ item.description|default:item.name }}</span>
@@ -334,27 +337,31 @@ tbody tr.selected td { background: rgba(236,31,39,0.16); }
   .inventory-filter-panel > .actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; width: 100%; }
   .inventory-filter-panel > .actions > .btn { width: 100%; min-height: 44px; }
   .inventory-table-wrap { display: none; }
-  .mobile-inventory-list { display: grid; gap: 10px; }
-  .mobile-inventory-card { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: rgba(16,29,25,0.72); box-shadow: var(--shadow-sm); }
+  .mobile-inventory-list { display: grid; gap: 8px; }
+  .mobile-inventory-card { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface); box-shadow: var(--shadow-sm); }
   .mobile-card-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; }
-  .mobile-card-top.has-selection { grid-template-columns: 24px minmax(0, 1fr) auto; }
+  .mobile-card-top.has-selection { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .mobile-selection-control { display: grid; place-items: start; width: 40px; height: 40px; margin: 0; cursor: pointer; }
+  .mobile-item-checkbox { align-self: start; justify-self: start; width: 24px !important; height: 24px !important; min-width: 24px !important; min-height: 24px !important; margin: 2px 0 0; }
   .mobile-item-main { min-width: 0; display: grid; gap: 2px; }
   .mobile-item-main .part-link { color: #ff7277; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
   .mobile-item-main .name-link { color: var(--ink); font-size: 16px; line-height: 1.4; }
-  .mobile-qty { min-width: 58px; padding: 7px 9px; border-radius: 10px; background: rgba(255,255,255,0.08); text-align: center; }
+  .mobile-qty { min-width: 54px; padding: 6px 8px; border-radius: 9px; background: var(--surface-2); text-align: center; }
   .mobile-qty span { display: block; font-size: 11px; text-transform: uppercase; color: var(--muted); font-weight: 900; }
   .mobile-qty strong { display: block; font-size: 22px; line-height: 1; }
-  .mobile-meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-  .mobile-meta-grid div { padding: 8px 9px; border-radius: 10px; background: rgba(255,255,255,0.07); min-width: 0; }
-  .mobile-meta-grid span { display: block; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }
-  .mobile-meta-grid strong { display: block; font-size: 14px; overflow-wrap: anywhere; }
-  .mobile-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 10px; }
+  .mobile-meta-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 8px; border-block: 1px solid var(--border); }
+  .mobile-meta-grid div { min-width: 0; padding: 7px 8px; border-right: 1px solid var(--border); background: transparent; }
+  .mobile-meta-grid div:first-child { padding-left: 0; }
+  .mobile-meta-grid div:last-child { padding-right: 0; border-right: 0; }
+  .mobile-meta-grid span { display: block; color: var(--muted); font-size: 9px; font-weight: 900; letter-spacing: .03em; text-transform: uppercase; }
+  .mobile-meta-grid strong { display: block; margin-top: 1px; font-size: 13px; line-height: 1.25; overflow-wrap: anywhere; }
+  .mobile-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 8px; }
   .mobile-actions .action-chip { width: 100%; min-height: 44px; padding: 9px 7px; font-size: 13px; }
   .mobile-inventory-card.selected { border-color: var(--accent); background: rgba(236,31,39,0.12); }
 }
 @media (max-width: 420px) {
-  .mobile-meta-grid { grid-template-columns: 1fr; }
-  .mobile-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mobile-card-top.has-selection { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 7px; }
+  .mobile-meta-grid div { padding-inline: 6px; }
 }
 </style>
 <script nonce="{{ request.csp_nonce }}">

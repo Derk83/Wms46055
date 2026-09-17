@@ -53,7 +53,7 @@
   <p class="helptext">Shows every vendor/PO combination that received matching part numbers.</p>
   {% if vendor_history %}
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records vendor-history-records">
       <thead>
         <tr>
           <th>Part #</th>
@@ -83,7 +83,7 @@
 <div class="card">
   {% if page_obj %}
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records receiving-log-records">
       <thead>
         <tr>
           <th>Ticket #</th>

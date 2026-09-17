@@ -44,7 +44,7 @@
     {{ formset.management_form }}
     {% if formset.non_form_errors %}<div class="negative" style="margin-bottom: 1rem;">{{ formset.non_form_errors }}</div>{% endif %}
     <div class="table-responsive">
-      <table>
+      <table class="mobile-form-table receiving-lines-table">
         <thead>
           <tr>
             <th>Item</th>
@@ -56,15 +56,15 @@
         <tbody>
           {% for line_form in formset %}
           <tr>
-            <td>
+            <td data-label="Item" data-mobile-span="full">
               {% for hidden in line_form.hidden_fields %}{{ hidden }}{% endfor %}
               {{ line_form.item }}
               {% for error in line_form.item.errors %}<div class="negative">{{ error }}</div>{% endfor %}
               {% for error in line_form.id.errors %}<div class="negative">{{ error }}</div>{% endfor %}
             </td>
-            <td>{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
-            <td>{{ line_form.notes }}{% for error in line_form.notes.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
-            <td>{% if line_form.instance.pk %}<label style="display:flex;align-items:center;gap:8px;margin:0;">{{ line_form.DELETE }} Remove</label>{% endif %}</td>
+            <td data-label="Quantity">{{ line_form.quantity }}{% for error in line_form.quantity.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+            <td data-label="Notes" data-mobile-span="full">{{ line_form.notes }}{% for error in line_form.notes.errors %}<div class="negative">{{ error }}</div>{% endfor %}</td>
+            <td data-label="Remove">{% if line_form.instance.pk %}<label style="display:flex;align-items:center;gap:8px;margin:0;">{{ line_form.DELETE }} Remove</label>{% endif %}</td>
           </tr>
           {% endfor %}
         </tbody>

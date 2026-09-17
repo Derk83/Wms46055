@@ -55,7 +55,7 @@
 <section class="card">
   <h2>New material requests ({{ new_requests|length }})</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Request</th><th>Requester</th><th>Lines</th><th>Urgent</th><th>Status</th><th>Created</th></tr></thead>
       <tbody>
         {% for mr in new_requests %}
@@ -78,7 +78,7 @@
 <section class="card">
   <h2>Delivery confirmations ({{ confirmed|length }})</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Request</th><th>Confirmed by</th><th>Note</th><th>When</th></tr></thead>
       <tbody>
         {% for mr in confirmed %}
@@ -99,7 +99,7 @@
 <section class="card">
   <h2>Delivery denials / reschedule requests ({{ denied|length }})</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Request</th><th>Marked not-ready by</th><th>Reason</th><th>When</th></tr></thead>
       <tbody>
         {% for mr in denied %}
@@ -120,7 +120,7 @@
 <section class="card">
   <h2>Pick tickets — opened ({{ tickets_opened|length }}) / picked ({{ tickets_picked|length }})</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Ticket</th><th>Status</th><th>Created by</th><th>Created</th></tr></thead>
       <tbody>
         {% for t in tickets_opened %}
@@ -152,7 +152,7 @@
   <h2>Receiving ({{ receiving_lines|length }} lines, {{ summary.units_received }} units)</h2>
   <h3>By item (top 20)</h3>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Part #</th><th>Item</th><th>Lines</th><th>Units</th></tr></thead>
       <tbody>
         {% for row in receiving_by_item %}
@@ -174,7 +174,7 @@
   <h2>Stock alerts</h2>
   <h3>Out of stock ({{ out_of_stock|length }})</h3>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Part #</th><th>Item</th><th>On hand</th></tr></thead>
       <tbody>
         {% for it in out_of_stock %}
@@ -192,7 +192,7 @@
   {% if low_stock %}
     <h3>Below threshold ({{ low_stock|length }})</h3>
     <div class="table-responsive">
-      <table>
+      <table class="responsive-records">
         <thead><tr><th>Part #</th><th>Item</th><th>On hand</th><th>Threshold</th></tr></thead>
         <tbody>
           {% for it in low_stock %}
@@ -212,7 +212,7 @@
 <section class="card">
   <h2>Top requesters</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Username</th><th>Requests</th></tr></thead>
       <tbody>
         {% for row in top_requesters %}
@@ -231,7 +231,7 @@
 <section class="card">
   <h2>Top items (most-requested)</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Part #</th><th>Item</th><th>Lines</th><th>Units</th></tr></thead>
       <tbody>
         {% for row in top_items %}
@@ -253,7 +253,7 @@
 <section class="card">
   <h2>Open tickets (still open at end of period)</h2>
   <div class="table-responsive">
-    <table>
+    <table class="responsive-records">
       <thead><tr><th>Ticket</th><th>Created</th><th>Age (days)</th></tr></thead>
       <tbody>
         {% for t, age in open_tickets %}
