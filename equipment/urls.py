@@ -22,6 +22,7 @@ urlpatterns = [
     path("", views.dashboard, name="equipment_dashboard"),
     path("requests/", request_views.manager_queue, name="equipment_request_queue"),
     path("requests/<uuid:pk>/", request_views.manager_detail, name="equipment_request_detail"),
+    path("requests/<uuid:pk>/delete/", request_views.manager_delete, name="equipment_request_delete"),
     path("requests/<uuid:pk>/assign/", request_views.manager_assign, name="equipment_request_assign"),
     path("requests/<uuid:pk>/allocate/", request_views.manager_allocate, name="equipment_request_allocate"),
     path("requests/<uuid:pk>/transition/", request_views.manager_transition, name="equipment_request_transition"),

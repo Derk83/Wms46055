@@ -8,9 +8,11 @@ from django.utils import timezone
 
 from .models import (
     Asset,
+    AssetEvent,
     EquipmentParty,
     EquipmentRequest,
     EquipmentRequestAllocation,
+    EquipmentRequestDeletion,
     EquipmentRequestEvent,
     EquipmentRequestLine,
     Reservation,
@@ -206,6 +208,20 @@ def _change_linked_reservation(reservation, actor, status):
         raise ValidationError("Unsupported linked reservation transition.")
     reservation.status = status
     reservation.save(update_fields=("status", "approved_by", "updated_at"))
+    correlation_id = uuid4()
+    for asset in assets:
+        AssetEvent.objects.create(
+            asset=asset,
+            actor=actor,
+            event_type=AssetEvent.Type.RESERVATION_CHANGED,
+            summary=f"Reservation {reservation.reservation_number}: {old} → {status}",
+            metadata={
+                "reservation_id": str(reservation.pk),
+                "from_status": old,
+                "to_status": status,
+            },
+            correlation_id=correlation_id,
+        )
 
 
 @transaction.atomic
@@ -284,6 +300,156 @@ def cancel_equipment_request(*, actor, request_id):
     _event(equipment_request, actor, EquipmentRequestEvent.Type.CANCELLED, "Request cancelled", old=old, new=equipment_request.status,
            metadata={"changes": {"status": {"from": old, "to": equipment_request.status}}})
     return equipment_request
+
+
+@transaction.atomic
+def delete_equipment_request(*, actor, request_id, confirmation):
+    """Permanently remove a request while retaining fulfillment and an audit tombstone."""
+    _require(actor, "equipment.manage_equipment_requests")
+    serialize_equipment_mutation()
+    equipment_request = (
+        EquipmentRequest.objects.select_for_update()
+        .select_related("requester", "requestor_party", "assigned_to")
+        .get(pk=request_id)
+    )
+    if (confirmation or "") != equipment_request.request_number:
+        raise ValidationError(f"Enter {equipment_request.request_number} exactly to confirm deletion.")
+    reservation = None
+    reservation_snapshot = None
+    if equipment_request.reservation_id:
+        reservation = Reservation.objects.select_for_update().get(
+            pk=equipment_request.reservation_id
+        )
+        reservation_assets = list(reservation.assets.order_by("asset_tag"))
+        reservation_snapshot = {
+            "id": str(reservation.pk),
+            "number": reservation.reservation_number,
+            "status_before": reservation.status,
+            "status_after": reservation.status,
+            "requestor_id": reservation.requestor_id,
+            "starts_at": reservation.starts_at.isoformat(),
+            "ends_at": reservation.ends_at.isoformat(),
+            "purpose": reservation.purpose,
+            "destination_id": reservation.destination_id,
+            "created_by_id": reservation.created_by_id,
+            "approved_by_id": reservation.approved_by_id,
+            "created_at": reservation.created_at.isoformat(),
+            "updated_at": reservation.updated_at.isoformat(),
+            "assets": [{
+                "id": str(asset.pk),
+                "asset_tag": asset.asset_tag,
+                "status_before": asset.status,
+                "status_after": asset.status,
+            } for asset in reservation_assets],
+        }
+        if reservation.status in {
+            Reservation.Status.PENDING,
+            Reservation.Status.APPROVED,
+        }:
+            _change_linked_reservation(
+                reservation, actor, Reservation.Status.CANCELLED
+            )
+            reservation_snapshot["status_after"] = reservation.status
+        asset_statuses_after = {
+            str(asset_id): status
+            for asset_id, status in Asset.objects.filter(
+                pk__in=[asset.pk for asset in reservation_assets]
+            ).values_list("pk", "status")
+        }
+        for asset_snapshot in reservation_snapshot["assets"]:
+            asset_snapshot["status_after"] = asset_statuses_after.get(
+                asset_snapshot["id"], asset_snapshot["status_before"]
+            )
+
+    lines = list(
+        equipment_request.lines.select_related("category", "requested_asset")
+        .prefetch_related("allocations__asset")
+    )
+    requester_label = (
+        equipment_request.requester.get_full_name().strip()
+        or equipment_request.requester.username
+    )
+    events = list(equipment_request.events.order_by("occurred_at", "id"))
+    EquipmentRequestDeletion.objects.create(
+        request_id=equipment_request.pk,
+        request_number=equipment_request.request_number,
+        requester_label=requester_label,
+        status=equipment_request.status,
+        deleted_by=actor,
+        snapshot={
+            "requester_id": equipment_request.requester_id,
+            "requester_username": equipment_request.requester.username,
+            "requester_name": equipment_request.requester.get_full_name(),
+            "requester_email": equipment_request.requester.email,
+            "requestor_party_id": equipment_request.requestor_party_id,
+            "requestor_party_label": str(equipment_request.requestor_party),
+            "status": equipment_request.status,
+            "created_at": equipment_request.created_at.isoformat(),
+            "updated_at": equipment_request.updated_at.isoformat(),
+            "needed_from": equipment_request.needed_from.isoformat(),
+            "needed_until": (
+                equipment_request.needed_until.isoformat()
+                if equipment_request.needed_until else None
+            ),
+            "destination": equipment_request.destination,
+            "purpose": equipment_request.purpose,
+            "project": equipment_request.project,
+            "priority": equipment_request.priority,
+            "accepts_substitutes": equipment_request.accepts_substitutes,
+            "requester_notes": equipment_request.requester_notes,
+            "manager_notes": equipment_request.manager_notes,
+            "assigned_to": ({
+                "id": equipment_request.assigned_to_id,
+                "username": equipment_request.assigned_to.username,
+                "name": equipment_request.assigned_to.get_full_name(),
+            } if equipment_request.assigned_to_id else None),
+            "cancelled_at": (
+                equipment_request.cancelled_at.isoformat()
+                if equipment_request.cancelled_at else None
+            ),
+            "cancelled_by_id": equipment_request.cancelled_by_id,
+            "reservation": reservation_snapshot,
+            "line_count": len(lines),
+            "event_count": len(events),
+            "events": [{
+                "type": event.event_type,
+                "occurred_at": event.occurred_at.isoformat(),
+                "actor_id": event.actor_id,
+                "from_status": event.from_status,
+                "to_status": event.to_status,
+                "message": event.message,
+                "metadata": event.metadata,
+            } for event in events],
+            "lines": [{
+                "id": line.pk,
+                "category_id": line.category_id,
+                "category": line.category.name if line.category_id else None,
+                "requested_asset_id": str(line.requested_asset_id) if line.requested_asset_id else None,
+                "requested_asset_tag": (
+                    line.requested_asset.asset_tag if line.requested_asset_id else None
+                ),
+                "unlisted_equipment": line.unlisted_equipment,
+                "quantity": line.quantity,
+                "notes": line.notes,
+                "created_at": line.created_at.isoformat(),
+                "updated_at": line.updated_at.isoformat(),
+                "allocations": [{
+                    "id": allocation.pk,
+                    "asset_id": str(allocation.asset_id),
+                    "asset_tag": allocation.asset.asset_tag,
+                    "quantity": allocation.quantity,
+                    "allocated_by_id": allocation.allocated_by_id,
+                    "created_at": allocation.created_at.isoformat(),
+                } for allocation in line.allocations.all()],
+            } for line in lines],
+        },
+    )
+    database = equipment_request._state.db or "default"
+    equipment_request.events.all()._raw_delete(database)
+    EquipmentRequestAllocation.objects.filter(line__request=equipment_request).delete()
+    equipment_request.lines.all().delete()
+    equipment_request.delete()
+    return equipment_request.request_number
 
 
 @transaction.atomic

@@ -1,16 +1,20 @@
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.test import Client, TestCase
 from django.utils import timezone
 
 from .models import (
+    ActiveCustody,
     Asset,
+    AssetEvent,
     EquipmentCategory,
     EquipmentParty,
     EquipmentRequest,
+    EquipmentRequestDeletion,
     EquipmentRequestEvent,
     EquipmentRequestLine,
     Reservation,
@@ -19,6 +23,7 @@ from .request_services import (
     allocate_request_assets,
     assign_equipment_request,
     create_equipment_request,
+    delete_equipment_request,
     transition_equipment_request,
     update_equipment_request,
 )
@@ -373,6 +378,271 @@ class EquipmentRequestTests(TestCase):
             transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
                                          status=EquipmentRequest.Status.APPROVED,
                                          expected_status=EquipmentRequest.Status.REVIEWING)
+
+    def test_manager_can_permanently_delete_unfulfilled_request_with_tombstone(self):
+        equipment_request = self.make_request()
+        request_id = equipment_request.pk
+        request_number = equipment_request.request_number
+        long_notes = "N" * 700
+        equipment_request.requester_notes = long_notes
+        equipment_request.manager_notes = "Manager-only detail"
+        equipment_request.assigned_to = self.manager
+        equipment_request.save(update_fields=("requester_notes", "manager_notes", "assigned_to", "updated_at"))
+        client = Client(HTTP_HOST="equipment.rplwms.com")
+        client.force_login(self.manager)
+
+        detail = client.get(f"/requests/{request_id}/")
+        self.assertContains(detail, "Delete request")
+        confirmation = client.get(f"/requests/{request_id}/delete/")
+        self.assertEqual(confirmation.status_code, 200)
+        self.assertContains(confirmation, request_number)
+        self.assertContains(confirmation, "Permanently delete request")
+
+        response = client.post(
+            f"/requests/{request_id}/delete/",
+            {"confirmation": request_number},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, f"Request {request_number} was permanently deleted")
+        self.assertFalse(EquipmentRequest.objects.filter(pk=request_id).exists())
+        tombstone = EquipmentRequestDeletion.objects.get(request_id=request_id)
+        self.assertEqual(tombstone.request_number, request_number)
+        self.assertEqual(tombstone.deleted_by, self.manager)
+        self.assertEqual(tombstone.requester_label, self.requester.username)
+        self.assertEqual(tombstone.snapshot["line_count"], 1)
+        self.assertEqual(tombstone.snapshot["event_count"], 1)
+        self.assertEqual(tombstone.snapshot["requester_notes"], long_notes)
+        self.assertEqual(tombstone.snapshot["manager_notes"], "Manager-only detail")
+        self.assertEqual(tombstone.snapshot["assigned_to"]["id"], self.manager.pk)
+        self.assertEqual(tombstone.snapshot["events"][0]["type"], EquipmentRequestEvent.Type.CREATED)
+        with self.assertRaises(TypeError):
+            tombstone.delete()
+
+    def test_request_delete_requires_exact_confirmation_and_manager_permission(self):
+        equipment_request = self.make_request()
+        csrf_client = Client(HTTP_HOST="equipment.rplwms.com", enforce_csrf_checks=True)
+        csrf_client.force_login(self.manager)
+        csrf_client.get(f"/requests/{equipment_request.pk}/delete/")
+        denied = csrf_client.post(
+            f"/requests/{equipment_request.pk}/delete/",
+            {"confirmation": equipment_request.request_number},
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.assertTrue(EquipmentRequest.objects.filter(pk=equipment_request.pk).exists())
+
+        client = Client(HTTP_HOST="equipment.rplwms.com")
+        client.force_login(self.manager)
+
+        wrong = client.post(
+            f"/requests/{equipment_request.pk}/delete/",
+            {"confirmation": "wrong"},
+            follow=True,
+        )
+        self.assertContains(wrong, f"Enter {equipment_request.request_number} exactly")
+        self.assertTrue(EquipmentRequest.objects.filter(pk=equipment_request.pk).exists())
+        self.assertFalse(EquipmentRequestDeletion.objects.exists())
+
+        with self.assertRaises(PermissionDenied):
+            delete_equipment_request(
+                actor=self.requester,
+                request_id=equipment_request.pk,
+                confirmation=equipment_request.request_number,
+            )
+        requester_client = Client(HTTP_HOST="equipment.rplwms.com")
+        requester_client.force_login(self.requester)
+        self.assertEqual(
+            requester_client.post(
+                f"/requests/{equipment_request.pk}/delete/",
+                {"confirmation": equipment_request.request_number},
+            ).status_code,
+            403,
+        )
+
+    def test_request_with_fulfillment_history_deletes_request_and_preserves_reservation(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(
+            actor=self.manager,
+            request_id=equipment_request.pk,
+            line_id=equipment_request.lines.get().pk,
+            asset_ids=[self.asset.pk],
+        )
+        equipment_request.refresh_from_db()
+        request_id = equipment_request.pk
+        reservation_id = equipment_request.reservation_id
+        client = Client(HTTP_HOST="equipment.rplwms.com")
+        client.force_login(self.manager)
+
+        confirmation = client.get(f"/requests/{request_id}/delete/")
+        self.assertContains(confirmation, "Linked equipment history will be preserved")
+        self.assertContains(confirmation, "Permanently delete request")
+        response = client.post(
+            f"/requests/{request_id}/delete/",
+            {"confirmation": equipment_request.request_number},
+            follow=True,
+        )
+
+        self.assertContains(response, "was permanently deleted")
+        self.assertFalse(EquipmentRequest.objects.filter(pk=request_id).exists())
+        reservation = Reservation.objects.get(pk=reservation_id)
+        self.assertEqual(reservation.status, Reservation.Status.CANCELLED)
+        tombstone = EquipmentRequestDeletion.objects.get(request_id=request_id)
+        self.assertEqual(tombstone.snapshot["reservation"]["id"], str(reservation_id))
+        self.assertEqual(tombstone.snapshot["reservation"]["status_before"], Reservation.Status.PENDING)
+        self.assertEqual(tombstone.snapshot["reservation"]["status_after"], Reservation.Status.CANCELLED)
+        self.assertEqual(
+            tombstone.snapshot["lines"][0]["allocations"][0]["asset_tag"],
+            self.asset.asset_tag,
+        )
+        self.assertEqual(
+            tombstone.snapshot["lines"][0]["allocations"][0]["allocated_by_id"],
+            self.manager.pk,
+        )
+
+    def test_deleting_approved_request_cancels_reservation_and_releases_asset(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(
+            actor=self.manager, request_id=equipment_request.pk,
+            line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk],
+        )
+        transition_equipment_request(
+            actor=self.manager, request_id=equipment_request.pk,
+            status=EquipmentRequest.Status.APPROVED,
+            expected_status=EquipmentRequest.Status.REVIEWING,
+        )
+        equipment_request.refresh_from_db()
+        reservation_id = equipment_request.reservation_id
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.RESERVED)
+
+        delete_equipment_request(
+            actor=self.manager,
+            request_id=equipment_request.pk,
+            confirmation=equipment_request.request_number,
+        )
+
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.AVAILABLE)
+        self.assertEqual(
+            Reservation.objects.get(pk=reservation_id).status,
+            Reservation.Status.CANCELLED,
+        )
+        release_event = AssetEvent.objects.filter(
+            asset=self.asset,
+            event_type=AssetEvent.Type.RESERVATION_CHANGED,
+            metadata__to_status=Reservation.Status.CANCELLED,
+        ).get()
+        self.assertEqual(release_event.actor, self.manager)
+        self.assertEqual(release_event.metadata["from_status"], Reservation.Status.APPROVED)
+        asset_snapshot = EquipmentRequestDeletion.objects.get(
+            request_id=equipment_request.pk
+        ).snapshot["reservation"]["assets"][0]
+        self.assertEqual(asset_snapshot["status_before"], Asset.Status.RESERVED)
+        self.assertEqual(asset_snapshot["status_after"], Asset.Status.AVAILABLE)
+
+    def test_delete_preserves_nonreserved_asset_state_in_reservation_snapshot(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(
+            actor=self.manager, request_id=equipment_request.pk,
+            line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk],
+        )
+        transition_equipment_request(
+            actor=self.manager, request_id=equipment_request.pk,
+            status=EquipmentRequest.Status.APPROVED,
+            expected_status=EquipmentRequest.Status.REVIEWING,
+        )
+        Asset.objects.filter(pk=self.asset.pk).update(status=Asset.Status.MAINTENANCE)
+
+        delete_equipment_request(
+            actor=self.manager,
+            request_id=equipment_request.pk,
+            confirmation=equipment_request.request_number,
+        )
+
+        asset_snapshot = EquipmentRequestDeletion.objects.get(
+            request_id=equipment_request.pk
+        ).snapshot["reservation"]["assets"][0]
+        self.assertEqual(asset_snapshot["status_before"], Asset.Status.MAINTENANCE)
+        self.assertEqual(asset_snapshot["status_after"], Asset.Status.MAINTENANCE)
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.MAINTENANCE)
+
+    def test_delete_rolls_back_reservation_release_if_request_removal_fails(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(
+            actor=self.manager, request_id=equipment_request.pk,
+            line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk],
+        )
+        transition_equipment_request(
+            actor=self.manager, request_id=equipment_request.pk,
+            status=EquipmentRequest.Status.APPROVED,
+            expected_status=EquipmentRequest.Status.REVIEWING,
+        )
+        equipment_request.refresh_from_db()
+        queryset_type = type(equipment_request.events.all())
+
+        with patch.object(queryset_type, "_raw_delete", side_effect=RuntimeError("forced failure")):
+            with self.assertRaisesMessage(RuntimeError, "forced failure"):
+                delete_equipment_request(
+                    actor=self.manager,
+                    request_id=equipment_request.pk,
+                    confirmation=equipment_request.request_number,
+                )
+
+        self.assertTrue(EquipmentRequest.objects.filter(pk=equipment_request.pk).exists())
+        self.assertFalse(EquipmentRequestDeletion.objects.filter(request_id=equipment_request.pk).exists())
+        self.assertEqual(
+            Reservation.objects.get(pk=equipment_request.reservation_id).status,
+            Reservation.Status.APPROVED,
+        )
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.RESERVED)
+
+    def test_deleting_fulfilled_request_preserves_checkout_and_custody(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(
+            actor=self.manager, request_id=equipment_request.pk,
+            line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk],
+        )
+        transition_equipment_request(
+            actor=self.manager, request_id=equipment_request.pk,
+            status=EquipmentRequest.Status.APPROVED,
+            expected_status=EquipmentRequest.Status.REVIEWING,
+        )
+        transition_equipment_request(
+            actor=self.manager, request_id=equipment_request.pk,
+            status=EquipmentRequest.Status.READY,
+            expected_status=EquipmentRequest.Status.APPROVED,
+        )
+        equipment_request.refresh_from_db()
+        reservation_id = equipment_request.reservation_id
+        checkout = checkout_assets(
+            actor=self.manager,
+            borrower_id=equipment_request.requestor_party_id,
+            asset_ids=[self.asset.pk],
+            reservation_id=reservation_id,
+        )
+        equipment_request.refresh_from_db()
+
+        delete_equipment_request(
+            actor=self.manager,
+            request_id=equipment_request.pk,
+            confirmation=equipment_request.request_number,
+        )
+
+        self.assertTrue(type(checkout).objects.filter(pk=checkout.pk).exists())
+        self.assertEqual(
+            Reservation.objects.get(pk=reservation_id).status,
+            Reservation.Status.FULFILLED,
+        )
+        self.asset.refresh_from_db()
+        self.assertEqual(self.asset.status, Asset.Status.CHECKED_OUT)
+        self.assertEqual(self.asset.current_party_id, equipment_request.requestor_party_id)
+        self.assertEqual(
+            ActiveCustody.objects.get(asset=self.asset).borrower_id,
+            equipment_request.requestor_party_id,
+        )
 
     def test_role_provisioning_removes_stale_request_management_permissions(self):
         from .roles import provision_equipment_roles

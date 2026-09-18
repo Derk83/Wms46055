@@ -23,6 +23,7 @@ from .request_services import (
     assign_equipment_request,
     cancel_equipment_request,
     create_equipment_request,
+    delete_equipment_request,
     transition_equipment_request,
     update_equipment_request,
 )
@@ -264,6 +265,38 @@ def manager_detail(request, pk):
         "can_allocate": equipment_request.status in {
             EquipmentRequest.Status.SUBMITTED, EquipmentRequest.Status.REVIEWING,
         },
+    })
+
+
+@equipment_access
+@equipment_permission("manage_equipment_requests")
+@require_http_methods(["GET", "POST"])
+def manager_delete(request, pk):
+    equipment_request = get_object_or_404(
+        EquipmentRequest.objects.select_related("requester", "reservation"), pk=pk
+    )
+    has_fulfillment_history = bool(
+        equipment_request.reservation_id
+        or equipment_request.lines.filter(allocations__isnull=False).exists()
+    )
+    if request.method == "POST":
+        try:
+            request_number = delete_equipment_request(
+                actor=request.user,
+                request_id=pk,
+                confirmation=request.POST.get("confirmation", ""),
+            )
+        except EquipmentRequest.DoesNotExist:
+            messages.warning(request, "That equipment request was already deleted.")
+            return redirect("equipment_request_queue")
+        except (ValidationError, PermissionDenied) as error:
+            messages.error(request, _error_text(error))
+            return redirect("equipment_request_delete", pk=pk)
+        messages.success(request, f"Request {request_number} was permanently deleted.")
+        return redirect("equipment_request_queue")
+    return render(request, "equipment/request_confirm_delete.html", {
+        "equipment_request": equipment_request,
+        "has_fulfillment_history": has_fulfillment_history,
     })
 
 

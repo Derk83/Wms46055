@@ -1,0 +1,35 @@
+{% extends 'equipment/base.html' %}
+{% block title %}Delete {{ equipment_request.request_number }} · RPL Equipment{% endblock %}
+{% block content %}
+<section class="equipment-workspace-heading">
+  <div>
+    <p class="equipment-breadcrumb"><a href="{% url 'equipment_request_detail' equipment_request.pk %}">{{ equipment_request.request_number }}</a> / Delete</p>
+    <h1>Delete equipment request</h1>
+    <p class="meta">Permanent manager action</p>
+  </div>
+</section>
+<section class="card" style="max-width: 700px;">
+  <h2>{{ equipment_request.request_number }}</h2>
+  {% if has_fulfillment_history %}
+    <div class="alert alert-warning">
+      <strong>Linked equipment history will be preserved.</strong>
+      The request will be deleted, but its reservation, checkout, and custody records will remain available for audit.
+      Any pending or approved reservation will be cancelled and reserved assets will be released.
+    </div>
+  {% endif %}
+  <p>This permanently removes the request, its item lines, and its activity feed. A manager deletion record will remain for accountability.</p>
+  <div class="alert alert-danger">
+    <strong>This action cannot be undone.</strong>
+    Enter <strong>{{ equipment_request.request_number }}</strong> exactly to continue.
+  </div>
+  <form method="post" class="equipment-request-form">
+    {% csrf_token %}
+    <label for="confirmation">Request number</label>
+    <input id="confirmation" name="confirmation" type="text" required autocomplete="off" spellcheck="false">
+    <div class="actions">
+      <a class="btn secondary" href="{% url 'equipment_request_detail' equipment_request.pk %}">Cancel</a>
+      <button class="btn danger" type="submit">Permanently delete request</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

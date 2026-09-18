@@ -816,6 +816,27 @@ class EquipmentRequestEvent(ImmutableModel):
         indexes = [models.Index(fields=("request", "occurred_at"))]
 
 
+class EquipmentRequestDeletion(ImmutableModel):
+    """Permanent tombstone for a manager-deleted request."""
+
+    request_id = models.UUIDField(db_index=True)
+    request_number = models.CharField(max_length=24, db_index=True)
+    requester_label = models.CharField(max_length=220)
+    status = models.CharField(max_length=16, choices=EquipmentRequest.Status)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT,
+        related_name="deleted_equipment_requests",
+    )
+    deleted_at = models.DateTimeField(default=timezone.now)
+    snapshot = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ("-deleted_at", "-id")
+
+    def __str__(self):
+        return f"Deleted {self.request_number}"
+
+
 class EquipmentImportBatch(TimestampedModel):
     class Status(models.TextChoices):
         UPLOADED = "UPLOADED", "Uploaded"
