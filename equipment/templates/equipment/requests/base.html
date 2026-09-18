@@ -1,13 +1,29 @@
 {% load static inventory_extras %}<!doctype html>
-<html lang="en" data-theme="dark"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light"><meta name="theme-color" content="#1967d2">
-<title>{% block title %}RPL Equipment Requests{% endblock %}</title>
-<link rel="manifest" href="/manifest.webmanifest">
-<link rel="icon" href="{% static 'equipment/eqreq/eqreq-mark.svg' %}" type="image/svg+xml">
-<link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
-<link rel="stylesheet" href="{% versioned_static 'equipment/eqreq/eqreq.css' %}">
-</head><body>
-<header class="eqreq-header"><a href="{% url 'eqreq_dashboard' %}" class="eqreq-brand"><img src="{% static 'equipment/eqreq/eqreq-mark.svg' %}" alt=""><span><strong>RPL</strong><small>Equipment Requests</small></span></a>{% if user.is_authenticated %}<nav><a href="{% url 'eqreq_dashboard' %}">My requests</a><a class="button" href="{% url 'eqreq_create' %}">New request</a><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form></nav>{% endif %}</header>
-<main class="eqreq-main">{% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}{% block content %}{% endblock %}</main>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark light"><meta name="theme-color" content="#f4f7fb" data-theme-color>
+  <title>{% block title %}RPL Equipment Requests{% endblock %}</title>
+  <script src="{% versioned_static 'equipment/eqreq/eqreq-init.js' %}"></script>
+  <link rel="manifest" href="{% url 'eqreq_manifest' %}">
+  <link rel="icon" href="{% static 'equipment/eqreq/eqreq-mark.svg' %}" type="image/svg+xml">
+  <link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
+  <link rel="stylesheet" href="{% versioned_static 'equipment/eqreq/eqreq.css' %}">
+  <script src="{% versioned_static 'equipment/eqreq/eqreq.js' %}" defer></script>
+</head>
+<body>
+<header class="eqreq-header">
+  <a href="{% url 'eqreq_dashboard' %}" class="eqreq-brand"><img src="{% static 'equipment/eqreq/eqreq-mark.svg' %}" alt=""><span><strong>RPL</strong><small>Equipment Requests</small></span></a>
+  {% if user.is_authenticated %}<nav aria-label="Requester navigation">
+    <a href="{% url 'eqreq_dashboard' %}"{% if request.resolver_match.url_name == 'eqreq_dashboard' or request.resolver_match.url_name == 'eqreq_detail' or request.resolver_match.url_name == 'eqreq_edit' %} aria-current="page"{% endif %}>My requests</a>
+    <a href="{% url 'eqreq_create' %}"{% if request.resolver_match.url_name == 'eqreq_create' %} aria-current="page"{% endif %}>New request</a>
+    <a href="{% url 'eqreq_help' %}"{% if request.resolver_match.url_name == 'eqreq_help' %} aria-current="page"{% endif %}>Help</a>
+    <a href="{% url 'eqreq_account' %}"{% if request.resolver_match.url_name == 'eqreq_account' %} aria-current="page"{% endif %}>Account</a>
+    <button type="button" class="eqreq-theme-toggle" data-eqreq-theme-toggle><span aria-hidden="true">◐</span><span class="sr-only">Change theme</span></button>
+  </nav>{% endif %}
+</header>
+<main class="eqreq-main" id="main-content">
+  {% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+  {% block content %}{% endblock %}
+</main>
 </body></html>

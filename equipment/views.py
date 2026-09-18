@@ -62,6 +62,7 @@ from .services import (
     set_reservation_status,
     transition_maintenance,
     update_asset,
+    allowed_maintenance_transitions,
 )
 
 
@@ -95,6 +96,13 @@ def _service_error(request, error):
     else:
         text = str(error)
     messages.error(request, text or "The operation could not be completed.")
+
+
+def _form_error_text(form):
+    return " ".join(
+        f"{form.fields[field].label or field.replace('_', ' ').capitalize()}: {message}" if field in form.fields else str(message)
+        for field, errors in form.errors.items() for message in errors
+    )
 
 
 def _csv_safe(value):
@@ -744,9 +752,20 @@ def maintenance_list(request):
     can_manage = request.user.has_perm("equipment.manage_maintenance")
     if tab in {"plans", "schedule", "history"} and not can_manage:
         raise PermissionDenied
+    visible_orders = list(orders[:150])
+    for order in visible_orders:
+        allowed = allowed_maintenance_transitions(order.status)
+        order.can_schedule = MaintenanceWorkOrder.Status.SCHEDULED in allowed
+        order.can_start = MaintenanceWorkOrder.Status.IN_PROGRESS in allowed
+        order.can_wait = MaintenanceWorkOrder.Status.WAITING_PARTS in allowed
+        order.can_reopen = MaintenanceWorkOrder.Status.OPEN in allowed
+        order.can_cancel = MaintenanceWorkOrder.Status.CANCELLED in allowed
+        order.can_complete = order.status not in {
+            MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED,
+        }
     plans = MaintenancePlan.objects.select_related("asset", "preferred_vendor").order_by("active", "next_due_date", "asset__asset_tag") if can_manage else MaintenancePlan.objects.none()
     return render(request, "equipment/maintenance.html", {
-        "form": form, "orders": orders[:150], "plans": plans, "tab": tab, "query": query,
+        "form": form, "orders": visible_orders, "plans": plans, "tab": tab, "query": query,
         "filter_status": status, "statuses": MaintenanceWorkOrder.Status, "can_manage": can_manage,
     })
 
@@ -757,6 +776,9 @@ def maintenance_complete(request, pk):
     if not request.user.has_perm("equipment.manage_maintenance"):
         raise PermissionDenied
     order = get_object_or_404(MaintenanceWorkOrder.objects.select_related("asset"), pk=pk)
+    if order.status in {MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED}:
+        messages.info(request, "This work order is closed and has no available actions.")
+        return redirect("equipment_maintenance")
     form = MaintenanceCompleteForm(request.POST or None, include_costs=request.user.has_perm("equipment.view_asset_costs"))
     if request.method == "POST" and form.is_valid():
         try:
@@ -839,7 +861,7 @@ def maintenance_status(request, pk):
         else:
             messages.success(request, "Work order status updated.")
     else:
-        messages.error(request, "Choose a valid status and schedule date.")
+        messages.error(request, _form_error_text(form) or "Choose a valid status and schedule date.")
     return redirect("equipment_maintenance")
 
 

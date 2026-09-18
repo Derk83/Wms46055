@@ -1,1 +1,23 @@
-const CACHE='rpl-equipment-requests-v1';const OFFLINE='/offline/';self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll([OFFLINE,'/static/equipment/eqreq/eqreq.css','/static/equipment/eqreq/eqreq-mark.svg']))));self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k))))));self.addEventListener('fetch',e=>{if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).catch(()=>caches.match(OFFLINE)));}});
+const CACHE = "rpl-equipment-requests-v2";
+const OFFLINE = "/offline/";
+const CORE = [
+  OFFLINE,
+  "/static/equipment/eqreq/eqreq.css",
+  "/static/equipment/eqreq/eqreq-init.js",
+  "/static/equipment/eqreq/eqreq.js",
+  "/static/equipment/eqreq/eqreq-mark.svg",
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE)));
+});
+self.addEventListener("activate", (event) => {
+  event.waitUntil(caches.keys().then((keys) => Promise.all(
+    keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
+  )));
+});
+self.addEventListener("fetch", (event) => {
+  if (event.request.mode === "navigate") {
+    event.respondWith(fetch(event.request).catch(() => caches.match(OFFLINE)));
+  }
+});

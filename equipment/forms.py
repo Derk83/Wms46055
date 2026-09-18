@@ -209,6 +209,12 @@ class MaintenanceStatusForm(forms.Form):
     ))
     scheduled_for = forms.DateTimeField(required=False, widget=DateTimeLocalInput(format="%Y-%m-%dT%H:%M"))
 
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("status") == MaintenanceWorkOrder.Status.SCHEDULED and not cleaned.get("scheduled_for"):
+            self.add_error("scheduled_for", "A scheduled service date is required.")
+        return cleaned
+
 
 class ImportUploadForm(forms.Form):
     workbook = forms.FileField(help_text="Excel .xlsx workbook, maximum 25 MB.")
@@ -275,8 +281,8 @@ class EquipmentRequestLineForm(forms.ModelForm):
 
 
 EquipmentRequestLineFormSet = forms.formset_factory(
-    EquipmentRequestLineForm, extra=3, min_num=1, validate_min=True,
-    max_num=20, validate_max=True, absolute_max=40,
+    EquipmentRequestLineForm, extra=0, min_num=1, validate_min=True,
+    max_num=20, validate_max=True, absolute_max=40, can_delete=True,
 )
 
 

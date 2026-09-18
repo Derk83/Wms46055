@@ -18,6 +18,7 @@ from .forms import (
 )
 from .models import EquipmentRequest
 from .request_services import (
+    allowed_request_transitions,
     allocate_request_assets,
     assign_equipment_request,
     cancel_equipment_request,
@@ -44,6 +45,24 @@ def _error_text(error):
 
 def _line_payload(formset):
     return [form.cleaned_data for form in formset.forms if form.cleaned_data and not form.cleaned_data.get("DELETE")]
+
+
+def _form_error_text(form):
+    return " ".join(
+        f"{form.fields[field].label or field.replace('_', ' ').capitalize()}: {message}" if field in form.fields else str(message)
+        for field, errors in form.errors.items() for message in errors
+    )
+
+
+REQUEST_GUIDANCE = {
+    EquipmentRequest.Status.SUBMITTED: "Your request is waiting for an equipment manager to review it.",
+    EquipmentRequest.Status.REVIEWING: "An equipment manager is reviewing availability and allocating equipment.",
+    EquipmentRequest.Status.APPROVED: "Your equipment is approved. The team will prepare it for pickup or delivery.",
+    EquipmentRequest.Status.READY: "Your equipment is ready. Follow the pickup or delivery instructions from the equipment team.",
+    EquipmentRequest.Status.FULFILLED: "This request was fulfilled. Contact the equipment team if anything is incorrect.",
+    EquipmentRequest.Status.DECLINED: "This request is closed and cannot be changed online. Contact the equipment team with questions.",
+    EquipmentRequest.Status.CANCELLED: "This request was cancelled and no further action will be taken.",
+}
 
 
 @require_safe
@@ -85,9 +104,26 @@ def offline(request):
 @requester_access
 def dashboard(request):
     requests = EquipmentRequest.objects.filter(requester=request.user).prefetch_related("lines")
+    status = request.GET.get("status", "").strip()
+    if status in EquipmentRequest.Status.values:
+        requests = requests.filter(status=status)
     return render(request, "equipment/requests/dashboard.html", {
         "page": Paginator(requests, 20).get_page(request.GET.get("page")),
+        "statuses": EquipmentRequest.Status,
+        "selected_status": status,
     })
+
+
+@requester_access
+@require_safe
+def help_page(request):
+    return render(request, "equipment/requests/help.html")
+
+
+@requester_access
+@require_safe
+def account(request):
+    return render(request, "equipment/requests/account.html")
 
 
 @requester_access
@@ -101,7 +137,7 @@ def request_create(request):
                 actor=request.user, values=form.cleaned_data, lines=_line_payload(formset)
             )
         except (ValidationError, PermissionDenied) as error:
-            messages.error(request, _error_text(error))
+            form.add_error(None, _error_text(error))
         else:
             messages.success(request, f"Request {equipment_request.request_number} was submitted.")
             return redirect("eqreq_detail", pk=equipment_request.pk)
@@ -131,7 +167,7 @@ def request_edit(request, pk):
                 values=form.cleaned_data, lines=_line_payload(formset),
             )
         except (ValidationError, PermissionDenied) as error:
-            messages.error(request, _error_text(error))
+            form.add_error(None, _error_text(error))
         else:
             messages.success(request, "Request updated.")
             return redirect("eqreq_detail", pk=equipment_request.pk)
@@ -148,7 +184,13 @@ def request_detail(request, pk):
         .select_related("assigned_to")
         .prefetch_related("lines", "events"), pk=pk,
     )
-    return render(request, "equipment/requests/detail.html", {"equipment_request": equipment_request})
+    return render(request, "equipment/requests/detail.html", {
+        "equipment_request": equipment_request,
+        "next_guidance": REQUEST_GUIDANCE[equipment_request.status],
+        "can_cancel": equipment_request.status in {
+            EquipmentRequest.Status.SUBMITTED, EquipmentRequest.Status.REVIEWING,
+        },
+    })
 
 
 @requester_access
@@ -162,7 +204,7 @@ def request_cancel(request, pk):
         messages.error(request, _error_text(error))
     else:
         messages.success(request, f"Request {equipment_request.request_number} was cancelled.")
-    return redirect("eqreq_dashboard")
+    return redirect("eqreq_detail", pk=pk)
 
 
 @equipment_access
@@ -186,6 +228,7 @@ def manager_detail(request, pk):
         EquipmentRequest.objects.select_related("requester", "requestor_party", "assigned_to", "reservation")
         .prefetch_related("lines__category", "lines__allocations__asset", "events__actor"), pk=pk,
     )
+    allowed = allowed_request_transitions(equipment_request.status)
     return render(request, "equipment/request_detail.html", {
         "equipment_request": equipment_request,
         "assignment_form": EquipmentRequestAssignmentForm(initial={
@@ -194,6 +237,13 @@ def manager_detail(request, pk):
         }),
         "allocation_form": EquipmentAllocationForm(equipment_request=equipment_request),
         "status_form": EquipmentRequestStatusForm(initial={"expected_status": equipment_request.status}),
+        "allowed_transitions": [
+            (value, EquipmentRequest.Status(value).label) for value in allowed
+        ],
+        "is_terminal": not allowed,
+        "can_allocate": equipment_request.status in {
+            EquipmentRequest.Status.SUBMITTED, EquipmentRequest.Status.REVIEWING,
+        },
     })
 
 
@@ -213,7 +263,7 @@ def manager_assign(request, pk):
         else:
             messages.success(request, "Assignment updated.")
     else:
-        messages.error(request, "Correct the assignment details.")
+        messages.error(request, _form_error_text(form) or "Correct the assignment details.")
     return redirect("equipment_request_detail", pk=pk)
 
 
@@ -234,7 +284,7 @@ def manager_allocate(request, pk):
         else:
             messages.success(request, "Assets allocated and linked reservation updated.")
     else:
-        messages.error(request, "Choose a request line and available assets.")
+        messages.error(request, _form_error_text(form) or "Choose a request line and available assets.")
     return redirect("equipment_request_detail", pk=pk)
 
 
@@ -254,5 +304,5 @@ def manager_transition(request, pk):
         else:
             messages.success(request, "Request status updated.")
     else:
-        messages.error(request, "Choose a valid status action.")
+        messages.error(request, _form_error_text(form) or "Choose a valid status action.")
     return redirect("equipment_request_detail", pk=pk)

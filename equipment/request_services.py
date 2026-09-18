@@ -25,6 +25,24 @@ EDITABLE_FIELDS = {
     "accepts_substitutes", "requester_notes",
 }
 
+REQUEST_TRANSITIONS = {
+    EquipmentRequest.Status.SUBMITTED: (
+        EquipmentRequest.Status.REVIEWING, EquipmentRequest.Status.DECLINED,
+    ),
+    EquipmentRequest.Status.REVIEWING: (
+        EquipmentRequest.Status.APPROVED, EquipmentRequest.Status.DECLINED,
+    ),
+    EquipmentRequest.Status.APPROVED: (
+        EquipmentRequest.Status.READY, EquipmentRequest.Status.DECLINED,
+    ),
+    EquipmentRequest.Status.READY: (EquipmentRequest.Status.FULFILLED,),
+}
+
+
+def allowed_request_transitions(status):
+    """Return the service-owned transition allowlist for the current state."""
+    return REQUEST_TRANSITIONS.get(status, ())
+
 
 def _require(actor, permission):
     if not actor or not actor.is_authenticated or not actor.has_perm(permission):
@@ -356,13 +374,7 @@ def transition_equipment_request(*, actor, request_id, status, expected_status, 
     equipment_request = EquipmentRequest.objects.select_for_update().get(pk=request_id)
     if equipment_request.status != expected_status:
         raise ValidationError("This request changed after the page was opened. Reload and try again.")
-    allowed = {
-        EquipmentRequest.Status.SUBMITTED: {EquipmentRequest.Status.REVIEWING, EquipmentRequest.Status.DECLINED},
-        EquipmentRequest.Status.REVIEWING: {EquipmentRequest.Status.APPROVED, EquipmentRequest.Status.DECLINED},
-        EquipmentRequest.Status.APPROVED: {EquipmentRequest.Status.READY, EquipmentRequest.Status.DECLINED},
-        EquipmentRequest.Status.READY: {EquipmentRequest.Status.FULFILLED},
-    }
-    if status not in allowed.get(equipment_request.status, set()):
+    if status not in allowed_request_transitions(equipment_request.status):
         raise ValidationError("That request status transition is not allowed.")
     old = equipment_request.status
     old_notes = equipment_request.manager_notes

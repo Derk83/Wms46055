@@ -413,6 +413,29 @@ def forecast_plan_due(plan, *, as_of=None, current_meter=None):
     }
 
 
+MAINTENANCE_TRANSITIONS = {
+    MaintenanceWorkOrder.Status.OPEN: (
+        MaintenanceWorkOrder.Status.SCHEDULED, MaintenanceWorkOrder.Status.IN_PROGRESS,
+        MaintenanceWorkOrder.Status.CANCELLED,
+    ),
+    MaintenanceWorkOrder.Status.SCHEDULED: (
+        MaintenanceWorkOrder.Status.OPEN, MaintenanceWorkOrder.Status.IN_PROGRESS,
+        MaintenanceWorkOrder.Status.CANCELLED,
+    ),
+    MaintenanceWorkOrder.Status.IN_PROGRESS: (
+        MaintenanceWorkOrder.Status.WAITING_PARTS, MaintenanceWorkOrder.Status.CANCELLED,
+    ),
+    MaintenanceWorkOrder.Status.WAITING_PARTS: (
+        MaintenanceWorkOrder.Status.IN_PROGRESS, MaintenanceWorkOrder.Status.CANCELLED,
+    ),
+}
+
+
+def allowed_maintenance_transitions(status):
+    """Return the service-owned transition allowlist for the current state."""
+    return MAINTENANCE_TRANSITIONS.get(status, ())
+
+
 def _occurrence_key(plan):
     date_part = plan.next_due_date.isoformat() if plan.next_due_date else "none"
     meter_part = str(plan.next_due_meter) if plan.next_due_meter is not None else "none"
@@ -472,13 +495,7 @@ def transition_maintenance(*, actor, work_order_id, status, scheduled_for=None):
     serialize_equipment_mutation()
     order = MaintenanceWorkOrder.objects.select_for_update().select_related("asset").get(pk=work_order_id)
     asset = Asset.objects.select_for_update().get(pk=order.asset_id)
-    allowed = {
-        MaintenanceWorkOrder.Status.OPEN: {MaintenanceWorkOrder.Status.SCHEDULED, MaintenanceWorkOrder.Status.IN_PROGRESS, MaintenanceWorkOrder.Status.CANCELLED},
-        MaintenanceWorkOrder.Status.SCHEDULED: {MaintenanceWorkOrder.Status.OPEN, MaintenanceWorkOrder.Status.IN_PROGRESS, MaintenanceWorkOrder.Status.CANCELLED},
-        MaintenanceWorkOrder.Status.IN_PROGRESS: {MaintenanceWorkOrder.Status.WAITING_PARTS, MaintenanceWorkOrder.Status.CANCELLED},
-        MaintenanceWorkOrder.Status.WAITING_PARTS: {MaintenanceWorkOrder.Status.IN_PROGRESS, MaintenanceWorkOrder.Status.CANCELLED},
-    }
-    if status not in allowed.get(order.status, set()):
+    if status not in allowed_maintenance_transitions(order.status):
         raise ValidationError("That maintenance status transition is not allowed.")
     if status == MaintenanceWorkOrder.Status.SCHEDULED:
         if not scheduled_for:

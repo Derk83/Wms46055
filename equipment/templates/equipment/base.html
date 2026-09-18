@@ -31,7 +31,7 @@
       {% if perms.equipment.view_maintenanceworkorder or perms.equipment.view_rentalcontract %}
       <section class="equipment-nav-group">
         <span class="equipment-nav-label">Operations</span>
-        {% if perms.equipment.view_maintenanceworkorder %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_maintenance' or request.resolver_match.url_name == 'equipment_maintenance_plan_create' or request.resolver_match.url_name == 'equipment_maintenance_plan_edit' %} is-active{% endif %}" href="{% url 'equipment_maintenance' %}"{% if request.resolver_match.url_name == 'equipment_maintenance' %} aria-current="page"{% endif %}>Maintenance</a>{% endif %}
+        {% if perms.equipment.view_maintenanceworkorder %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_maintenance' or request.resolver_match.url_name == 'equipment_maintenance_plan_create' or request.resolver_match.url_name == 'equipment_maintenance_plan_edit' or request.resolver_match.url_name == 'equipment_maintenance_complete' %} is-active{% endif %}" href="{% url 'equipment_maintenance' %}"{% if request.resolver_match.url_name == 'equipment_maintenance' or request.resolver_match.url_name == 'equipment_maintenance_plan_create' or request.resolver_match.url_name == 'equipment_maintenance_plan_edit' or request.resolver_match.url_name == 'equipment_maintenance_complete' %} aria-current="page"{% endif %}>Maintenance</a>{% endif %}
         {% if perms.equipment.view_rentalcontract %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_rentals' %} is-active{% endif %}" href="{% url 'equipment_rentals' %}"{% if request.resolver_match.url_name == 'equipment_rentals' %} aria-current="page"{% endif %}>Rentals & obligations</a>{% endif %}
       </section>
       {% endif %}
@@ -45,7 +45,7 @@
       {% if perms.equipment.manage_equipment_requests or perms.equipment.import_equipment or perms.inventory.manage_users %}
       <section class="equipment-nav-group">
         <span class="equipment-nav-label">Management</span>
-        {% if perms.equipment.manage_equipment_requests %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_request_queue' or request.resolver_match.url_name == 'equipment_request_detail' %} is-active{% endif %}" href="{% url 'equipment_request_queue' %}">Request queue</a>{% endif %}
+        {% if perms.equipment.manage_equipment_requests %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_request_queue' or request.resolver_match.url_name == 'equipment_request_detail' %} is-active{% endif %}" href="{% url 'equipment_request_queue' %}"{% if request.resolver_match.url_name == 'equipment_request_queue' or request.resolver_match.url_name == 'equipment_request_detail' %} aria-current="page"{% endif %}>Request queue</a>{% endif %}
         {% if perms.inventory.manage_users %}<a class="equipment-nav-link" href="https://bbx.rplwms.com/settings/users/" title="Open Warehouse user administration; sign-in may be required">Users &amp; access</a>{% endif %}
         {% if perms.equipment.import_equipment %}
         <a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_import' or request.resolver_match.url_name == 'equipment_import_batch' %} is-active{% endif %}" href="{% url 'equipment_import' %}"{% if request.resolver_match.url_name == 'equipment_import' or request.resolver_match.url_name == 'equipment_import_batch' %} aria-current="page"{% endif %}>Import center</a>

@@ -21,6 +21,8 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
     path("", request_views.dashboard, name="eqreq_dashboard"),
     path("new/", request_views.request_create, name="eqreq_create"),
+    path("help/", request_views.help_page, name="eqreq_help"),
+    path("account/", request_views.account, name="eqreq_account"),
     path("requests/<uuid:pk>/", request_views.request_detail, name="eqreq_detail"),
     path("requests/<uuid:pk>/edit/", request_views.request_edit, name="eqreq_edit"),
     path("requests/<uuid:pk>/cancel/", request_views.request_cancel, name="eqreq_cancel"),
