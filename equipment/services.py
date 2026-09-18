@@ -115,6 +115,7 @@ def checkout_assets(
         raise ValidationError("Select at least one asset.")
     borrower = EquipmentParty.objects.get(pk=borrower_id, active=True)
     reservation = None
+    linked_request = None
     if reservation_id:
         reservation = Reservation.objects.select_for_update().get(pk=reservation_id)
         if reservation.status != Reservation.Status.APPROVED:
@@ -124,6 +125,11 @@ def checkout_assets(
         reserved_ids = {str(value) for value in reservation.assets.values_list("pk", flat=True)}
         if set(ids) != reserved_ids:
             raise ValidationError("Checkout every asset held by the approved reservation together.")
+        from .models import EquipmentRequest
+
+        linked_request = EquipmentRequest.objects.select_for_update().filter(reservation=reservation).first()
+        if linked_request and linked_request.status != EquipmentRequest.Status.READY:
+            raise ValidationError("The linked equipment request must be ready before checkout.")
     assets = list(Asset.objects.select_for_update().filter(pk__in=ids).order_by("asset_tag"))
     if len(assets) != len(ids):
         raise ValidationError("One or more assets no longer exist.")
@@ -176,6 +182,24 @@ def checkout_assets(
     if reservation:
         reservation.status = Reservation.Status.FULFILLED
         reservation.save(update_fields=("status", "updated_at"))
+        if linked_request:
+            from .models import EquipmentRequestEvent
+
+            old_status = linked_request.status
+            linked_request.status = linked_request.Status.FULFILLED
+            linked_request.save(update_fields=("status", "updated_at"))
+            EquipmentRequestEvent.objects.create(
+                request=linked_request,
+                actor=actor,
+                event_type=EquipmentRequestEvent.Type.STATUS_CHANGED,
+                from_status=old_status,
+                to_status=linked_request.status,
+                message=f"Fulfilled by checkout {checkout.checkout_number}",
+                metadata={
+                    "checkout_number": checkout.checkout_number,
+                    "changes": {"status": {"from": old_status, "to": linked_request.status}},
+                },
+            )
     return checkout
 
 
@@ -279,6 +303,8 @@ def set_reservation_status(*, actor, reservation_id, status):
     _require(actor, "equipment.manage_reservations")
     serialize_equipment_mutation()
     reservation = Reservation.objects.select_for_update().get(pk=reservation_id)
+    if hasattr(reservation, "equipment_request"):
+        raise ValidationError("Linked request reservations must be managed from the equipment request.")
     assets = list(Asset.objects.select_for_update().filter(reservations=reservation).order_by("asset_tag"))
     allowed = {
         Reservation.Status.PENDING: {Reservation.Status.APPROVED, Reservation.Status.REJECTED, Reservation.Status.CANCELLED},

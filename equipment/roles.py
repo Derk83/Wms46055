@@ -23,9 +23,11 @@ ROLE_PERMISSIONS = {
         "view_returnrecord", "view_reservation", "view_maintenanceworkorder", "view_rentalcontract",
         "view_rentalasset", "view_equipment_audit", "export_equipment",
     },
-    "Logistics Manager": "*",
-    "Sr. Logistics Manager": "*",
-    "Procurement Manager": "*",
+    # Frozen to the permissions these roles had before Equipment Requests was
+    # introduced. Do not use "*": new capabilities require explicit review.
+    "Logistics Manager": "legacy-manager",
+    "Sr. Logistics Manager": "legacy-manager",
+    "Procurement Manager": "legacy-manager",
     "Logistics Specialist": {
         "access_equipment_portal", "view_asset", "checkout_asset", "return_asset", "view_checkout",
         "view_checkoutitem", "view_returnrecord", "add_reservation", "view_reservation",
@@ -36,6 +38,25 @@ ROLE_PERMISSIONS = {
         "view_maintenanceworkorder", "view_rentalcontract", "view_rentalasset", "manage_rentals",
         "view_asset_costs", "export_equipment",
     },
+}
+
+LEGACY_MANAGER_PERMISSIONS = {
+    "access_equipment_portal", "access_equipment_requests", "checkout_asset", "export_equipment",
+    "import_equipment", "manage_equipment", "manage_maintenance", "manage_rentals",
+    "manage_reservations", "print_asset_labels", "return_asset", "view_asset_costs",
+    "view_equipment_audit",
+}
+# Freeze the standard CRUD model list too, so future models are not silently granted.
+LEGACY_MANAGER_MODELS = {
+    "activecustody", "asset", "assetcomponent", "assetdocument", "assetevent", "assetidentifier",
+    "checkout", "checkoutitem", "equipmentcategory", "equipmentimportbatch", "equipmentimportrow",
+    "equipmentlocation", "equipmentmutationlock", "equipmentparty", "equipmentrequest",
+    "equipmentrequestallocation", "equipmentrequestevent", "equipmentrequestline", "equipmentvendor",
+    "maintenanceplan", "maintenanceworkorder", "rentalasset", "rentalcontract", "reservation",
+    "reservationasset", "returnrecord", "vehiclemeterreading",
+}
+LEGACY_MANAGER_PERMISSIONS |= {
+    f"{action}_{model}" for action in ("add", "change", "delete", "view") for model in LEGACY_MANAGER_MODELS
 }
 
 
@@ -49,5 +70,12 @@ def provision_equipment_roles(sender, **kwargs):
         return
     for group_name, codenames in ROLE_PERMISSIONS.items():
         group, _ = Group.objects.get_or_create(name=group_name)
-        assigned = permissions if codenames == "*" else [by_codename[name] for name in codenames if name in by_codename]
+        if codenames == "*":
+            assigned = permissions
+        else:
+            if codenames == "legacy-manager":
+                codenames = LEGACY_MANAGER_PERMISSIONS
+            assigned = [by_codename[name] for name in codenames if name in by_codename]
+        # Exact semantics clean stale equipment grants left by older versions.
+        group.permissions.remove(*permissions)
         group.permissions.add(*assigned)

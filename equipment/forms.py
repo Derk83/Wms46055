@@ -234,6 +234,8 @@ class EquipmentRequestForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         start, end = cleaned.get("needed_from"), cleaned.get("needed_until")
+        if start and not self.instance.pk and start < timezone.localdate():
+            self.add_error("needed_from", "The needed date cannot be in the past.")
         if start and end and end < start:
             self.add_error("needed_until", "The end date cannot be before the start date.")
         return cleaned
@@ -268,7 +270,8 @@ class EquipmentRequestLineForm(forms.ModelForm):
 
 
 EquipmentRequestLineFormSet = forms.formset_factory(
-    EquipmentRequestLineForm, extra=3, min_num=1, validate_min=True, max_num=20
+    EquipmentRequestLineForm, extra=3, min_num=1, validate_min=True,
+    max_num=20, validate_max=True, absolute_max=40,
 )
 
 

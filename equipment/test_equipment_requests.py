@@ -16,9 +16,12 @@ from .models import (
 )
 from .request_services import (
     allocate_request_assets,
+    assign_equipment_request,
     create_equipment_request,
     transition_equipment_request,
+    update_equipment_request,
 )
+from .services import checkout_assets, set_reservation_status
 
 
 class EquipmentRequestTests(TestCase):
@@ -174,3 +177,124 @@ class EquipmentRequestTests(TestCase):
             )
         equipment_request.refresh_from_db()
         self.assertEqual(equipment_request.status, EquipmentRequest.Status.REVIEWING)
+
+    def test_linked_checkout_atomically_fulfills_request_with_event(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk])
+        transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                     status=EquipmentRequest.Status.APPROVED,
+                                     expected_status=EquipmentRequest.Status.REVIEWING)
+        transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                     status=EquipmentRequest.Status.READY,
+                                     expected_status=EquipmentRequest.Status.APPROVED)
+        equipment_request.refresh_from_db()
+        checkout = checkout_assets(actor=self.manager, borrower_id=equipment_request.requestor_party_id,
+                                   asset_ids=[self.asset.pk], reservation_id=equipment_request.reservation_id)
+        equipment_request.refresh_from_db()
+        self.assertEqual(equipment_request.status, EquipmentRequest.Status.FULFILLED)
+        event = equipment_request.events.first()
+        self.assertEqual(event.to_status, EquipmentRequest.Status.FULFILLED)
+        self.assertEqual(event.metadata["checkout_number"], checkout.checkout_number)
+
+    def test_generic_reservation_mutation_rejects_linked_request(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk])
+        equipment_request.refresh_from_db()
+        with self.assertRaisesMessage(ValidationError, "managed from the equipment request"):
+            set_reservation_status(actor=self.manager, reservation_id=equipment_request.reservation_id,
+                                   status=Reservation.Status.APPROVED)
+
+    def test_direct_fulfillment_requires_checkout(self):
+        equipment_request = self.make_request()
+        allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk])
+        transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                     status=EquipmentRequest.Status.APPROVED,
+                                     expected_status=EquipmentRequest.Status.REVIEWING)
+        transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                     status=EquipmentRequest.Status.READY,
+                                     expected_status=EquipmentRequest.Status.APPROVED)
+        with self.assertRaisesMessage(ValidationError, "completed by checking out"):
+            transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                         status=EquipmentRequest.Status.FULFILLED,
+                                         expected_status=EquipmentRequest.Status.READY)
+
+    def test_duplicate_asset_across_request_lines_is_clean_validation_error(self):
+        equipment_request = self.make_request(lines=[
+            {"category": self.category, "quantity": 1}, {"category": self.category, "quantity": 1},
+        ])
+        first, second = equipment_request.lines.all()
+        allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                line_id=first.pk, asset_ids=[self.asset.pk])
+        with self.assertRaisesMessage(ValidationError, "already allocated to this request"):
+            allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                    line_id=second.pk, asset_ids=[self.asset.pk])
+
+    def test_audit_events_capture_bounded_edit_assignment_and_note_deltas(self):
+        equipment_request = self.make_request()
+        values = self.values()
+        values["purpose"] = "B" * 700
+        update_equipment_request(actor=self.requester, request_id=equipment_request.pk, values=values,
+                                 lines=[{"category": self.category, "quantity": 1, "notes": "changed"}])
+        updated = equipment_request.events.first()
+        self.assertEqual(updated.metadata["changes"]["purpose"]["from"], "Field commissioning")
+        self.assertLessEqual(len(updated.metadata["changes"]["purpose"]["to"]), 501)
+        assign_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                 assigned_to=self.manager, manager_notes="private manager note")
+        assigned = equipment_request.events.first()
+        self.assertEqual(assigned.metadata["changes"]["assigned_to_id"]["to"], self.manager.pk)
+        self.assertEqual(assigned.metadata["changes"]["manager_notes"]["to"], "private manager note")
+        client = Client(HTTP_HOST="eqreq.rplwms.com")
+        client.force_login(self.requester)
+        self.assertNotContains(client.get(f"/requests/{equipment_request.pk}/"), "private manager note")
+
+    def test_forged_formset_over_maximum_is_rejected(self):
+        client = Client(HTTP_HOST="eqreq.rplwms.com")
+        client.force_login(self.requester)
+        values = self.values()
+        data = {**values, "needed_from": values["needed_from"].isoformat(),
+                "needed_until": values["needed_until"].isoformat(),
+                "lines-TOTAL_FORMS": "41", "lines-INITIAL_FORMS": "0",
+                "lines-MIN_NUM_FORMS": "1", "lines-MAX_NUM_FORMS": "20"}
+        for index in range(41):
+            data[f"lines-{index}-category"] = str(self.category.pk)
+            data[f"lines-{index}-quantity"] = "1"
+        response = client.post("/new/", data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "at most 20 forms")
+        self.assertFalse(EquipmentRequest.objects.filter(requester=self.requester).exists())
+
+    def test_past_needed_date_is_rejected_on_create_and_expired_approval(self):
+        values = self.values()
+        values["needed_from"] = timezone.localdate() - timedelta(days=1)
+        values["needed_until"] = timezone.localdate()
+        with self.assertRaisesMessage(ValidationError, "cannot be in the past"):
+            create_equipment_request(actor=self.requester, values=values,
+                                     lines=[{"category": self.category, "quantity": 1}])
+        equipment_request = self.make_request()
+        allocate_request_assets(actor=self.manager, request_id=equipment_request.pk,
+                                line_id=equipment_request.lines.get().pk, asset_ids=[self.asset.pk])
+        EquipmentRequest.objects.filter(pk=equipment_request.pk).update(
+            needed_from=timezone.localdate() - timedelta(days=2),
+            needed_until=timezone.localdate() - timedelta(days=1))
+        with self.assertRaisesMessage(ValidationError, "window has expired"):
+            transition_equipment_request(actor=self.manager, request_id=equipment_request.pk,
+                                         status=EquipmentRequest.Status.APPROVED,
+                                         expected_status=EquipmentRequest.Status.REVIEWING)
+
+    def test_role_provisioning_removes_stale_request_management_permissions(self):
+        from .roles import provision_equipment_roles
+
+        stale = Permission.objects.get(content_type__app_label="equipment", codename="manage_equipment_requests")
+        requester = Group.objects.get(name="Equipment Requester")
+        logistics = Group.objects.get(name="Logistics Manager")
+        requester.permissions.add(stale, Permission.objects.get(
+            content_type__app_label="equipment", codename="access_equipment_portal"))
+        logistics.permissions.add(stale)
+        provision_equipment_roles(sender=type("Sender", (), {"label": "equipment"})())
+        self.assertEqual(set(requester.permissions.filter(content_type__app_label="equipment")
+                             .values_list("codename", flat=True)), {"access_equipment_requests"})
+        self.assertFalse(logistics.permissions.filter(codename="manage_equipment_requests",
+                                                       content_type__app_label="equipment").exists())
