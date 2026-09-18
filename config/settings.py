@@ -45,6 +45,7 @@ ALLOWED_HOSTS = [
     'bbx.rplwms.com',
     'requests.rplwms.com',
     'equipment.rplwms.com',
+    'eqreq.rplwms.com',
     'rplwms.com',
     'www.rplwms.com',
     'wms.bonksystems.com',
@@ -54,6 +55,7 @@ ALLOWED_HOSTS = [
 APP_URL = 'https://bbx.rplwms.com'
 REQUESTS_URL = 'https://requests.rplwms.com'
 EQUIPMENT_URL = 'https://equipment.rplwms.com'
+EQUIPMENT_REQUESTS_URL = 'https://eqreq.rplwms.com'
 
 WEBPUSH_VAPID_PUBLIC_KEY = os.environ.get("WEBPUSH_VAPID_PUBLIC_KEY", "")
 WEBPUSH_VAPID_PRIVATE_KEY = os.environ.get("WEBPUSH_VAPID_PRIVATE_KEY", "")
@@ -94,6 +96,7 @@ CSRF_TRUSTED_ORIGINS = [
     'https://bbx.rplwms.com',
     'https://requests.rplwms.com',
     'https://equipment.rplwms.com',
+    'https://eqreq.rplwms.com',
     'https://rplwms.com',
     'https://www.rplwms.com',
     'https://wms.bonksystems.com',

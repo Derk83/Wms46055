@@ -502,6 +502,129 @@ class EquipmentMutationLock(models.Model):
         verbose_name = "equipment mutation lock"
 
 
+class EquipmentRequest(TimestampedModel):
+    """Requester-authored need; concrete inventory remains manager-selected."""
+
+    class Status(models.TextChoices):
+        SUBMITTED = "SUBMITTED", "Submitted"
+        REVIEWING = "REVIEWING", "Under review"
+        APPROVED = "APPROVED", "Approved"
+        READY = "READY", "Ready"
+        FULFILLED = "FULFILLED", "Fulfilled"
+        DECLINED = "DECLINED", "Declined"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    class Priority(models.TextChoices):
+        LOW = "LOW", "Low"
+        NORMAL = "NORMAL", "Normal"
+        HIGH = "HIGH", "High"
+        URGENT = "URGENT", "Urgent"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request_number = models.CharField(max_length=24, unique=True, editable=False)
+    requester = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="equipment_requests")
+    requestor_party = models.ForeignKey(EquipmentParty, on_delete=models.PROTECT, related_name="equipment_requests")
+    status = models.CharField(max_length=16, choices=Status, default=Status.SUBMITTED)
+    priority = models.CharField(max_length=12, choices=Priority, default=Priority.NORMAL)
+    needed_from = models.DateField()
+    needed_until = models.DateField(null=True, blank=True)
+    destination = models.CharField(max_length=220)
+    purpose = models.TextField()
+    project = models.CharField(max_length=180, blank=True)
+    accepts_substitutes = models.BooleanField(default=True)
+    requester_notes = models.TextField(blank=True)
+    manager_notes = models.TextField(blank=True)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="assigned_equipment_requests",
+    )
+    reservation = models.OneToOneField(
+        Reservation, null=True, blank=True, on_delete=models.PROTECT, related_name="equipment_request"
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="cancelled_equipment_requests",
+    )
+
+    class Meta:
+        ordering = ("-created_at",)
+        indexes = [models.Index(fields=("status", "needed_from")), models.Index(fields=("requester", "created_at"))]
+        constraints = [models.CheckConstraint(
+            condition=Q(needed_until__isnull=True) | Q(needed_until__gte=models.F("needed_from")),
+            name="equipment_request_needed_dates",
+        )]
+        permissions = [
+            ("access_equipment_requests", "Can access equipment requests portal"),
+            ("manage_equipment_requests", "Can manage equipment requests"),
+        ]
+
+    def __str__(self):
+        return self.request_number
+
+
+class EquipmentRequestLine(TimestampedModel):
+    request = models.ForeignKey(EquipmentRequest, on_delete=models.PROTECT, related_name="lines")
+    category = models.ForeignKey(
+        EquipmentCategory, null=True, blank=True, on_delete=models.PROTECT, related_name="request_lines"
+    )
+    unlisted_equipment = models.CharField(max_length=220, blank=True)
+    quantity = models.PositiveIntegerField(default=1)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("id",)
+        constraints = [
+            models.CheckConstraint(condition=Q(quantity__gte=1), name="equipment_request_line_quantity_positive"),
+            models.CheckConstraint(
+                condition=Q(category__isnull=False) | ~Q(unlisted_equipment=""),
+                name="equipment_request_line_has_equipment",
+            ),
+        ]
+
+    @property
+    def description(self):
+        return self.category.name if self.category_id else self.unlisted_equipment
+
+
+class EquipmentRequestAllocation(models.Model):
+    line = models.ForeignKey(EquipmentRequestLine, on_delete=models.PROTECT, related_name="allocations")
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="request_allocations")
+    quantity = models.PositiveIntegerField(default=1)
+    allocated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(fields=("line", "asset"), name="equipment_request_allocation_unique"),
+            models.CheckConstraint(condition=Q(quantity__gte=1), name="equipment_request_allocation_quantity_positive"),
+        ]
+
+
+class EquipmentRequestEvent(ImmutableModel):
+    class Type(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        UPDATED = "UPDATED", "Updated"
+        CANCELLED = "CANCELLED", "Cancelled"
+        ASSIGNED = "ASSIGNED", "Assigned"
+        ALLOCATED = "ALLOCATED", "Allocated"
+        STATUS_CHANGED = "STATUS_CHANGED", "Status changed"
+
+    request = models.ForeignKey(EquipmentRequest, on_delete=models.PROTECT, related_name="events")
+    event_type = models.CharField(max_length=24, choices=Type)
+    occurred_at = models.DateTimeField(default=timezone.now)
+    actor = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)
+    from_status = models.CharField(max_length=16, blank=True)
+    to_status = models.CharField(max_length=16, blank=True)
+    message = models.CharField(max_length=255)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ("-occurred_at", "-id")
+        indexes = [models.Index(fields=("request", "occurred_at"))]
+
+
 class EquipmentImportBatch(TimestampedModel):
     class Status(models.TextChoices):
         UPLOADED = "UPLOADED", "Uploaded"

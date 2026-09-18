@@ -17,5 +17,6 @@ def hub_home(request):
             "warehouse_url": settings.APP_URL,
             "requests_url": settings.REQUESTS_URL,
             "equipment_url": settings.EQUIPMENT_URL,
+            "equipment_requests_url": settings.EQUIPMENT_REQUESTS_URL,
         },
     )

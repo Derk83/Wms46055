@@ -4,6 +4,7 @@ from django.dispatch import receiver
 
 
 ROLE_PERMISSIONS = {
+    "Equipment Requester": {"access_equipment_requests"},
     "Equipment Manager": "*",
     "Equipment Coordinator": {
         "access_equipment_portal", "view_asset", "add_asset", "change_asset", "manage_equipment",

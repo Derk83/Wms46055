@@ -1,4 +1,5 @@
 from django import forms
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import (
@@ -6,6 +7,8 @@ from .models import (
     EquipmentCategory,
     EquipmentLocation,
     EquipmentParty,
+    EquipmentRequest,
+    EquipmentRequestLine,
     MaintenanceWorkOrder,
     Reservation,
 )
@@ -164,3 +167,96 @@ class ImportUploadForm(forms.Form):
         if workbook.size > 25 * 1024 * 1024:
             raise forms.ValidationError("Workbook exceeds 25 MB.")
         return workbook
+
+
+class EquipmentRequestForm(forms.ModelForm):
+    class Meta:
+        model = EquipmentRequest
+        fields = (
+            "needed_from", "needed_until", "destination", "purpose", "project",
+            "priority", "accepts_substitutes", "requester_notes",
+        )
+        widgets = {
+            "needed_from": forms.DateInput(attrs={"type": "date"}),
+            "needed_until": forms.DateInput(attrs={"type": "date"}),
+            "purpose": forms.Textarea(attrs={"rows": 3}),
+            "requester_notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        start, end = cleaned.get("needed_from"), cleaned.get("needed_until")
+        if start and end and end < start:
+            self.add_error("needed_until", "The end date cannot be before the start date.")
+        return cleaned
+
+
+class EquipmentRequestLineForm(forms.ModelForm):
+    class Meta:
+        model = EquipmentRequestLine
+        fields = ("category", "unlisted_equipment", "quantity", "notes")
+        widgets = {"notes": forms.TextInput()}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = EquipmentCategory.objects.filter(active=True)
+        self.fields["category"].required = False
+        self.fields["quantity"].required = False
+        if not self.instance.pk:
+            self.fields["quantity"].initial = None
+
+    def clean(self):
+        cleaned = super().clean()
+        category = cleaned.get("category")
+        unlisted = (cleaned.get("unlisted_equipment") or "").strip()
+        if not category and not unlisted:
+            if any(self.data.get(self.add_prefix(name)) for name in ("quantity", "notes")):
+                raise forms.ValidationError("Choose a category or describe unlisted equipment.")
+            return cleaned
+        cleaned["unlisted_equipment"] = unlisted
+        if not cleaned.get("quantity"):
+            cleaned["quantity"] = 1
+        return cleaned
+
+
+EquipmentRequestLineFormSet = forms.formset_factory(
+    EquipmentRequestLineForm, extra=3, min_num=1, validate_min=True, max_num=20
+)
+
+
+class EquipmentRequestAssignmentForm(forms.Form):
+    assigned_to = forms.ModelChoiceField(queryset=None, required=False)
+    manager_notes = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 3}))
+
+    def __init__(self, *args, **kwargs):
+        from django.contrib.auth import get_user_model
+        from django.contrib.auth.models import Permission
+        super().__init__(*args, **kwargs)
+        permission = Permission.objects.filter(
+            content_type__app_label="equipment", codename="manage_equipment_requests"
+        ).first()
+        users = get_user_model().objects.filter(is_active=True)
+        if permission:
+            users = users.filter(Q(is_superuser=True) | Q(user_permissions=permission) | Q(groups__permissions=permission)).distinct()
+        self.fields["assigned_to"].queryset = users.order_by("first_name", "last_name", "username")
+
+
+class EquipmentRequestStatusForm(forms.Form):
+    status = forms.ChoiceField(choices=EquipmentRequest.Status)
+    expected_status = forms.CharField(widget=forms.HiddenInput)
+    note = forms.CharField(required=False, widget=forms.Textarea(attrs={"rows": 2}))
+
+
+class EquipmentAllocationForm(forms.Form):
+    line = forms.ModelChoiceField(queryset=EquipmentRequestLine.objects.none())
+    assets = forms.ModelMultipleChoiceField(
+        queryset=Asset.objects.none(), widget=forms.SelectMultiple(attrs={"size": 10})
+    )
+
+    def __init__(self, *args, equipment_request=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if equipment_request:
+            self.fields["line"].queryset = equipment_request.lines.all()
+        self.fields["assets"].queryset = Asset.objects.filter(
+            status=Asset.Status.AVAILABLE, archived_at__isnull=True
+        ).select_related("category").order_by("category__name", "asset_tag")
