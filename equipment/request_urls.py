@@ -21,6 +21,7 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
     path("", request_views.dashboard, name="eqreq_dashboard"),
     path("new/", request_views.request_create, name="eqreq_create"),
+    path("api/equipment-options/", request_views.equipment_options, name="eqreq_equipment_options"),
     path("help/", request_views.help_page, name="eqreq_help"),
     path("account/", request_views.account, name="eqreq_account"),
     path("requests/<uuid:pk>/", request_views.request_detail, name="eqreq_detail"),

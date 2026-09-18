@@ -12,6 +12,7 @@ from .models import (
     EquipmentParty,
     EquipmentRequest,
     EquipmentRequestEvent,
+    EquipmentRequestLine,
     Reservation,
 )
 from .request_services import (
@@ -110,6 +111,95 @@ class EquipmentRequestTests(TestCase):
         self.assertEqual(client.get("/").status_code, 403)
         self.assertEqual(client.get("/requests/").status_code, 403)
         self.assertEqual(client.get("/assets/").status_code, 403)
+
+    def test_equipment_options_requires_requester_permission(self):
+        self.other.groups.clear()
+        self.other.user_permissions.clear()
+        client = Client(HTTP_HOST="eqreq.rplwms.com")
+        client.force_login(self.other)
+        self.assertEqual(
+            client.get("/api/equipment-options/", {"category": self.category.pk}).status_code,
+            403,
+        )
+
+    def test_request_form_filters_preferred_assets_and_marks_unavailable_choices(self):
+        other_category = EquipmentCategory.objects.create(name="Lifts", code="LIFT")
+        checked_out = Asset.objects.create(
+            asset_tag="RPL-EQ-RADIO02", category=self.category, name="Checked-out radio",
+            status=Asset.Status.CHECKED_OUT, condition=Asset.Condition.GOOD,
+            created_by=self.manager, updated_by=self.manager,
+        )
+        other_asset = Asset.objects.create(
+            asset_tag="RPL-EQ-LIFT01", category=other_category, name="Scissor lift",
+            status=Asset.Status.AVAILABLE, condition=Asset.Condition.GOOD,
+            created_by=self.manager, updated_by=self.manager,
+        )
+        client = Client(HTTP_HOST="eqreq.rplwms.com")
+        client.force_login(self.requester)
+
+        response = client.get("/new/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="lines-0-requested_asset"')
+        self.assertNotContains(response, "Checked-out radio")
+        self.assertNotContains(response, "Scissor lift")
+
+        response = client.get("/api/equipment-options/", {"category": self.category.pk})
+        self.assertEqual(response.status_code, 200)
+        assets = {asset["id"]: asset for asset in response.json()["assets"]}
+        self.assertEqual(set(assets), {str(self.asset.pk), str(checked_out.pk)})
+        self.assertTrue(assets[str(self.asset.pk)]["available"])
+        self.assertFalse(assets[str(checked_out.pk)]["available"])
+        self.assertIn("Checked-out radio", assets[str(checked_out.pk)]["label"])
+        self.assertIn("Checked out", assets[str(checked_out.pk)]["label"])
+        self.assertNotIn(str(other_asset.pk), assets)
+
+    def test_request_persists_available_preferred_asset(self):
+        equipment_request = self.make_request(lines=[{
+            "category": self.category, "requested_asset": self.asset, "quantity": 1,
+        }])
+        line = equipment_request.lines.select_related("requested_asset").get()
+        self.assertEqual(line.requested_asset, self.asset)
+
+    def test_request_rejects_unavailable_or_cross_category_preferred_asset(self):
+        checked_out = Asset.objects.create(
+            asset_tag="RPL-EQ-RADIO02", category=self.category, name="Checked-out radio",
+            status=Asset.Status.CHECKED_OUT, condition=Asset.Condition.GOOD,
+            created_by=self.manager, updated_by=self.manager,
+        )
+        other_category = EquipmentCategory.objects.create(name="Lifts", code="LIFT")
+        with self.assertRaisesMessage(ValidationError, "selected equipment is not available"):
+            self.make_request(lines=[{
+                "category": self.category, "requested_asset": checked_out, "quantity": 1,
+            }])
+        with self.assertRaisesMessage(ValidationError, "does not belong to the selected category"):
+            self.make_request(lines=[{
+                "category": other_category, "requested_asset": self.asset, "quantity": 1,
+            }])
+
+    def test_model_rejects_cross_category_preferred_asset(self):
+        equipment_request = self.make_request()
+        other_category = EquipmentCategory.objects.create(name="Lifts", code="LIFT")
+        line = EquipmentRequestLine(
+            request=equipment_request, category=other_category,
+            requested_asset=self.asset, quantity=1,
+        )
+        with self.assertRaisesMessage(ValidationError, "does not belong to this category"):
+            line.full_clean()
+
+    def test_edit_audit_preserves_old_preferred_asset(self):
+        equipment_request = self.make_request(lines=[{
+            "category": self.category, "requested_asset": self.asset, "quantity": 1,
+        }])
+        update_equipment_request(
+            actor=self.requester, request_id=equipment_request.pk, values=self.values(),
+            lines=[{"category": self.category, "quantity": 1}],
+        )
+        event = equipment_request.events.get(event_type=EquipmentRequestEvent.Type.UPDATED)
+        self.assertEqual(
+            event.metadata["lines"]["from"][0]["requested_asset_id"], str(self.asset.pk),
+        )
+        self.assertIsNone(event.metadata["lines"]["to"][0]["requested_asset_id"])
 
     def test_web_form_creates_unlisted_request(self):
         client = Client(HTTP_HOST="eqreq.rplwms.com")

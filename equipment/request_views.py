@@ -16,7 +16,7 @@ from .forms import (
     EquipmentRequestLineFormSet,
     EquipmentRequestStatusForm,
 )
-from .models import EquipmentRequest
+from .models import Asset, EquipmentCategory, EquipmentRequest
 from .request_services import (
     allowed_request_transitions,
     allocate_request_assets,
@@ -127,6 +127,25 @@ def account(request):
 
 
 @requester_access
+@never_cache
+@require_safe
+def equipment_options(request):
+    category_id = request.GET.get("category", "").strip()
+    if not category_id or not EquipmentCategory.objects.filter(pk=category_id, active=True).exists():
+        return JsonResponse({"assets": []})
+    assets = (
+        Asset.objects.filter(category_id=category_id, archived_at__isnull=True)
+        .exclude(status__in=(Asset.Status.LOST, Asset.Status.RETIRED, Asset.Status.RETURNED_VENDOR))
+        .order_by("name", "asset_tag")
+    )
+    return JsonResponse({"assets": [{
+        "id": str(asset.pk),
+        "label": f"{asset.name} — {asset.asset_tag} · {asset.get_status_display()}",
+        "available": asset.status == Asset.Status.AVAILABLE,
+    } for asset in assets]})
+
+
+@requester_access
 @require_http_methods(["GET", "POST"])
 def request_create(request):
     form = EquipmentRequestForm(request.POST or None)
@@ -154,6 +173,7 @@ def request_edit(request, pk):
         raise PermissionDenied
     initial = [{
         "category": line.category_id,
+        "requested_asset": line.requested_asset_id,
         "unlisted_equipment": line.unlisted_equipment,
         "quantity": line.quantity,
         "notes": line.notes,
@@ -182,7 +202,7 @@ def request_detail(request, pk):
     equipment_request = get_object_or_404(
         EquipmentRequest.objects.filter(requester=request.user)
         .select_related("assigned_to")
-        .prefetch_related("lines", "events"), pk=pk,
+        .prefetch_related("lines__requested_asset", "events"), pk=pk,
     )
     return render(request, "equipment/requests/detail.html", {
         "equipment_request": equipment_request,
@@ -226,7 +246,7 @@ def manager_queue(request):
 def manager_detail(request, pk):
     equipment_request = get_object_or_404(
         EquipmentRequest.objects.select_related("requester", "requestor_party", "assigned_to", "reservation")
-        .prefetch_related("lines__category", "lines__allocations__asset", "events__actor"), pk=pk,
+        .prefetch_related("lines__category", "lines__requested_asset", "lines__allocations__asset", "events__actor"), pk=pk,
     )
     allowed = allowed_request_transitions(equipment_request.status)
     return render(request, "equipment/request_detail.html", {

@@ -252,16 +252,62 @@ class EquipmentRequestForm(forms.ModelForm):
         return cleaned
 
 
+class EquipmentAssetSelect(forms.Select):
+    """Expose category and availability metadata without hiding unavailable assets."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        asset = getattr(value, "instance", None)
+        if asset is not None:
+            option["attrs"]["data-asset-category"] = str(asset.category_id)
+            option["attrs"]["data-asset-available"] = (
+                "true" if asset.status == Asset.Status.AVAILABLE and not asset.archived_at else "false"
+            )
+            if asset.status != Asset.Status.AVAILABLE or asset.archived_at:
+                option["attrs"]["disabled"] = True
+                option["attrs"]["class"] = "eqreq-unavailable-option"
+        return option
+
+
+class EquipmentAssetChoiceField(forms.ModelChoiceField):
+    widget = EquipmentAssetSelect
+
+    def label_from_instance(self, asset):
+        return f"{asset.name} — {asset.asset_tag} · {asset.get_status_display()}"
+
+
 class EquipmentRequestLineForm(forms.ModelForm):
+    requested_asset = EquipmentAssetChoiceField(
+        queryset=Asset.objects.none(),
+        required=False,
+        label="Preferred item",
+        help_text="Optional. Checked-out and unavailable items remain visible but cannot be selected.",
+    )
+
     class Meta:
         model = EquipmentRequestLine
-        fields = ("category", "unlisted_equipment", "quantity", "notes")
+        fields = ("category", "requested_asset", "unlisted_equipment", "quantity", "notes")
         widgets = {"notes": forms.TextInput()}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields["category"].queryset = EquipmentCategory.objects.filter(active=True)
         self.fields["category"].required = False
+        self.fields["requested_asset"].queryset = Asset.objects.none()
+        selected_asset_id = (
+            self.data.get(self.add_prefix("requested_asset")) if self.is_bound
+            else self.initial.get("requested_asset") or self.instance.requested_asset_id
+        )
+        if selected_asset_id:
+            selected_asset_id = getattr(selected_asset_id, "pk", selected_asset_id)
+            self.fields["requested_asset"].queryset = (
+                Asset.objects.filter(pk=selected_asset_id).select_related("category")
+            )
+        self.fields["requested_asset"].widget.attrs.update({
+            "data-equipment-choice": "",
+            "aria-describedby": f"{self.add_prefix('requested_asset')}-availability",
+        })
+        self.fields["category"].widget.attrs["data-equipment-category"] = ""
         self.fields["quantity"].required = False
         if not self.instance.pk:
             self.fields["quantity"].initial = None
@@ -269,19 +315,42 @@ class EquipmentRequestLineForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         category = cleaned.get("category")
+        requested_asset = cleaned.get("requested_asset")
         unlisted = (cleaned.get("unlisted_equipment") or "").strip()
         if not category and not unlisted:
-            if any(self.data.get(self.add_prefix(name)) for name in ("quantity", "notes")):
+            if requested_asset or any(self.data.get(self.add_prefix(name)) for name in ("quantity", "notes")):
                 raise forms.ValidationError("Choose a category or describe unlisted equipment.")
             return cleaned
+        if requested_asset:
+            if not category:
+                self.add_error("category", "Choose the category for the preferred item.")
+            elif requested_asset.category_id != category.pk:
+                self.add_error("requested_asset", "The selected equipment does not belong to this category.")
+            elif requested_asset.status != Asset.Status.AVAILABLE or requested_asset.archived_at:
+                self.add_error("requested_asset", "The selected equipment is not available.")
         cleaned["unlisted_equipment"] = unlisted
         if not cleaned.get("quantity"):
             cleaned["quantity"] = 1
         return cleaned
 
 
+class EquipmentRequestLineBaseFormSet(forms.BaseFormSet):
+    def clean(self):
+        super().clean()
+        selected = set()
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data") or form.cleaned_data.get("DELETE"):
+                continue
+            asset = form.cleaned_data.get("requested_asset")
+            if asset and asset.pk in selected:
+                form.add_error("requested_asset", "Select each preferred item only once per request.")
+            elif asset:
+                selected.add(asset.pk)
+
+
 EquipmentRequestLineFormSet = forms.formset_factory(
-    EquipmentRequestLineForm, extra=0, min_num=1, validate_min=True,
+    EquipmentRequestLineForm, formset=EquipmentRequestLineBaseFormSet,
+    extra=0, min_num=1, validate_min=True,
     max_num=20, validate_max=True, absolute_max=40, can_delete=True,
 )
 

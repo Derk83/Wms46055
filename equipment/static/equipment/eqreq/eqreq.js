@@ -31,6 +31,64 @@
     const total = formset.querySelector("[name='lines-TOTAL_FORMS']");
     const notice = formset.querySelector("[data-line-limit]");
     const add = formset.querySelector("[data-add-line]");
+    const setupEquipmentChoices = (row) => {
+      const category = row.querySelector("[data-equipment-category]");
+      const equipment = row.querySelector("[data-equipment-choice]");
+      const availability = row.querySelector("[data-equipment-availability]");
+      if (!category || !equipment) return;
+      let requestVersion = 0;
+      const setMessage = (message) => { if (availability) availability.textContent = message; };
+      const loadChoices = async (preserveSelection = true) => {
+        const version = ++requestVersion;
+        const categoryId = category.value;
+        const previous = preserveSelection ? equipment.value : "";
+        const placeholder = new Option(categoryId ? "No preferred item" : "Select a category first", "", true, !previous);
+        if (!categoryId) {
+          equipment.replaceChildren(placeholder);
+          equipment.disabled = true;
+          setMessage("Choose a category to view its equipment.");
+          return;
+        }
+        equipment.disabled = true;
+        if (!preserveSelection) equipment.replaceChildren(placeholder);
+        equipment.setAttribute("aria-busy", "true");
+        setMessage("Loading equipment…");
+        try {
+          const url = new URL(formset.dataset.equipmentOptionsUrl, window.location.origin);
+          url.searchParams.set("category", categoryId);
+          const response = await fetch(url, {headers: {Accept: "application/json"}, credentials: "same-origin"});
+          if (!response.ok) throw new Error("Equipment lookup failed");
+          const data = await response.json();
+          if (version !== requestVersion) return;
+          const options = data.assets.map((asset) => {
+            const option = new Option(asset.label, asset.id, false, asset.id === previous);
+            option.dataset.assetCategory = categoryId;
+            option.dataset.assetAvailable = asset.available ? "true" : "false";
+            option.disabled = !asset.available;
+            if (!asset.available) option.className = "eqreq-unavailable-option";
+            return option;
+          });
+          equipment.replaceChildren(placeholder, ...options);
+          if (options.some((option) => option.value === previous)) equipment.value = previous;
+          equipment.disabled = false;
+          const available = data.assets.filter((asset) => asset.available).length;
+          const unavailable = data.assets.length - available;
+          if (!data.assets.length) {
+            setMessage("No listed equipment in this category. You can still submit a category-only request.");
+          } else {
+            setMessage(`${available} available${unavailable ? ` · ${unavailable} unavailable (shown in grey)` : ""}.`);
+          }
+        } catch (error) {
+          if (version !== requestVersion) return;
+          equipment.disabled = false;
+          setMessage("Equipment could not be loaded. You can still submit a category-only request.");
+        } finally {
+          if (version === requestVersion) equipment.removeAttribute("aria-busy");
+        }
+      };
+      category.addEventListener("change", () => loadChoices(false));
+      loadChoices(true);
+    };
     const activeRows = () => Array.from(list.querySelectorAll("[data-line-row]")).filter((row) => !row.hidden);
     const renumber = () => {
       activeRows().forEach((row, index) => {
@@ -62,10 +120,12 @@
       wrapper.innerHTML = template.innerHTML.replaceAll("__prefix__", String(index)).replaceAll("__number__", String(activeRows().length + 1)).trim();
       const row = wrapper.firstElementChild;
       list.appendChild(row);
+      setupEquipmentChoices(row);
       total.value = String(index + 1);
       renumber();
       row.querySelector("select, input:not([type='hidden']), textarea")?.focus();
     });
+    list.querySelectorAll("[data-line-row]").forEach(setupEquipmentChoices);
     renumber();
   }
 

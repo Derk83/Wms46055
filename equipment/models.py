@@ -743,6 +743,9 @@ class EquipmentRequestLine(TimestampedModel):
     category = models.ForeignKey(
         EquipmentCategory, null=True, blank=True, on_delete=models.PROTECT, related_name="request_lines"
     )
+    requested_asset = models.ForeignKey(
+        Asset, null=True, blank=True, on_delete=models.PROTECT, related_name="preferred_request_lines"
+    )
     unlisted_equipment = models.CharField(max_length=220, blank=True)
     quantity = models.PositiveIntegerField(default=1)
     notes = models.TextField(blank=True)
@@ -755,7 +758,20 @@ class EquipmentRequestLine(TimestampedModel):
                 condition=Q(category__isnull=False) | ~Q(unlisted_equipment=""),
                 name="equipment_request_line_has_equipment",
             ),
+            models.UniqueConstraint(
+                fields=("request", "requested_asset"),
+                condition=Q(requested_asset__isnull=False),
+                name="equipment_request_preferred_asset_unique",
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.requested_asset_id:
+            if not self.category_id:
+                raise ValidationError({"category": "A category is required when a preferred item is selected."})
+            if self.requested_asset.category_id != self.category_id:
+                raise ValidationError({"requested_asset": "The selected equipment does not belong to this category."})
 
     @property
     def description(self):

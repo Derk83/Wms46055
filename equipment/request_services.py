@@ -101,6 +101,7 @@ def _changes(old_values, new_values):
 def _line_snapshot(lines):
     return [{
         "category_id": line.get("category").pk if line.get("category") else None,
+        "requested_asset_id": str(line.get("requested_asset").pk) if line.get("requested_asset") else None,
         "unlisted_equipment": _audit_value(line.get("unlisted_equipment", "")),
         "quantity": line.get("quantity", 1),
         "notes": _audit_value(line.get("notes", "")),
@@ -109,16 +110,33 @@ def _line_snapshot(lines):
 
 def _validated_lines(lines):
     output = []
+    selected_asset_ids = set()
     for line in lines:
         category = line.get("category")
+        requested_asset = line.get("requested_asset")
         unlisted = (line.get("unlisted_equipment") or "").strip()
         if not category and not unlisted:
             continue
         quantity = line.get("quantity") or 1
         if quantity < 1:
             raise ValidationError("Equipment quantities must be at least one.")
+        if requested_asset:
+            requested_asset = (
+                Asset.objects.select_for_update().select_related("category")
+                .filter(pk=requested_asset.pk, archived_at__isnull=True).first()
+            )
+            if not requested_asset:
+                raise ValidationError("The selected equipment is no longer available.")
+            if not category or requested_asset.category_id != category.pk:
+                raise ValidationError("The selected equipment does not belong to the selected category.")
+            if requested_asset.status != Asset.Status.AVAILABLE:
+                raise ValidationError("The selected equipment is not available.")
+            if requested_asset.pk in selected_asset_ids:
+                raise ValidationError("Select each preferred item only once per request.")
+            selected_asset_ids.add(requested_asset.pk)
         output.append({
             "category": category,
+            "requested_asset": requested_asset,
             "unlisted_equipment": unlisted,
             "quantity": quantity,
             "notes": (line.get("notes") or "").strip(),
@@ -222,10 +240,11 @@ def update_equipment_request(*, actor, request_id, values, lines):
     old_values = {field: getattr(equipment_request, field) for field in EDITABLE_FIELDS}
     old_lines = _line_snapshot([{
         "category": line.category,
+        "requested_asset": line.requested_asset,
         "unlisted_equipment": line.unlisted_equipment,
         "quantity": line.quantity,
         "notes": line.notes,
-    } for line in equipment_request.lines.select_related("category")])
+    } for line in equipment_request.lines.select_related("category", "requested_asset")])
     for field, value in values.items():
         if field in EDITABLE_FIELDS:
             setattr(equipment_request, field, value)
