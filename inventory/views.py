@@ -4,6 +4,7 @@ import json
 import openpyxl
 import re
 import weasyprint
+from collections import Counter
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -27,6 +28,7 @@ from django.contrib.auth.forms import UserCreationForm, UserChangeForm, Password
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, models, transaction
+from django.db.models.deletion import ProtectedError, RestrictedError
 from django.db.models import Count, Q, Sum
 from django import forms
 from django.forms import formset_factory, inlineformset_factory
@@ -3278,21 +3280,87 @@ def user_edit(request, pk):
     })
 
 
+def _user_retained_record_counts(user):
+    """Return audit-bearing relations that require preserving this identity."""
+    counts = Counter()
+    retaining_policies = {models.PROTECT, models.RESTRICT, models.SET_NULL}
+    for relation in user._meta.related_objects:
+        field = relation.field
+        related_model = relation.related_model
+        if related_model._meta.app_label not in {"inventory", "equipment"}:
+            continue
+        if field.remote_field.on_delete not in retaining_policies:
+            continue
+        related_count = related_model._base_manager.filter(
+            **{f"{field.name}_id": user.pk}
+        ).count()
+        if related_count:
+            counts[str(related_model._meta.verbose_name_plural)] += related_count
+    return tuple(sorted(counts.items()))
+
+
+def _remove_user_access(user):
+    """Disable an account while retaining its identity for protected audit records."""
+    user.is_active = False
+    user.is_staff = False
+    user.is_superuser = False
+    user.set_unusable_password()
+    user.save(update_fields=("is_active", "is_staff", "is_superuser", "password"))
+    user.groups.clear()
+    user.user_permissions.clear()
+    if _axes_reset_user is not None:
+        for identifier in {user.username, user.email}:
+            if identifier:
+                _axes_reset_user(username=identifier)
+
+
 @login_required
 @any_perm_required("inventory.manage_users")
 def user_delete(request, pk):
-    """Delete a user."""
+    """Delete an unused account or remove access while preserving audit history."""
     user = get_object_or_404(User, pk=pk)
     if user == request.user:
         messages.error(request, "You cannot delete your own account.")
         return redirect("user_management")
+    if user.is_superuser and not request.user.is_superuser:
+        messages.error(request, "Only a superuser can remove another superuser account.")
+        return redirect("user_management")
+
+    retained_records = _user_retained_record_counts(user)
     if request.method == "POST":
-        username = user.username
-        user.delete()
-        messages.success(request, f"User '{username}' deleted.")
+        with transaction.atomic():
+            actor = User.objects.get(pk=request.user.pk)
+            user = User.objects.select_for_update().get(pk=pk)
+            if not actor.is_active or not (
+                actor.is_superuser or actor.has_perm("inventory.manage_users")
+            ):
+                raise PermissionDenied
+            if user.is_superuser and not actor.is_superuser:
+                raise PermissionDenied
+            username = user.username
+            retained_records = _user_retained_record_counts(user)
+            if retained_records:
+                _remove_user_access(user)
+                removed_access = True
+            else:
+                try:
+                    user.delete()
+                    removed_access = False
+                except (ProtectedError, RestrictedError):
+                    _remove_user_access(user)
+                    removed_access = True
+        if removed_access:
+            messages.warning(
+                request,
+                f"Access removed for '{username}'. The inactive account identity was retained "
+                "because operational records reference it.",
+            )
+        else:
+            messages.success(request, f"User '{username}' deleted.")
         return redirect("user_management")
     return render(request, "inventory/user_confirm_delete.html", {
         "user_obj": user,
+        "protected_records": retained_records,
     })
 
 

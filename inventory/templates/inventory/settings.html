@@ -164,7 +164,7 @@
                                     <div class="settings-row-actions">
                                         <a href="{% url 'user_edit' u.pk %}" class="btn btn-warning btn-sm" aria-label="Edit {{ u.username }}">Edit</a>
                                         {% if u != request.user %}
-                                        <a href="{% url 'user_delete' u.pk %}" class="btn btn-danger btn-sm" aria-label="Delete {{ u.username }}">Delete</a>
+                                        <a href="{% url 'user_delete' u.pk %}" class="btn btn-danger btn-sm" aria-label="Remove {{ u.username }}">Remove</a>
                                         {% endif %}
                                         {% if u.username in locked_usernames and u != request.user and request.user.is_superuser %}
                                         <form method="post" action="{% url 'user_unlock' u.pk %}" class="settings-unlock-form">
