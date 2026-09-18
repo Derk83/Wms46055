@@ -425,7 +425,9 @@ def generate_due_maintenance(*, actor=None, as_of=None, plan_ids=None):
         _require(actor, "equipment.manage_maintenance")
     serialize_equipment_mutation()
     plans = MaintenancePlan.objects.select_for_update().select_related("asset", "asset__category", "preferred_vendor", "updated_by").filter(
-        active=True, auto_create_work_order=True
+        active=True, auto_create_work_order=True, asset__archived_at__isnull=True,
+    ).exclude(
+        asset__status__in=(Asset.Status.RETIRED, Asset.Status.LOST, Asset.Status.RETURNED_VENDOR)
     )
     if plan_ids is not None:
         plans = plans.filter(pk__in=plan_ids)
@@ -545,37 +547,46 @@ def complete_maintenance(
     _require(actor, "equipment.manage_maintenance")
     if cost is not None:
         _require(actor, "equipment.view_asset_costs")
+    completed_on = completed_on or timezone.localdate()
+    if completed_on > timezone.localdate():
+        raise ValidationError("Completion date cannot be in the future.")
     serialize_equipment_mutation()
     order = MaintenanceWorkOrder.objects.select_for_update().select_related("asset").get(pk=work_order_id)
     asset = Asset.objects.select_for_update().get(pk=order.asset_id)
     if order.status in {MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED}:
         raise ValidationError("This work order is already closed.")
+    plan = None
+    if order.plan_id:
+        plan = MaintenancePlan.objects.select_for_update().get(pk=order.plan_id)
+        if order.asset_id != plan.asset_id:
+            raise ValidationError("The work order asset does not match its maintenance plan.")
+        if order.occurrence_key != _occurrence_key(plan):
+            raise ValidationError("This work order is not the plan's current maintenance occurrence.")
     order.status = MaintenanceWorkOrder.Status.COMPLETED
     order.completed_at = timezone.now()
     order.completed_by = actor
     order.work_performed = work_performed.strip()
     order.cost = cost
     if meter_at_completion is not None:
-        if not order.plan_id or not order.plan.meter_type:
+        if not plan or not plan.meter_type:
             raise ValidationError("A completion meter is only valid for a metered maintenance plan.")
         meter_value = Decimal(meter_at_completion)
-        latest = VehicleMeterReading.objects.filter(asset=asset, meter_type=order.plan.meter_type).order_by("-recorded_at", "-id").first()
+        latest = VehicleMeterReading.objects.filter(asset=asset, meter_type=plan.meter_type).order_by("-recorded_at", "-id").first()
         if latest and meter_value < latest.value:
             raise ValidationError(f"Reading cannot decrease below the current {latest.value}.")
         reading = VehicleMeterReading(
             asset=asset,
-            meter_type=order.plan.meter_type,
+            meter_type=plan.meter_type,
             value=meter_value,
-            reading_on=completed_on or timezone.localdate(),
+            reading_on=completed_on,
             recorded_by=actor,
         )
-        reading.full_clean()
         reading.save()
         order.meter_at_completion = meter_value
+    order.full_clean()
     order.save(update_fields=("status", "completed_at", "completed_by", "work_performed", "cost", "meter_at_completion", "updated_at"))
-    if order.plan_id:
-        plan = MaintenancePlan.objects.select_for_update().get(pk=order.plan_id)
-        plan.last_service_date = completed_on or timezone.localdate()
+    if plan:
+        plan.last_service_date = completed_on
         if plan.meter_type:
             if order.meter_at_completion is not None:
                 plan.last_service_meter = order.meter_at_completion
@@ -585,18 +596,15 @@ def complete_maintenance(
                     plan.last_service_meter = latest.value
         plan.calculate_next_due()
         plan.updated_by = actor
-        plan.full_clean()
         plan.save(update_fields=("last_service_date", "last_service_meter", "next_due_date", "next_due_meter", "updated_by", "updated_at"))
     other_open_orders = MaintenanceWorkOrder.objects.filter(asset=asset).exclude(pk=order.pk).exclude(
         status__in=(MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED)
     )
     has_custody = ActiveCustody.objects.filter(asset=asset).exists()
-    if has_custody:
-        asset.status = Asset.Status.CHECKED_OUT
-    elif asset.status == Asset.Status.RESERVED:
-        pass
-    else:
-        asset.status = Asset.Status.MAINTENANCE if other_open_orders.exists() else Asset.Status.AVAILABLE
+    # Only release a lifecycle state owned by maintenance. Unrelated,
+    # reserved, out-of-service, and terminal states must be preserved.
+    if asset.status == Asset.Status.MAINTENANCE and not has_custody and not other_open_orders.exists():
+        asset.status = Asset.Status.AVAILABLE
     asset.condition = condition
     asset.updated_by = actor
     asset.save(update_fields=("status", "condition", "updated_by", "updated_at"))

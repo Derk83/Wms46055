@@ -4,9 +4,13 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.db import IntegrityError, transaction
 from django.test import Client, TestCase
 from django.utils import timezone
 
+from .forms import MaintenanceCompleteForm, MaintenancePlanForm
 from .models import (
     ActiveCustody, Asset, EquipmentCategory, EquipmentLocation, EquipmentParty,
     MaintenancePlan, MaintenanceWorkOrder, VehicleMeterReading,
@@ -170,3 +174,171 @@ class VehicleMaintenanceTests(TestCase):
         maintenance = client.get("/maintenance/?tab=plans")
         self.assertContains(maintenance, "Recurring plans")
         self.assertContains(maintenance, "Oil and filter service")
+
+    def test_vehicle_classification_uses_controlled_codes_not_substrings(self):
+        misleading = EquipmentCategory.objects.create(name="Vehicle accessories", code="NONVEHICLE")
+        asset = Asset.objects.create(
+            asset_tag="ACC-001", category=misleading, name="Accessory", created_by=self.manager, updated_by=self.manager,
+        )
+        self.assertFalse(asset.is_vehicle)
+        self.assertNotIn(asset, MaintenancePlanForm().fields["asset"].queryset)
+        normalized = EquipmentCategory.objects.create(name="Fleet", code=" fleet-vehicle ")
+        vehicle = Asset.objects.create(
+            asset_tag="TRUCK-002", category=normalized, name="Truck", created_by=self.manager, updated_by=self.manager,
+        )
+        self.assertTrue(vehicle.is_vehicle)
+        self.assertIn(vehicle, MaintenancePlanForm().fields["asset"].queryset)
+
+    def test_direct_meter_create_enforces_nondecreasing_and_bulk_create_is_blocked(self):
+        VehicleMeterReading.objects.create(
+            asset=self.vehicle, meter_type=VehicleMeterReading.MeterType.ODOMETER,
+            value=Decimal("100"), reading_on=date(2026, 1, 1), recorded_by=self.manager,
+        )
+        with self.assertRaisesMessage(ValidationError, "cannot decrease"):
+            VehicleMeterReading.objects.create(
+                asset=self.vehicle, meter_type=VehicleMeterReading.MeterType.ODOMETER,
+                value=Decimal("99"), reading_on=date(2026, 1, 2), recorded_by=self.manager,
+            )
+        with self.assertRaises(TypeError):
+            VehicleMeterReading.objects.bulk_create([VehicleMeterReading(
+                asset=self.vehicle, meter_type=VehicleMeterReading.MeterType.ODOMETER,
+                value=Decimal("101"), recorded_by=self.manager,
+            )])
+
+    def test_plan_asset_is_immutable_and_schedule_edits_wait_for_closed_work(self):
+        plan = self.plan(last_service_date=date(2025, 1, 1))
+        order = generate_due_maintenance(actor=self.manager, as_of=date(2026, 1, 1), plan_ids=[plan.pk])[0]
+        with self.assertRaisesMessage(ValidationError, "Schedule-defining"):
+            save_maintenance_plan(actor=self.manager, plan_id=plan.pk, meter_interval=Decimal("6000"))
+        second = Asset.objects.create(
+            asset_tag="TRUCK-003", category=self.vehicle_category, name="Truck 3",
+            created_by=self.manager, updated_by=self.manager,
+        )
+        with self.assertRaisesMessage(ValidationError, "cannot be changed"):
+            save_maintenance_plan(actor=self.manager, plan_id=plan.pk, asset=second)
+        transition_maintenance(actor=self.manager, work_order_id=order.pk, status=MaintenanceWorkOrder.Status.CANCELLED)
+        updated = save_maintenance_plan(actor=self.manager, plan_id=plan.pk, meter_interval=Decimal("6000"))
+        self.assertEqual(updated.meter_interval, Decimal("6000"))
+        with self.assertRaisesMessage(ValidationError, "cannot be changed"):
+            save_maintenance_plan(actor=self.manager, plan_id=plan.pk, asset=second)
+
+    def test_completion_rejects_mismatched_asset_and_stale_occurrence(self):
+        plan = self.plan(last_service_date=date(2025, 1, 1))
+        order = generate_due_maintenance(actor=self.manager, as_of=date(2026, 1, 1), plan_ids=[plan.pk])[0]
+        MaintenanceWorkOrder.objects.filter(pk=order.pk).update(occurrence_key="stale")
+        with self.assertRaisesMessage(ValidationError, "current maintenance occurrence"):
+            complete_maintenance(actor=self.manager, work_order_id=order.pk, work_performed="No")
+        order.refresh_from_db()
+        self.assertEqual(order.status, MaintenanceWorkOrder.Status.OPEN)
+        MaintenanceWorkOrder.objects.filter(pk=order.pk).update(occurrence_key=f"maintenance-plan:{plan.pk}:date:{plan.next_due_date}:meter:{plan.next_due_meter}")
+        MaintenanceWorkOrder.objects.filter(pk=order.pk).update(asset=self.other)
+        with self.assertRaisesMessage(ValidationError, "does not match"):
+            complete_maintenance(actor=self.manager, work_order_id=order.pk, work_performed="No")
+        plan.refresh_from_db()
+        self.assertEqual(plan.last_service_date, date(2025, 1, 1))
+
+    def test_completion_preserves_nonmaintenance_states_and_requires_safe_release(self):
+        protected = (
+            Asset.Status.RETIRED, Asset.Status.LOST, Asset.Status.OUT_OF_SERVICE,
+            Asset.Status.RETURNED_VENDOR, Asset.Status.RESERVED, Asset.Status.CHECKED_OUT,
+            Asset.Status.IN_TRANSIT, Asset.Status.UNKNOWN,
+        )
+        for index, status in enumerate(protected):
+            self.vehicle.status = status
+            self.vehicle.save(update_fields=("status", "updated_at"))
+            order = MaintenanceWorkOrder.objects.create(
+                work_order_number=f"EQ-WO-P{index}", asset=self.vehicle, title="State test", opened_by=self.manager,
+            )
+            complete_maintenance(actor=self.manager, work_order_id=order.pk, work_performed="Done")
+            self.vehicle.refresh_from_db()
+            self.assertEqual(self.vehicle.status, status)
+
+        self.vehicle.status = Asset.Status.MAINTENANCE
+        self.vehicle.save(update_fields=("status", "updated_at"))
+        first = MaintenanceWorkOrder.objects.create(
+            work_order_number="EQ-WO-SAFE1", asset=self.vehicle, title="First", opened_by=self.manager,
+        )
+        MaintenanceWorkOrder.objects.create(
+            work_order_number="EQ-WO-SAFE2", asset=self.vehicle, title="Other", opened_by=self.manager,
+        )
+        complete_maintenance(actor=self.manager, work_order_id=first.pk, work_performed="Done")
+        self.vehicle.refresh_from_db()
+        self.assertEqual(self.vehicle.status, Asset.Status.MAINTENANCE)
+
+        safe_asset = Asset.objects.create(
+            asset_tag="TRUCK-SAFE", category=self.vehicle_category, name="Safe release",
+            status=Asset.Status.MAINTENANCE, created_by=self.manager, updated_by=self.manager,
+        )
+        safe_order = MaintenanceWorkOrder.objects.create(
+            work_order_number="EQ-WO-SAFE3", asset=safe_asset, title="Only work", opened_by=self.manager,
+        )
+        complete_maintenance(actor=self.manager, work_order_id=safe_order.pk, work_performed="Done")
+        safe_asset.refresh_from_db()
+        self.assertEqual(safe_asset.status, Asset.Status.AVAILABLE)
+
+    def test_generation_skips_archived_and_terminal_assets(self):
+        statuses = (Asset.Status.RETIRED, Asset.Status.LOST, Asset.Status.RETURNED_VENDOR)
+        for index, status in enumerate(statuses):
+            vehicle = Asset.objects.create(
+                asset_tag=f"TERM-{index}", category=self.vehicle_category, name="Terminal",
+                status=Asset.Status.AVAILABLE, created_by=self.manager, updated_by=self.manager,
+            )
+            plan = save_maintenance_plan(
+                actor=self.manager, asset=vehicle, service_title="Service", calendar_interval_months=1,
+                last_service_date=date(2025, 1, 1),
+            )
+            vehicle.status = status
+            vehicle.save(update_fields=("status", "updated_at"))
+            self.assertEqual(generate_due_maintenance(actor=self.manager, as_of=date(2026, 1, 1), plan_ids=[plan.pk]), [])
+        archived = Asset.objects.create(
+            asset_tag="ARCH-1", category=self.vehicle_category, name="Archived",
+            created_by=self.manager, updated_by=self.manager,
+        )
+        plan = save_maintenance_plan(
+            actor=self.manager, asset=archived, service_title="Service", calendar_interval_months=1,
+            last_service_date=date(2025, 1, 1),
+        )
+        archived.archived_at = timezone.now()
+        archived.archived_by = self.manager
+        archived.save(update_fields=("archived_at", "archived_by", "updated_at"))
+        self.assertEqual(generate_due_maintenance(actor=self.manager, as_of=date(2026, 1, 1), plan_ids=[plan.pk]), [])
+
+    def test_future_completion_date_rejected_by_form_and_service(self):
+        future = timezone.localdate() + timedelta(days=1)
+        form = MaintenanceCompleteForm(data={
+            "work_performed": "Done", "condition": Asset.Condition.GOOD,
+            "completed_on": future.isoformat(),
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("future", form.errors["completed_on"][0])
+        order = MaintenanceWorkOrder.objects.create(
+            work_order_number="EQ-WO-FUTURE", asset=self.vehicle, title="Future", opened_by=self.manager,
+        )
+        with self.assertRaisesMessage(ValidationError, "cannot be in the future"):
+            complete_maintenance(
+                actor=self.manager, work_order_id=order.pk, work_performed="Done", completed_on=future,
+            )
+        order.refresh_from_db()
+        self.assertEqual(order.status, MaintenanceWorkOrder.Status.OPEN)
+
+    def test_nonnegative_validators_and_database_checks(self):
+        plan = self.plan()
+        for field_name in ("lead_meter", "last_service_meter", "next_due_meter"):
+            field = MaintenancePlan._meta.get_field(field_name)
+            with self.assertRaises(ValidationError):
+                field.clean(Decimal("-1"), plan)
+        order = MaintenanceWorkOrder(
+            work_order_number="EQ-WO-NEG", asset=self.vehicle, title="Negative", opened_by=self.manager,
+        )
+        for field_name in ("meter_due", "meter_at_completion"):
+            with self.assertRaises(ValidationError):
+                MaintenanceWorkOrder._meta.get_field(field_name).clean(Decimal("-1"), order)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            MaintenanceWorkOrder.objects.create(
+                work_order_number="EQ-WO-DBNEG", asset=self.vehicle, title="Negative",
+                meter_due=Decimal("-1"), opened_by=self.manager,
+            )
+
+    def test_invalid_as_of_command_is_a_failure(self):
+        with self.assertRaisesMessage(CommandError, "YYYY-MM-DD"):
+            call_command("process_vehicle_maintenance", as_of="not-a-date")

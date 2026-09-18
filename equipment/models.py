@@ -3,7 +3,8 @@ import uuid
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.core.validators import MinValueValidator
+from django.db import models, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -21,6 +22,12 @@ class ImmutableQuerySet(models.QuerySet):
         raise TypeError("Equipment history is append-only.")
 
     def delete(self):
+        raise TypeError("Equipment history is append-only.")
+
+    def bulk_create(self, *args, **kwargs):
+        raise TypeError("Equipment history must be created through validated instance saves.")
+
+    def bulk_update(self, *args, **kwargs):
         raise TypeError("Equipment history is append-only.")
 
 
@@ -115,6 +122,8 @@ class EquipmentVendor(TimestampedModel):
 
 
 class Asset(TimestampedModel):
+    VEHICLE_CATEGORY_CODES = frozenset({"VEHICLE", "VEHICLES", "FLEET_VEHICLE", "FLEET_VEHICLES"})
+
     class Ownership(models.TextChoices):
         OWNED = "OWNED", "Owned"
         RENTED = "RENTED", "Rented"
@@ -227,10 +236,9 @@ class Asset(TimestampedModel):
 
     @property
     def is_vehicle(self):
-        """Vehicles remain generic assets; category identity enables vehicle workflows."""
-        code = (self.category.code or "").upper()
-        name = (self.category.name or "").upper()
-        return "VEHICLE" in code or "VEHICLE" in name
+        """Classify vehicles by controlled category codes, never display-name substrings."""
+        code = "_".join((self.category.code or "").strip().upper().replace("-", " ").split())
+        return code in self.VEHICLE_CATEGORY_CODES
 
     def __str__(self):
         return f"{self.asset_tag} · {self.name}"
@@ -394,7 +402,7 @@ class VehicleMeterReading(ImmutableModel):
 
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="meter_readings")
     meter_type = models.CharField(max_length=16, choices=MeterType)
-    value = models.DecimalField(max_digits=14, decimal_places=1)
+    value = models.DecimalField(max_digits=14, decimal_places=1, validators=[MinValueValidator(0)])
     reading_on = models.DateField(default=timezone.localdate)
     recorded_at = models.DateTimeField(auto_now_add=True)
     recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="vehicle_meter_readings")
@@ -405,11 +413,46 @@ class VehicleMeterReading(ImmutableModel):
         constraints = [models.CheckConstraint(condition=Q(value__gte=0), name="equipment_meter_reading_nonnegative")]
 
     def clean(self):
+        errors = {}
         if self.asset_id and not self.asset.is_vehicle:
-            raise ValidationError({"asset": "Meter readings can only be recorded for vehicle assets."})
+            errors["asset"] = "Meter readings can only be recorded for vehicle assets."
+        if self.reading_on and self.reading_on > timezone.localdate():
+            errors["reading_on"] = "Meter reading date cannot be in the future."
+        if self.asset_id and self.meter_type and self.value is not None and self._state.adding:
+            latest = type(self).objects.filter(asset_id=self.asset_id, meter_type=self.meter_type).order_by(
+                "-recorded_at", "-id"
+            ).first()
+            if latest and self.value < latest.value:
+                errors["value"] = f"Reading cannot decrease below the current {latest.value}."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        # Serialize on the owning asset so objects.create() cannot bypass the
+        # nondecreasing ledger invariant.
+        with transaction.atomic():
+            if self.asset_id:
+                Asset.objects.select_for_update().get(pk=self.asset_id)
+            self.full_clean()
+            return super().save(*args, **kwargs)
+
+
+class MaintenancePlanQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise TypeError("Maintenance plans must be updated through validated instance saves.")
+
+    def bulk_update(self, *args, **kwargs):
+        raise TypeError("Maintenance plans must be updated through validated instance saves.")
 
 
 class MaintenancePlan(TimestampedModel):
+    objects = MaintenancePlanQuerySet.as_manager()
+
+    SCHEDULE_FIELDS = frozenset({
+        "asset_id", "calendar_interval_months", "meter_type", "meter_interval",
+        "lead_days", "lead_meter", "last_service_date", "last_service_meter",
+        "next_due_date", "next_due_meter",
+    })
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="maintenance_plans")
     service_title = models.CharField(max_length=220)
     description = models.TextField(blank=True)
@@ -417,7 +460,7 @@ class MaintenancePlan(TimestampedModel):
     meter_type = models.CharField(max_length=16, choices=VehicleMeterReading.MeterType, blank=True)
     meter_interval = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
     lead_days = models.PositiveSmallIntegerField(default=14)
-    lead_meter = models.DecimalField(max_digits=14, decimal_places=1, default=0)
+    lead_meter = models.DecimalField(max_digits=14, decimal_places=1, default=0, validators=[MinValueValidator(0)])
     preferred_vendor = models.ForeignKey(EquipmentVendor, null=True, blank=True, on_delete=models.PROTECT, related_name="maintenance_plans")
     default_priority = models.CharField(max_length=12, choices=(
         ("LOW", "Low"), ("NORMAL", "Normal"), ("HIGH", "High"), ("CRITICAL", "Critical")
@@ -425,9 +468,9 @@ class MaintenancePlan(TimestampedModel):
     active = models.BooleanField(default=True)
     auto_create_work_order = models.BooleanField(default=True)
     last_service_date = models.DateField(null=True, blank=True)
-    last_service_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
+    last_service_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     next_due_date = models.DateField(null=True, blank=True, editable=False)
-    next_due_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, editable=False)
+    next_due_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, editable=False, validators=[MinValueValidator(0)])
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_maintenance_plans")
     updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="updated_maintenance_plans")
 
@@ -440,6 +483,9 @@ class MaintenancePlan(TimestampedModel):
             ),
             models.CheckConstraint(condition=Q(calendar_interval_months__isnull=True) | Q(calendar_interval_months__gt=0), name="equipment_plan_calendar_positive"),
             models.CheckConstraint(condition=Q(meter_interval__isnull=True) | Q(meter_interval__gt=0), name="equipment_plan_meter_positive"),
+            models.CheckConstraint(condition=Q(lead_meter__gte=0), name="equipment_plan_lead_meter_nonnegative"),
+            models.CheckConstraint(condition=Q(last_service_meter__isnull=True) | Q(last_service_meter__gte=0), name="equipment_plan_last_meter_nonnegative"),
+            models.CheckConstraint(condition=Q(next_due_meter__isnull=True) | Q(next_due_meter__gte=0), name="equipment_plan_next_meter_nonnegative"),
         ]
 
     def clean(self):
@@ -454,8 +500,28 @@ class MaintenancePlan(TimestampedModel):
             errors["meter_interval"] = "Provide a meter interval or clear the meter type."
         if self.last_service_meter is not None and not self.meter_type:
             errors["last_service_meter"] = "A service meter requires a meter trigger."
+        if self.pk:
+            original = type(self).objects.filter(pk=self.pk).values(*self.SCHEDULE_FIELDS).first()
+            if original:
+                if self.asset_id != original["asset_id"]:
+                    errors["asset"] = "A maintenance plan's asset cannot be changed after creation."
+                changed = {field for field in self.SCHEDULE_FIELDS if getattr(self, field) != original[field]}
+                open_statuses = {
+                    MaintenanceWorkOrder.Status.OPEN,
+                    MaintenanceWorkOrder.Status.SCHEDULED,
+                    MaintenanceWorkOrder.Status.IN_PROGRESS,
+                    MaintenanceWorkOrder.Status.WAITING_PARTS,
+                }
+                if changed and self.work_orders.filter(status__in=open_statuses).exists():
+                    message = "Schedule-defining fields cannot change while the plan has an open work order."
+                    for field in changed:
+                        errors.setdefault("asset" if field == "asset_id" else field, message)
         if errors:
             raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def calculate_next_due(self):
         self.next_due_date = (
@@ -498,8 +564,8 @@ class MaintenanceWorkOrder(TimestampedModel):
     out_of_service = models.BooleanField(default=True)
     scheduled_for = models.DateTimeField(null=True, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
-    meter_due = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
-    meter_at_completion = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
+    meter_due = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
+    meter_at_completion = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     completed_at = models.DateTimeField(null=True, blank=True)
     work_performed = models.TextField(blank=True)
     vendor = models.ForeignKey(EquipmentVendor, null=True, blank=True, on_delete=models.PROTECT)
@@ -511,6 +577,10 @@ class MaintenanceWorkOrder(TimestampedModel):
 
     class Meta:
         ordering = ("-created_at",)
+        constraints = [
+            models.CheckConstraint(condition=Q(meter_due__isnull=True) | Q(meter_due__gte=0), name="equipment_work_meter_due_nonnegative"),
+            models.CheckConstraint(condition=Q(meter_at_completion__isnull=True) | Q(meter_at_completion__gte=0), name="equipment_work_meter_done_nonnegative"),
+        ]
 
     def __str__(self):
         return self.work_order_number

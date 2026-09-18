@@ -160,6 +160,12 @@ class MaintenanceCompleteForm(forms.Form):
         if not include_costs:
             self.fields.pop("cost")
 
+    def clean_completed_on(self):
+        value = self.cleaned_data.get("completed_on")
+        if value and value > timezone.localdate():
+            raise forms.ValidationError("Completion date cannot be in the future.")
+        return value
+
 
 class VehicleMeterReadingForm(forms.Form):
     meter_type = forms.ChoiceField(choices=VehicleMeterReading.MeterType)
@@ -188,10 +194,9 @@ class MaintenancePlanForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["asset"].queryset = Asset.objects.filter(
-            Q(category__code__icontains="vehicle") | Q(category__name__icontains="vehicle"),
-            archived_at__isnull=True,
-        ).select_related("category")
+        candidates = Asset.objects.filter(archived_at__isnull=True).select_related("category")
+        vehicle_ids = [asset.pk for asset in candidates if asset.is_vehicle]
+        self.fields["asset"].queryset = candidates.filter(pk__in=vehicle_ids)
 
 
 class MaintenanceStatusForm(forms.Form):

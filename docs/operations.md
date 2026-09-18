@@ -115,6 +115,12 @@ cd /home/hermes/projects/ppe_inventory
 ssh pve01 'cd /home/hermes/projects/ppe_inventory && git pull'
 
 # 2. Apply any new migrations
+# Equipment migrations 0005 and 0006 rebuild maintenance tables on SQLite
+# (verified with sqlmigrate). Before their first production application, stop
+# writers, take a fresh online backup, run `manage.py sqlmigrate equipment 0005`
+# and `0006` for review, and allow enough free disk for a temporary table copy.
+# 0006 preflights legacy meter values and aborts before adding constraints if
+# any negative values need repair.
 ssh pve01 'cd /home/hermes/projects/ppe_inventory && \
   sudo -u hermes /home/hermes/projects/ppe-pick-ticket-venv/bin/python \
     manage.py migrate --noinput'
