@@ -1,3 +1,4 @@
+import calendar
 import uuid
 
 from django.conf import settings
@@ -224,6 +225,13 @@ class Asset(TimestampedModel):
         identifier = self.identifiers.filter(kind=AssetIdentifier.Kind.SERIAL, is_primary=True).first()
         return identifier.value if identifier else ""
 
+    @property
+    def is_vehicle(self):
+        """Vehicles remain generic assets; category identity enables vehicle workflows."""
+        code = (self.category.code or "").upper()
+        name = (self.category.name or "").upper()
+        return "VEHICLE" in code or "VEHICLE" in name
+
     def __str__(self):
         return f"{self.asset_tag} · {self.name}"
 
@@ -371,6 +379,99 @@ class ReturnRecord(ImmutableModel):
     created_at = models.DateTimeField(auto_now_add=True)
 
 
+def add_calendar_months(value, months):
+    """Advance a date by calendar months, clamping to the target month's final day."""
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    return value.replace(year=year, month=month, day=min(value.day, calendar.monthrange(year, month)[1]))
+
+
+class VehicleMeterReading(ImmutableModel):
+    class MeterType(models.TextChoices):
+        ODOMETER = "ODOMETER", "Odometer"
+        ENGINE_HOURS = "ENGINE_HOURS", "Engine hours"
+
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="meter_readings")
+    meter_type = models.CharField(max_length=16, choices=MeterType)
+    value = models.DecimalField(max_digits=14, decimal_places=1)
+    reading_on = models.DateField(default=timezone.localdate)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="vehicle_meter_readings")
+
+    class Meta:
+        ordering = ("-reading_on", "-recorded_at", "-id")
+        indexes = [models.Index(fields=("asset", "meter_type", "-reading_on"))]
+        constraints = [models.CheckConstraint(condition=Q(value__gte=0), name="equipment_meter_reading_nonnegative")]
+
+    def clean(self):
+        if self.asset_id and not self.asset.is_vehicle:
+            raise ValidationError({"asset": "Meter readings can only be recorded for vehicle assets."})
+
+
+class MaintenancePlan(TimestampedModel):
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="maintenance_plans")
+    service_title = models.CharField(max_length=220)
+    description = models.TextField(blank=True)
+    calendar_interval_months = models.PositiveSmallIntegerField(null=True, blank=True)
+    meter_type = models.CharField(max_length=16, choices=VehicleMeterReading.MeterType, blank=True)
+    meter_interval = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
+    lead_days = models.PositiveSmallIntegerField(default=14)
+    lead_meter = models.DecimalField(max_digits=14, decimal_places=1, default=0)
+    preferred_vendor = models.ForeignKey(EquipmentVendor, null=True, blank=True, on_delete=models.PROTECT, related_name="maintenance_plans")
+    default_priority = models.CharField(max_length=12, choices=(
+        ("LOW", "Low"), ("NORMAL", "Normal"), ("HIGH", "High"), ("CRITICAL", "Critical")
+    ), default="NORMAL")
+    active = models.BooleanField(default=True)
+    auto_create_work_order = models.BooleanField(default=True)
+    last_service_date = models.DateField(null=True, blank=True)
+    last_service_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
+    next_due_date = models.DateField(null=True, blank=True, editable=False)
+    next_due_meter = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True, editable=False)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="created_maintenance_plans")
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="updated_maintenance_plans")
+
+    class Meta:
+        ordering = ("asset__asset_tag", "service_title")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(calendar_interval_months__isnull=False) | Q(meter_interval__isnull=False),
+                name="equipment_plan_has_trigger",
+            ),
+            models.CheckConstraint(condition=Q(calendar_interval_months__isnull=True) | Q(calendar_interval_months__gt=0), name="equipment_plan_calendar_positive"),
+            models.CheckConstraint(condition=Q(meter_interval__isnull=True) | Q(meter_interval__gt=0), name="equipment_plan_meter_positive"),
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.asset_id and not self.asset.is_vehicle:
+            errors["asset"] = "Recurring maintenance plans can only be assigned to vehicle assets."
+        if not self.calendar_interval_months and self.meter_interval is None:
+            errors["calendar_interval_months"] = "Provide a calendar interval and/or meter interval."
+        if self.meter_interval is not None and not self.meter_type:
+            errors["meter_type"] = "Choose a meter type for a meter interval."
+        if self.meter_interval is None and self.meter_type:
+            errors["meter_interval"] = "Provide a meter interval or clear the meter type."
+        if self.last_service_meter is not None and not self.meter_type:
+            errors["last_service_meter"] = "A service meter requires a meter trigger."
+        if errors:
+            raise ValidationError(errors)
+
+    def calculate_next_due(self):
+        self.next_due_date = (
+            add_calendar_months(self.last_service_date, self.calendar_interval_months)
+            if self.calendar_interval_months and self.last_service_date else None
+        )
+        self.next_due_meter = (
+            self.last_service_meter + self.meter_interval
+            if self.meter_interval is not None and self.last_service_meter is not None else None
+        )
+
+    @property
+    def is_paused(self):
+        return not self.active
+
+
 class MaintenanceWorkOrder(TimestampedModel):
     class Status(models.TextChoices):
         OPEN = "OPEN", "Open"
@@ -388,6 +489,8 @@ class MaintenanceWorkOrder(TimestampedModel):
 
     work_order_number = models.CharField(max_length=24, unique=True)
     asset = models.ForeignKey(Asset, on_delete=models.PROTECT, related_name="maintenance_work_orders")
+    plan = models.ForeignKey(MaintenancePlan, null=True, blank=True, on_delete=models.PROTECT, related_name="work_orders")
+    occurrence_key = models.CharField(max_length=180, null=True, blank=True, unique=True)
     title = models.CharField(max_length=220)
     problem_description = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=Status, default=Status.OPEN)
@@ -395,6 +498,8 @@ class MaintenanceWorkOrder(TimestampedModel):
     out_of_service = models.BooleanField(default=True)
     scheduled_for = models.DateTimeField(null=True, blank=True)
     due_at = models.DateTimeField(null=True, blank=True)
+    meter_due = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
+    meter_at_completion = models.DecimalField(max_digits=14, decimal_places=1, null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     work_performed = models.TextField(blank=True)
     vendor = models.ForeignKey(EquipmentVendor, null=True, blank=True, on_delete=models.PROTECT)

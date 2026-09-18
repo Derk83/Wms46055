@@ -26,9 +26,12 @@ from .forms import (
     ImportUploadForm,
     MaintenanceCompleteForm,
     MaintenanceForm,
+    MaintenancePlanForm,
+    MaintenanceStatusForm,
     ReservationForm,
     ReservationStatusForm,
     ReturnForm,
+    VehicleMeterReadingForm,
 )
 from .importer import import_workbook
 from .models import (
@@ -39,6 +42,7 @@ from .models import (
     Checkout,
     EquipmentCategory,
     EquipmentImportBatch,
+    MaintenancePlan,
     MaintenanceWorkOrder,
     RentalAsset,
     RentalContract,
@@ -49,9 +53,14 @@ from .services import (
     complete_maintenance,
     create_asset,
     create_reservation,
+    generate_due_maintenance,
     open_maintenance,
+    record_meter_reading,
     return_asset,
+    save_maintenance_plan,
+    set_maintenance_plan_active,
     set_reservation_status,
+    transition_maintenance,
     update_asset,
 )
 
@@ -514,7 +523,10 @@ def asset_detail(request, pk):
     events = asset.events.select_related("actor")[:100] if can_view_audit else AssetEvent.objects.none()
     active_custody = ActiveCustody.objects.filter(asset=asset).select_related("borrower", "checkout_item__checkout").first() if request.user.has_perm("equipment.view_checkout") else None
     reservations = asset.reservations.select_related("requestor").order_by("-starts_at")[:10] if request.user.has_perm("equipment.view_reservation") else Reservation.objects.none()
-    maintenance = asset.maintenance_work_orders.select_related("vendor").order_by("-created_at")[:10] if request.user.has_perm("equipment.view_maintenanceworkorder") else MaintenanceWorkOrder.objects.none()
+    maintenance = asset.maintenance_work_orders.select_related("vendor", "plan").order_by("-created_at")[:10] if request.user.has_perm("equipment.view_maintenanceworkorder") else MaintenanceWorkOrder.objects.none()
+    can_manage_maintenance = request.user.has_perm("equipment.manage_maintenance")
+    maintenance_plans = asset.maintenance_plans.select_related("preferred_vendor") if can_manage_maintenance and asset.is_vehicle else MaintenancePlan.objects.none()
+    meter_readings = asset.meter_readings.select_related("recorded_by")[:20] if can_manage_maintenance and asset.is_vehicle else []
     return render(
         request,
         "equipment/asset_detail.html",
@@ -524,6 +536,9 @@ def asset_detail(request, pk):
             "active_custody": active_custody,
             "reservations": reservations,
             "maintenance": maintenance,
+            "maintenance_plans": maintenance_plans,
+            "meter_readings": meter_readings,
+            "can_manage_maintenance": can_manage_maintenance,
             "show_costs": request.user.has_perm("equipment.view_asset_costs"),
             "can_view_audit": can_view_audit,
         },
@@ -712,8 +727,28 @@ def maintenance_list(request):
             else:
                 messages.success(request, f"Work order {order.work_order_number} opened.")
                 return redirect("equipment_maintenance")
-    orders = MaintenanceWorkOrder.objects.select_related("asset", "vendor").order_by("status", "due_at", "-created_at")[:150]
-    return render(request, "equipment/maintenance.html", {"form": form, "orders": orders})
+    tab = request.GET.get("tab", "work-orders")
+    query = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    orders = MaintenanceWorkOrder.objects.select_related("asset", "vendor", "plan")
+    if query:
+        orders = orders.filter(Q(work_order_number__icontains=query) | Q(asset__asset_tag__icontains=query) | Q(title__icontains=query))
+    if status in MaintenanceWorkOrder.Status.values:
+        orders = orders.filter(status=status)
+    if tab == "schedule":
+        orders = orders.filter(scheduled_for__isnull=False).order_by("scheduled_for")
+    elif tab == "history":
+        orders = orders.filter(status__in=(MaintenanceWorkOrder.Status.COMPLETED, MaintenanceWorkOrder.Status.CANCELLED)).order_by("-completed_at", "-updated_at")
+    else:
+        orders = orders.order_by("status", "due_at", "-created_at")
+    can_manage = request.user.has_perm("equipment.manage_maintenance")
+    if tab in {"plans", "schedule", "history"} and not can_manage:
+        raise PermissionDenied
+    plans = MaintenancePlan.objects.select_related("asset", "preferred_vendor").order_by("active", "next_due_date", "asset__asset_tag") if can_manage else MaintenancePlan.objects.none()
+    return render(request, "equipment/maintenance.html", {
+        "form": form, "orders": orders[:150], "plans": plans, "tab": tab, "query": query,
+        "filter_status": status, "statuses": MaintenanceWorkOrder.Status, "can_manage": can_manage,
+    })
 
 
 @equipment_access
@@ -731,6 +766,8 @@ def maintenance_complete(request, pk):
                 work_performed=form.cleaned_data["work_performed"],
                 cost=form.cleaned_data.get("cost"),
                 condition=form.cleaned_data["condition"],
+                meter_at_completion=form.cleaned_data.get("meter_at_completion"),
+                completed_on=form.cleaned_data.get("completed_on"),
             )
         except (ValidationError, PermissionDenied) as error:
             _service_error(request, error)
@@ -738,6 +775,94 @@ def maintenance_complete(request, pk):
             messages.success(request, f"Work order {order.work_order_number} completed.")
             return redirect("equipment_maintenance")
     return render(request, "equipment/form.html", {"form": form, "title": f"Complete {order.work_order_number}", "submit_label": "Complete work order", "order": order})
+
+
+@equipment_access
+@equipment_permission("manage_maintenance")
+@require_http_methods(["GET", "POST"])
+def maintenance_plan_edit(request, pk=None):
+    plan = get_object_or_404(MaintenancePlan.objects.select_related("asset"), pk=pk) if pk else None
+    initial = {"asset": request.GET.get("asset")} if not plan and request.GET.get("asset") else None
+    form = MaintenancePlanForm(request.POST or None, instance=plan, initial=initial)
+    if request.method == "POST" and form.is_valid():
+        try:
+            saved = save_maintenance_plan(actor=request.user, plan_id=plan.pk if plan else None, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as error:
+            _service_error(request, error)
+        else:
+            messages.success(request, f"Recurring plan for {saved.asset.asset_tag} saved.")
+            return redirect(f'{reverse("equipment_maintenance")}?tab=plans')
+    return render(request, "equipment/form.html", {
+        "form": form,
+        "title": f"Edit {plan.service_title}" if plan else "Add recurring maintenance plan",
+        "submit_label": "Save plan",
+        "form_intro": "The first calendar or meter trigger to enter its lead window creates one work order.",
+    })
+
+
+@equipment_access
+@equipment_permission("manage_maintenance")
+@require_POST
+def maintenance_plan_toggle(request, pk):
+    plan = get_object_or_404(MaintenancePlan, pk=pk)
+    try:
+        set_maintenance_plan_active(actor=request.user, plan_id=pk, active=not plan.active)
+    except (ValidationError, PermissionDenied) as error:
+        _service_error(request, error)
+    else:
+        messages.success(request, "Maintenance plan resumed." if not plan.active else "Maintenance plan paused.")
+    return redirect(f'{reverse("equipment_maintenance")}?tab=plans')
+
+
+@equipment_access
+@equipment_permission("manage_maintenance")
+@require_POST
+def maintenance_generate(request):
+    generated = generate_due_maintenance(actor=request.user)
+    messages.success(request, f"Generated {len(generated)} due work order(s).")
+    return redirect("equipment_maintenance")
+
+
+@equipment_access
+@equipment_permission("manage_maintenance")
+@require_POST
+def maintenance_status(request, pk):
+    form = MaintenanceStatusForm(request.POST)
+    if form.is_valid():
+        try:
+            transition_maintenance(
+                actor=request.user, work_order_id=pk, status=form.cleaned_data["status"],
+                scheduled_for=form.cleaned_data.get("scheduled_for"),
+            )
+        except (ValidationError, PermissionDenied) as error:
+            _service_error(request, error)
+        else:
+            messages.success(request, "Work order status updated.")
+    else:
+        messages.error(request, "Choose a valid status and schedule date.")
+    return redirect("equipment_maintenance")
+
+
+@equipment_access
+@equipment_permission("manage_maintenance")
+@require_http_methods(["GET", "POST"])
+def asset_meter_reading(request, pk):
+    asset = get_object_or_404(Asset.objects.select_related("category"), pk=pk)
+    if not asset.is_vehicle:
+        raise Http404
+    form = VehicleMeterReadingForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            record_meter_reading(actor=request.user, asset_id=asset.pk, **form.cleaned_data)
+        except (ValidationError, PermissionDenied) as error:
+            _service_error(request, error)
+        else:
+            messages.success(request, "Vehicle meter reading recorded permanently.")
+            return redirect("equipment_asset_detail", pk=asset.pk)
+    return render(request, "equipment/form.html", {
+        "form": form, "title": f"Record meter · {asset.asset_tag}", "submit_label": "Record reading",
+        "form_intro": "Meter history is immutable and readings cannot decrease.", "asset": asset,
+    })
 
 
 @equipment_access

@@ -1,0 +1,10 @@
+[Unit]
+Description=Process recurring vehicle maintenance daily
+
+[Timer]
+OnCalendar=*-*-* 04:45:00 America/Chicago
+Persistent=true
+Unit=ppe-vehicle-maintenance.service
+
+[Install]
+WantedBy=timers.target

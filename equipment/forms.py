@@ -9,8 +9,10 @@ from .models import (
     EquipmentParty,
     EquipmentRequest,
     EquipmentRequestLine,
+    MaintenancePlan,
     MaintenanceWorkOrder,
     Reservation,
+    VehicleMeterReading,
 )
 
 
@@ -149,12 +151,58 @@ class MaintenanceForm(forms.Form):
 class MaintenanceCompleteForm(forms.Form):
     work_performed = forms.CharField(widget=forms.Textarea(attrs={"rows": 4}))
     condition = forms.ChoiceField(choices=Asset.Condition, initial=Asset.Condition.GOOD)
+    meter_at_completion = forms.DecimalField(required=False, min_value=0, decimal_places=1, max_digits=14)
+    completed_on = forms.DateField(required=False, widget=forms.DateInput(attrs={"type": "date"}))
     cost = forms.DecimalField(required=False, min_value=0, decimal_places=2, max_digits=12)
 
     def __init__(self, *args, include_costs=True, **kwargs):
         super().__init__(*args, **kwargs)
         if not include_costs:
             self.fields.pop("cost")
+
+
+class VehicleMeterReadingForm(forms.Form):
+    meter_type = forms.ChoiceField(choices=VehicleMeterReading.MeterType)
+    value = forms.DecimalField(min_value=0, decimal_places=1, max_digits=14)
+    reading_on = forms.DateField(initial=timezone.localdate, widget=forms.DateInput(attrs={"type": "date"}))
+
+    def clean_reading_on(self):
+        value = self.cleaned_data["reading_on"]
+        if value > timezone.localdate():
+            raise forms.ValidationError("Meter reading date cannot be in the future.")
+        return value
+
+
+class MaintenancePlanForm(forms.ModelForm):
+    class Meta:
+        model = MaintenancePlan
+        fields = (
+            "asset", "service_title", "description", "calendar_interval_months", "meter_type",
+            "meter_interval", "lead_days", "lead_meter", "preferred_vendor", "default_priority",
+            "active", "auto_create_work_order", "last_service_date", "last_service_meter",
+        )
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3}),
+            "last_service_date": forms.DateInput(attrs={"type": "date"}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["asset"].queryset = Asset.objects.filter(
+            Q(category__code__icontains="vehicle") | Q(category__name__icontains="vehicle"),
+            archived_at__isnull=True,
+        ).select_related("category")
+
+
+class MaintenanceStatusForm(forms.Form):
+    status = forms.ChoiceField(choices=(
+        (MaintenanceWorkOrder.Status.OPEN, "Open"),
+        (MaintenanceWorkOrder.Status.SCHEDULED, "Scheduled"),
+        (MaintenanceWorkOrder.Status.IN_PROGRESS, "In progress"),
+        (MaintenanceWorkOrder.Status.WAITING_PARTS, "Waiting for parts"),
+        (MaintenanceWorkOrder.Status.CANCELLED, "Cancelled"),
+    ))
+    scheduled_for = forms.DateTimeField(required=False, widget=DateTimeLocalInput(format="%Y-%m-%dT%H:%M"))
 
 
 class ImportUploadForm(forms.Form):

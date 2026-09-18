@@ -13,11 +13,13 @@ from .models import (
     EquipmentLocation,
     EquipmentParty,
     EquipmentVendor,
+    MaintenancePlan,
     MaintenanceWorkOrder,
     RentalAsset,
     RentalContract,
     Reservation,
     ReturnRecord,
+    VehicleMeterReading,
 )
 
 
@@ -77,7 +79,7 @@ class CheckoutAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(AssetEvent, CheckoutItem, ReturnRecord)
+@admin.register(AssetEvent, CheckoutItem, ReturnRecord, VehicleMeterReading)
 class ImmutableHistoryAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
@@ -114,6 +116,11 @@ class WorkflowReadOnlyAdmin(admin.ModelAdmin):
 @admin.register(Reservation)
 class ReservationAdmin(WorkflowReadOnlyAdmin):
     list_display = ("reservation_number", "requestor", "starts_at", "ends_at", "status")
+
+
+@admin.register(MaintenancePlan)
+class MaintenancePlanAdmin(WorkflowReadOnlyAdmin):
+    list_display = ("asset", "service_title", "active", "next_due_date", "next_due_meter")
 
 
 @admin.register(MaintenanceWorkOrder)

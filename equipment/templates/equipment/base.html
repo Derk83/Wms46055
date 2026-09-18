@@ -31,7 +31,7 @@
       {% if perms.equipment.view_maintenanceworkorder or perms.equipment.view_rentalcontract %}
       <section class="equipment-nav-group">
         <span class="equipment-nav-label">Operations</span>
-        {% if perms.equipment.view_maintenanceworkorder %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_maintenance' %} is-active{% endif %}" href="{% url 'equipment_maintenance' %}"{% if request.resolver_match.url_name == 'equipment_maintenance' %} aria-current="page"{% endif %}>Maintenance</a>{% endif %}
+        {% if perms.equipment.view_maintenanceworkorder %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_maintenance' or request.resolver_match.url_name == 'equipment_maintenance_plan_create' or request.resolver_match.url_name == 'equipment_maintenance_plan_edit' %} is-active{% endif %}" href="{% url 'equipment_maintenance' %}"{% if request.resolver_match.url_name == 'equipment_maintenance' %} aria-current="page"{% endif %}>Maintenance</a>{% endif %}
         {% if perms.equipment.view_rentalcontract %}<a class="equipment-nav-link{% if request.resolver_match.url_name == 'equipment_rentals' %} is-active{% endif %}" href="{% url 'equipment_rentals' %}"{% if request.resolver_match.url_name == 'equipment_rentals' %} aria-current="page"{% endif %}>Rentals & obligations</a>{% endif %}
       </section>
       {% endif %}
