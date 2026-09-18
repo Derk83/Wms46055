@@ -19,6 +19,7 @@ class HubHostTests(SimpleTestCase):
             [
                 "https://bbx.rplwms.com",
                 "https://requests.rplwms.com",
+                "https://eqreq.rplwms.com",
                 "https://equipment.rplwms.com",
             ],
         )
