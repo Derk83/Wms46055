@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
   <div class="filter-heading">
     <div>
       <h2>Find Inventory</h2>
-      <p class="helptext">Filter by part, FB part, PO, category, stock status, scanner text, or location.</p>
+      <p class="helptext">Filter by part, PO, category, stock status, scanner text, or location.</p>
     </div>
     {% if filters_active %}<a href="{% url 'inventory_list' %}" class="btn btn-secondary btn-sm">Clear Filters</a>{% endif %}
   </div>
@@ -101,7 +101,6 @@ document.addEventListener('DOMContentLoaded', function() {
     <a class="filter-chip{% if stock == 'low' %} is-active{% endif %}" href="?stock=low">Low Stock</a>
     <a class="filter-chip{% if stock == 'zero' %} is-active{% endif %}" href="?stock=zero">Zero Stock</a>
     <a class="filter-chip{% if data_quality == 'missing_location' %} is-active{% endif %}" href="?data_quality=missing_location">Missing Location</a>
-    <a class="filter-chip{% if data_quality == 'missing_fb' %} is-active{% endif %}" href="?data_quality=missing_fb">Missing FB Part #</a>
     <a class="filter-chip{% if data_quality == 'missing_model' %} is-active{% endif %}" href="?data_quality=missing_model">Missing Model</a>
     <a class="filter-chip{% if sort == 'updated' and not filters_active %} is-active{% endif %}" href="?sort=updated">Recently Updated</a>
   </div>
@@ -113,10 +112,6 @@ document.addEventListener('DOMContentLoaded', function() {
     <div class="form-group">
       <label for="part_number">Part #</label>
       <input id="part_number" name="part_number" value="{{ part_number }}" placeholder="Exact or partial part #">
-    </div>
-    <div class="form-group">
-      <label for="fb_part_number">FB Part #</label>
-      <input id="fb_part_number" name="fb_part_number" value="{{ fb_part_number }}" placeholder="Exact or partial FB part #">
     </div>
     <div class="form-group">
       <label for="po_number">PO #</label>
@@ -145,8 +140,6 @@ document.addEventListener('DOMContentLoaded', function() {
       <select id="sort" name="sort">
         <option value="part" {% if sort == "part" %}selected{% endif %}>Part # A-Z</option>
         <option value="part_desc" {% if sort == "part_desc" %}selected{% endif %}>Part # Z-A</option>
-        <option value="fb_part" {% if sort == "fb_part" %}selected{% endif %}>FB Part # A-Z</option>
-        <option value="fb_part_desc" {% if sort == "fb_part_desc" %}selected{% endif %}>FB Part # Z-A</option>
         <option value="name" {% if sort == "name" %}selected{% endif %}>Name</option>
         <option value="category" {% if sort == "category" %}selected{% endif %}>Category</option>
         <option value="qty" {% if sort == "qty" %}selected{% endif %}>Qty Low-High</option>
@@ -201,7 +194,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="checkbox" id="selectAll" aria-label="Select all">
           </th>{% endif %}
           <th class="part-col">Part #</th>
-          <th class="fb-col" data-column="fb">FB Part #</th>
           <th data-column="name">Name</th>
           <th class="qty-col" data-column="qty">Qty</th>
           <th class="bin-col" data-column="bin">Bin</th>
@@ -215,7 +207,6 @@ document.addEventListener('DOMContentLoaded', function() {
             <input type="checkbox" value="{{ item.id }}" class="item-checkbox" form="bulkForm" aria-label="Select {{ item.part_number }}">
           </td>{% endif %}
           <td data-label="Part #"><a class="item-detail-link part-link" href="{% url 'item_detail' item.pk %}">{{ item.part_number }}</a></td>
-          <td data-label="FB Part #" class="fb-part-cell" data-column="fb">{{ item.fb_part_number|default:"—" }}</td>
           <td data-label="Name" data-column="name">{{ item.description|default:item.name }}</td>
           <td data-label="Qty" data-column="qty" class="qty-cell {% if item.quantity_on_hand < 0 %}negative{% elif item.is_low_stock %}low{% endif %}">{{ item.quantity_on_hand }}</td>
           <td data-label="Bin" data-column="bin" class="bin-cell">{% if item.storage_location %}<strong>{{ item.storage_location }}</strong>{% else %}—{% endif %}</td>
@@ -233,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}7{% else %}6{% endif %}" class="empty-row">{% if filters_active %}<strong>No inventory matches these filters.</strong><br><a href="{% url 'inventory_list' %}">Clear filters and show all inventory</a>{% else %}<strong>No inventory items yet.</strong>{% if not request.is_request_portal and perms.inventory.add_inventoryitem %}<br><a href="{% url 'inventory_new' %}">Add the first inventory item</a>{% endif %}{% endif %}</td></tr>
+        <tr><td colspan="{% if not request.is_request_portal and perms.inventory.bulk_adjust_inventory %}6{% else %}5{% endif %}" class="empty-row">{% if filters_active %}<strong>No inventory matches these filters.</strong><br><a href="{% url 'inventory_list' %}">Clear filters and show all inventory</a>{% else %}<strong>No inventory items yet.</strong>{% if not request.is_request_portal and perms.inventory.add_inventoryitem %}<br><a href="{% url 'inventory_new' %}">Add the first inventory item</a>{% endif %}{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -253,7 +244,6 @@ document.addEventListener('DOMContentLoaded', function() {
           </div>
         </div>
         <div class="mobile-meta-grid">
-          <div data-label="FB Part #" data-column="fb"><span>FB Part #</span><strong>{{ item.fb_part_number|default:"—" }}</strong></div>
           <div data-label="Bin" data-column="bin"><span>Bin</span><strong>{{ item.storage_location|default:"—" }}</strong></div>
           <div data-label="Category"><span>Category</span><strong>{{ item.category|default:"—" }}</strong></div>
         </div>
@@ -295,7 +285,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .inventory-table tbody tr[data-item-url], .mobile-inventory-card[data-item-url] { cursor: pointer; }
 .select-col { width: 36px; }
 .part-col { width: 12%; }
-.fb-part-col { width: 12%; }
 .qty-col { width: 58px; text-align: center; }
 .bin-col { width: 80px; }
 .actions-col { width: 290px; }

@@ -40,7 +40,7 @@
       <tbody>
         {% for line in material_request.lines.all %}
         <tr class="responsive-record-card">
-          <td data-label="Part">{{ line.item.part_number }}{% if line.item.fb_part_number %}<br><small>FB {{ line.item.fb_part_number }}</small>{% endif %}</td>
+          <td data-label="Part">{{ line.item.part_number }}</td>
           <td data-label="Description">{{ line.item.name }}</td>
           <td data-label="Requested">{{ line.quantity }}</td>
           <td data-label="Allocated now">{{ line.allocated_quantity }}</td>

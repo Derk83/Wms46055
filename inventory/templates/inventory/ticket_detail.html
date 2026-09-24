@@ -43,12 +43,11 @@
     <input type="hidden" name="status" value="PICKED">
     <div class="table-responsive">
       <table class="pick-quantity-table pick-ticket-lines">
-        <thead><tr><th>Part #</th><th>FB Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Quantity picked</th><th>Variance reason</th></tr></thead>
+        <thead><tr><th>Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Quantity picked</th><th>Variance reason</th></tr></thead>
         <tbody>
         {% for line in ticket.lines.all %}
           <tr>
             <td data-label="Part #"><strong>{{ line.item.part_number }}</strong></td>
-            <td data-label="FB Part #">{{ line.item.fb_part_number|default:"—" }}</td>
             <td data-label="Bin location">{{ line.item.storage_location|default:"Unassigned" }}</td>
             <td data-label="Item">{{ line.item.name }}</td>
             <td data-label="Requested">{{ line.quantity }}</td>
@@ -83,8 +82,8 @@
   {% else %}
   <div class="table-responsive">
     <table class="pick-quantity-table pick-ticket-lines">
-      <thead><tr><th>Part #</th><th>FB Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Picked</th><th>Variance reason</th></tr></thead>
-      <tbody>{% for line in ticket.lines.all %}<tr><td data-label="Part #"><strong>{{ line.item.part_number }}</strong></td><td data-label="FB Part #">{{ line.item.fb_part_number|default:"—" }}</td><td data-label="Bin location">{{ line.item.storage_location|default:"Unassigned" }}</td><td data-label="Item">{{ line.item.name }}</td><td data-label="Requested">{{ line.quantity }}</td><td data-label="Picked">{{ line.picked_quantity|default_if_none:"Not recorded" }}</td><td data-label="Variance reason">{{ line.pick_variance_reason|default:"—" }}</td></tr>{% endfor %}</tbody>
+      <thead><tr><th>Part #</th><th>Bin location</th><th>Item</th><th>Requested</th><th>Picked</th><th>Variance reason</th></tr></thead>
+      <tbody>{% for line in ticket.lines.all %}<tr><td data-label="Part #"><strong>{{ line.item.part_number }}</strong></td><td data-label="Bin location">{{ line.item.storage_location|default:"Unassigned" }}</td><td data-label="Item">{{ line.item.name }}</td><td data-label="Requested">{{ line.quantity }}</td><td data-label="Picked">{{ line.picked_quantity|default_if_none:"Not recorded" }}</td><td data-label="Variance reason">{{ line.pick_variance_reason|default:"—" }}</td></tr>{% endfor %}</tbody>
     </table>
   </div>
   {% endif %}

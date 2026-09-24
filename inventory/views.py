@@ -795,7 +795,6 @@ def global_search(request):
     if query:
         inventory_results = InventoryItem.objects.filter(
             Q(part_number__icontains=query)
-            | Q(fb_part_number__icontains=query)
             | Q(model_number__icontains=query)
             | Q(name__icontains=query)
             | Q(description__icontains=query)
@@ -837,7 +836,6 @@ def global_search(request):
                 | Q(line__material_request__request_number__icontains=query)
                 | Q(line__material_request__requestor_name__icontains=query)
                 | Q(line__item__part_number__icontains=query)
-                | Q(line__item__fb_part_number__icontains=query)
                 | Q(line__item__name__icontains=query)
             ).distinct().order_by("-created_at")[:10]
 
@@ -855,7 +853,6 @@ def global_search(request):
 def inventory_list(request):
     query = request.GET.get("q", "").strip()
     part_number = request.GET.get("part_number", "").strip()
-    fb_part_number = request.GET.get("fb_part_number", "").strip()
     po_number = request.GET.get("po_number", "").strip()
     category = request.GET.get("category", "").strip()
     stock = request.GET.get("stock", "").strip()
@@ -871,7 +868,6 @@ def inventory_list(request):
     if query:
         items = items.filter(
             Q(part_number__icontains=query)
-            | Q(fb_part_number__icontains=query)
             | Q(model_number__icontains=query)
             | Q(name__icontains=query)
             | Q(description__icontains=query)
@@ -885,8 +881,6 @@ def inventory_list(request):
         )
     if part_number:
         items = items.filter(part_number__icontains=part_number)
-    if fb_part_number:
-        items = items.filter(fb_part_number__icontains=fb_part_number)
     if po_number:
         items = items.filter(
             receivingline__ticket__po_number__icontains=po_number
@@ -904,14 +898,11 @@ def inventory_list(request):
         items = items.filter(quantity_on_hand__lt=0)
 
     quality_labels = {
-        "missing_fb": "Missing FB Part #",
         "missing_model": "Missing model number",
         "missing_location": "Missing location",
         "inactive": "Inactive items",
     }
-    if data_quality == "missing_fb":
-        items = items.filter(Q(fb_part_number="") | Q(fb_part_number__isnull=True))
-    elif data_quality == "missing_model":
+    if data_quality == "missing_model":
         items = items.filter(Q(model_number="") | Q(model_number__isnull=True))
     elif data_quality == "missing_location":
         items = items.filter(building_room="", bin_location="")
@@ -923,8 +914,6 @@ def inventory_list(request):
     sort_map = {
         "part": "part_number",
         "part_desc": "-part_number",
-        "fb_part": "fb_part_number",
-        "fb_part_desc": "-fb_part_number",
         "name": "description",
         "category": "category",
         "qty": "quantity_on_hand",
@@ -949,8 +938,6 @@ def inventory_list(request):
         active_filters.append(f'Search: "{query}"')
     if part_number:
         active_filters.append(f"Part #: {part_number}")
-    if fb_part_number:
-        active_filters.append(f"FB Part #: {fb_part_number}")
     if po_number:
         active_filters.append(f"PO #: {po_number}")
     if category:
@@ -969,7 +956,6 @@ def inventory_list(request):
             "items": items,
             "query": query,
             "part_number": part_number,
-            "fb_part_number": fb_part_number,
             "po_number": po_number,
             "category": category,
             "category_choices": CategoryChoices.choices,
@@ -982,7 +968,6 @@ def inventory_list(request):
             "page_obj": page_obj,
             "querystring": query_params.urlencode(),
             "column_choices": [
-                ("fb", "FB Part #"),
                 ("name", "Name"),
                 ("qty", "Quantity"),
                 ("bin", "Bin"),
@@ -995,7 +980,6 @@ def inventory_list(request):
 
 INVENTORY_IMPORT_HEADER_ALIASES = {
     "part_number": {"part #", "part", "part number", "part no", "part no.", "sku"},
-    "fb_part_number": {"fb part #", "fb part", "fb part number", "fb part no", "fb part no."},
     "model_number": {"model", "model #", "model number", "model no", "model no."},
     "name": {"name", "item", "item name", "product", "description/name"},
     "shipper": {"shipper", "carrier", "freight", "shipping company"},
@@ -1128,7 +1112,6 @@ def process_inventory_import(spreadsheet_file, user):
             continue
 
         defaults = {
-            "fb_part_number": str(cell("fb_part_number", "")).strip(),
             "model_number": str(cell("model_number", "")).strip(),
             "name": name,
             "shipper": str(cell("shipper", "")).strip(),
@@ -1828,7 +1811,6 @@ def item_search_api(request):
 
     items = InventoryItem.objects.filter(active=True).filter(
         Q(part_number__icontains=q)
-        | Q(fb_part_number__icontains=q)
         | Q(model_number__icontains=q)
         | Q(name__icontains=q)
     ).order_by("part_number")[:50]
@@ -1837,7 +1819,6 @@ def item_search_api(request):
         {
             "id": item.pk,
             "part_number": item.part_number,
-            "fb_part_number": item.fb_part_number,
             "name": item.name,
             "quantity_on_hand": item.quantity_on_hand,
             "storage_location": item.storage_location,
@@ -1909,11 +1890,10 @@ def export_inventory_csv(request):
     response = HttpResponse(content_type="text/csv")
     response["Content-Disposition"] = 'attachment; filename="warehouse_inventory_export.csv"'
     writer = csv.writer(response)
-    writer.writerow(["Part #", "FB Part #", "Model #", "Name", "Shipper", "Category", "Qty", "BLDG/Room #", "Rack", "Section", "Bin Location", "Barcode", "QR"])
+    writer.writerow(["Part #", "Model #", "Name", "Shipper", "Category", "Qty", "BLDG/Room #", "Rack", "Section", "Bin Location", "Barcode", "QR"])
     for item in InventoryItem.objects.all():
         writer.writerow([
             item.part_number,
-            item.fb_part_number,
             item.model_number,
             item.description or item.name,
             item.shipper,
@@ -2475,7 +2455,7 @@ def export_inventory_xlsx(request):
     ws.title = "Inventory"
 
     headers = [
-        "Part #", "FB Part #", "Model #", "Name", "Shipper", "Category", "Description", "Qty", "Unit",
+        "Part #", "Model #", "Name", "Shipper", "Category", "Description", "Qty", "Unit",
         "BLDG/Room #", "Rack", "Section", "Bin Location", "Low Stock Threshold",
         "Barcode Value", "QR Code Value", "Active", "Updated At",
     ]
@@ -2490,7 +2470,6 @@ def export_inventory_xlsx(request):
     for item in items:
         ws.append([
             item.part_number,
-            item.fb_part_number,
             item.model_number,
             item.description or item.name,
             item.shipper,
@@ -2516,9 +2495,9 @@ def export_inventory_xlsx(request):
     ws.add_data_validation(rack_validation)
     ws.add_data_validation(section_validation)
     ws.add_data_validation(bin_validation)
-    rack_validation.add("K2:K1000")
-    section_validation.add("L2:L1000")
-    bin_validation.add("M2:M1000")
+    rack_validation.add("J2:J1000")
+    section_validation.add("K2:K1000")
+    bin_validation.add("L2:L1000")
 
     for col in ws.columns:
         max_length = 0

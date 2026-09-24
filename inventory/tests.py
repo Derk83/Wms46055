@@ -666,7 +666,6 @@ class TicketImprovementTests(TestCase):
         self.assertContains(response, 'class="inventory-table condensed compact-inventory"')
         self.assertContains(response, 'class="mobile-inventory-list"')
         self.assertContains(response, 'class="mobile-inventory-card"')
-        self.assertContains(response, 'data-label="FB Part #"')
         self.assertNotContains(response, 'data-label="Shipper"')
         self.assertNotContains(response, 'data-label="Building/Room"')
         self.assertNotContains(response, '<th class="more-col">More</th>', html=False)
@@ -684,11 +683,11 @@ class TicketImprovementTests(TestCase):
         workbook = openpyxl.load_workbook(io.BytesIO(response.content), data_only=True)
         sheet = workbook.active
         headers = [cell.value for cell in sheet[1]]
-        self.assertEqual(headers[:7], ["Part #", "FB Part #", "Model #", "Name", "Shipper", "Category", "Description"])
+        self.assertEqual(headers[:6], ["Part #", "Model #", "Name", "Shipper", "Category", "Description"])
         rows = {row[0]: row for row in sheet.iter_rows(min_row=2, values_only=True)}
-        self.assertEqual(rows["WH-A"][3], "Cut resistant gloves")
-        self.assertEqual(rows["WH-A"][4], "Graybar")
-        self.assertEqual(rows["WH-A"][6], "Cut resistant gloves")
+        self.assertEqual(rows["WH-A"][2], "Cut resistant gloves")
+        self.assertEqual(rows["WH-A"][3], "Graybar")
+        self.assertEqual(rows["WH-A"][5], "Cut resistant gloves")
 
     def test_inventory_import_reads_shipper_column(self):
         upload = self._inventory_upload_file([

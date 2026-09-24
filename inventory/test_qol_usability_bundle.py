@@ -15,7 +15,6 @@ class QolUsabilityBundleTests(TestCase):
         self.client.force_login(self.user)
         self.complete = InventoryItem.objects.create(
             part_number="QOL-001",
-            fb_part_number="FB-QOL-001",
             model_number="MODEL-1",
             name="Complete item",
             quantity_on_hand=8,
@@ -38,14 +37,14 @@ class QolUsabilityBundleTests(TestCase):
             )
 
     def test_data_quality_quick_filters_and_result_summary(self):
-        response = self.client.get(reverse("inventory_list"), {"data_quality": "missing_fb"})
+        response = self.client.get(reverse("inventory_list"), {"data_quality": "missing_model"})
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["result_count"], 29)
-        self.assertEqual(response.context["active_filters"], ["Missing FB Part #"])
+        self.assertEqual(response.context["active_filters"], ["Missing model number"])
         self.assertContains(response, "29</strong> matching items", html=False)
         self.assertContains(response, "Missing Location")
-        self.assertNotContains(response, "FB-QOL-001")
+        self.assertNotContains(response, "QOL-001")
 
     def test_missing_location_includes_incomplete_location_tuple(self):
         partial = InventoryItem.objects.create(
@@ -67,7 +66,6 @@ class QolUsabilityBundleTests(TestCase):
         response = self.client.get(reverse("inventory_list"))
 
         self.assertContains(response, 'class="name-link" data-column="name"')
-        self.assertContains(response, 'data-label="FB Part #" data-column="fb"')
         self.assertContains(response, 'data-label="Bin" data-column="bin"')
         self.assertContains(response, 'inventory-action-group" data-column="actions"')
 
@@ -107,7 +105,7 @@ class QolUsabilityBundleTests(TestCase):
         self.assertContains(response, 'data-list-back')
         self.assertContains(response, 'href="/inventory/?stock=zero&amp;sort=qty"')
         self.assertContains(response, 'data-previous-item')
-        self.assertContains(response, 'data-copy-text="FB-QOL-001"')
+        self.assertContains(response, 'data-copy-text="MODEL-1"')
         self.assertContains(response, 'data-copy-text="BAR-QOL-001"')
 
     def test_item_detail_rejects_external_return_url(self):

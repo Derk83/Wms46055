@@ -312,7 +312,7 @@ class MaterialShortageViewsTests(TestCase):
         self.assertEqual(procurement_response.status_code, 200)
         self.assertContains(procurement_response, "PRQ-")
         self.assertEqual(detail_response.status_code, 200)
-        self.assertContains(detail_response, "FB Part #")
+        self.assertContains(detail_response, "Backordered quantity")
 
     def test_request_detail_shows_allocation_and_shortage(self):
         response = self.client.get(reverse("material_request_detail", args=[self.request.pk]))

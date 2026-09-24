@@ -387,7 +387,6 @@ class InventoryItemForm(forms.ModelForm):
         model = InventoryItem
         fields = [
             "part_number",
-            "fb_part_number",
             "model_number",
             "name",
             "category",

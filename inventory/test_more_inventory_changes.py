@@ -16,7 +16,6 @@ class InventoryMoreChangesTests(TestCase):
         self.client.force_login(self.admin)
         self.item = InventoryItem.objects.create(
             part_number="PART-100",
-            fb_part_number="FB-9001",
             model_number="MODEL-1",
             name="Fiber Bracket",
             description="Fiber mounting bracket",
@@ -29,7 +28,7 @@ class InventoryMoreChangesTests(TestCase):
         )
         self.other = InventoryItem.objects.create(
             part_number="PART-200",
-            fb_part_number="FB-9002",
+            model_number="MODEL-2",
             name="Other Item",
             quantity_on_hand=3,
         )
@@ -47,45 +46,30 @@ class InventoryMoreChangesTests(TestCase):
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    def test_inventory_page_has_fb_part_number_without_removed_columns(self):
+    def test_inventory_page_keeps_operational_columns_without_removed_columns(self):
         response = self.client.get(reverse("inventory_list"))
 
-        self.assertContains(response, '<th class="fb-col" data-column="fb">FB Part #</th>', html=False)
-        self.assertContains(response, "FB-9001")
+        self.assertContains(response, "PART-100")
         self.assertNotContains(response, '<th class="shipper-col">Shipper</th>', html=False)
         self.assertNotContains(response, 'data-label="Shipper"', html=False)
         self.assertNotContains(response, 'data-label="Building/Room"', html=False)
         self.assertNotContains(response, '<th class="more-col">More</th>', html=False)
         self.assertContains(response, "inventory-action-group")
 
-    def test_inventory_general_search_finds_fb_part_number(self):
-        response = self.client.get(reverse("inventory_list"), {"q": "FB-9001"})
+    def test_inventory_general_search_finds_model_number(self):
+        response = self.client.get(reverse("inventory_list"), {"q": "MODEL-1"})
 
         self.assertContains(response, "PART-100")
         self.assertNotContains(response, "PART-200")
 
-    def test_inventory_has_dedicated_fb_filter_and_sorting(self):
-        response = self.client.get(
-            reverse("inventory_list"),
-            {"fb_part_number": "9001", "sort": "fb_part_desc"},
-        )
+    def test_unknown_sort_falls_back_to_part_number(self):
+        response = self.client.get(reverse("inventory_list"), {"sort": "retired_identifier"})
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'name="fb_part_number"', html=False)
-        self.assertContains(response, 'value="9001"', html=False)
-        self.assertContains(response, "PART-100")
-        self.assertNotContains(response, "PART-200")
-        self.assertTrue(response.context["filters_active"])
-
-        ascending = self.client.get(reverse("inventory_list"), {"sort": "fb_part"})
-        descending = self.client.get(reverse("inventory_list"), {"sort": "fb_part_desc"})
+        self.assertEqual(response.context["sort"], "part")
         self.assertEqual(
-            list(ascending.context["items"].values_list("fb_part_number", flat=True)),
-            ["FB-9001", "FB-9002"],
-        )
-        self.assertEqual(
-            list(descending.context["items"].values_list("fb_part_number", flat=True)),
-            ["FB-9002", "FB-9001"],
+            list(response.context["items"].values_list("part_number", flat=True)),
+            ["PART-100", "PART-200"],
         )
 
     def test_inventory_table_has_sticky_headers_and_safe_clickable_rows(self):
@@ -99,14 +83,13 @@ class InventoryMoreChangesTests(TestCase):
         self.assertIn("event.target.closest('a, button, input, select, textarea, label, form')", html)
         self.assertIn("window.location.assign(this.dataset.itemUrl)", html)
 
-    def test_inventory_form_renders_and_saves_fb_part_number(self):
+    def test_inventory_form_renders_and_saves_model_number(self):
         response = self.client.get(reverse("inventory_edit", args=[self.item.pk]))
-        self.assertContains(response, 'name="fb_part_number"', html=False)
+        self.assertContains(response, 'name="model_number"', html=False)
 
         data = {
             "part_number": self.item.part_number,
-            "model_number": self.item.model_number,
-            "fb_part_number": "FB-UPDATED",
+            "model_number": "MODEL-UPDATED",
             "name": self.item.name,
             "category": "",
             "description": self.item.description,
@@ -126,35 +109,32 @@ class InventoryMoreChangesTests(TestCase):
 
         self.assertEqual(response.status_code, 302)
         self.item.refresh_from_db()
-        self.assertEqual(self.item.fb_part_number, "FB-UPDATED")
+        self.assertEqual(self.item.model_number, "MODEL-UPDATED")
 
-    def test_inventory_spreadsheet_import_and_export_include_fb_part_number(self):
+    def test_inventory_spreadsheet_import_and_export_include_model_number(self):
         upload = self._xlsx_upload([
-            ["Part #", "FB Part #", "Name", "Qty"],
-            ["IMPORTED-1", "FB-IMPORT", "Imported Item", 4],
+            ["Part #", "Model #", "Name", "Qty"],
+            ["IMPORTED-1", "MODEL-IMPORT", "Imported Item", 4],
         ])
         response = self.client.post(reverse("inventory_import_xlsx"), {"spreadsheet": upload})
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(InventoryItem.objects.get(part_number="IMPORTED-1").fb_part_number, "FB-IMPORT")
+        self.assertEqual(InventoryItem.objects.get(part_number="IMPORTED-1").model_number, "MODEL-IMPORT")
 
         response = self.client.get(reverse("export_inventory_xlsx"))
         workbook = openpyxl.load_workbook(io.BytesIO(response.content), data_only=True)
         sheet = workbook.active
         headers = [cell.value for cell in sheet[1]]
-        self.assertIn("FB Part #", headers)
         rows = {row[0]: dict(zip(headers, row)) for row in sheet.iter_rows(min_row=2, values_only=True)}
-        self.assertEqual(rows["PART-100"]["FB Part #"], "FB-9001")
+        self.assertEqual(rows["PART-100"]["Model #"], "MODEL-1")
 
-    def test_material_request_picker_and_item_api_search_fb_part_number(self):
+    def test_material_request_picker_and_item_api_search_model_number(self):
         response = self.client.get(reverse("material_request_create"))
-        self.assertContains(response, "FB-9001")
-        self.assertContains(response, "FB Part #")
-        self.assertContains(response, "fb-9001")
+        self.assertContains(response, "model-1")
 
-        response = self.client.get(reverse("item_search_api"), {"q": "FB-9001"})
+        response = self.client.get(reverse("item_search_api"), {"q": "MODEL-1"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["results"][0]["id"], self.item.pk)
-        self.assertEqual(response.json()["results"][0]["fb_part_number"], "FB-9001")
+        self.assertEqual(response.json()["results"][0]["part_number"], "PART-100")
 
     @patch("inventory.views.generate_qr_code", side_effect=lambda payload: payload)
     def test_location_qrs_encode_absolute_bbx_location_url(self, _generate):

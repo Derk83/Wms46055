@@ -255,16 +255,14 @@ class MaterialRequestClaimTests(TestCase):
         self.assertIn("navigator.vibrate([140, 70, 140])", app_source)
         self.assertIn("claim_url: payload.claimUrl", push_source)
 
-    def test_pick_ticket_ui_includes_mobile_cards_fb_part_and_bin_location(self):
+    def test_pick_ticket_ui_includes_mobile_cards_and_bin_location(self):
         root = Path(__file__).resolve().parent
         detail_source = (root / "templates/inventory/ticket_detail.html").read_text()
         print_source = (root / "templates/inventory/ticket_print.html").read_text()
         css_source = (root / "static/inventory/css/app.css").read_text()
         self.assertIn("pick-ticket-lines", detail_source)
-        self.assertIn("line.item.fb_part_number", detail_source)
         self.assertIn("line.item.storage_location", detail_source)
         self.assertIn("Locked to the specialist who accepted", detail_source)
-        self.assertIn("row.line.item.fb_part_number", print_source)
         self.assertIn("BIN LOCATION", print_source)
         self.assertIn("Mobile pick-ticket workflow", css_source)
 

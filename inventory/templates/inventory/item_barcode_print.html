@@ -1,14 +1,13 @@
 {% extends 'inventory/base.html' %}
 {% block content %}
 <div class="page-header no-print">
-  <div><h1>Item Barcode</h1><p class="subtitle">{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</p></div>
+  <div><h1>Item Barcode</h1><p class="subtitle">{{ item.part_number }}</p></div>
   <div class="actions"><a class="btn btn-secondary" href="{% url 'item_detail' item.pk %}">Back</a><button class="btn btn-info" onclick="window.print()">Print Barcode</button></div>
 </div>
 <section class="barcode-sheet">
   <article class="barcode-label">
     <div class="brand">RPL WAREHOUSE</div>
     <h2>{{ item.part_number }}</h2>
-    {% if item.fb_part_number %}<p><strong>FB Part #:</strong> {{ item.fb_part_number }}</p>{% endif %}
     <p class="item-name">{{ item.name }}</p>
     <img src="data:image/png;base64,{{ barcode_image_b64 }}" alt="Barcode {{ barcode_value }}">
     <div class="barcode-value">{{ barcode_value }}</div>

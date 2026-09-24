@@ -223,7 +223,6 @@ class InventoryItem(models.Model):
     """An inventory item such as a specific warehouse product."""
 
     part_number = models.CharField(max_length=80)
-    fb_part_number = models.CharField("FB Part #", max_length=120, blank=True, db_index=True)
     model_number = models.CharField("Model #", max_length=120, blank=True)
     name = models.CharField(max_length=200)
     category = models.CharField(max_length=120, blank=True, choices=CategoryChoices.choices)

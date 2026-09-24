@@ -12,7 +12,7 @@
         <tr id="backorder-{{ row.pk }}" class="responsive-record-card">
           <td data-label="Backorder"><strong>{{ row.backorder_number }}</strong></td>
           <td data-label="Request"><a href="{% url 'material_request_detail' row.line.material_request.pk %}">{{ row.line.material_request.request_number }}</a></td>
-          <td data-label="Item">{{ row.line.item.part_number }}{% if row.line.item.fb_part_number %}<br><small>FB {{ row.line.item.fb_part_number }}</small>{% endif %}<br><small>{{ row.line.item.name }}</small></td>
+          <td data-label="Item">{{ row.line.item.part_number }}<br><small>{{ row.line.item.name }}</small></td>
           <td data-label="Needed">{{ row.quantity }}</td>
           <td data-label="Fulfilled">{{ row.fulfilled_quantity }}</td>
           <td data-label="Available now">{{ row.available_quantity }}</td>

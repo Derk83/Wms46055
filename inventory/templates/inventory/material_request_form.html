@@ -89,13 +89,13 @@
         <div class="inventory-picker-actions"><span class="inventory-result-count" id="inventory-result-count">{{ inventory_items|length }} items</span><button type="button" class="btn secondary sm" id="open-inventory-browser">Browse full inventory</button></div>
       </div>
       <label for="inventory-search">Search inventory</label>
-      <input type="search" id="inventory-search" placeholder="Part #, FB Part #, description, category, or location" autocomplete="off">
+      <input type="search" id="inventory-search" placeholder="Part #, description, category, or location" autocomplete="off">
       <p class="helptext">Select an item and it is added to your request immediately. Your form is saved in this browser while you work.</p>
       <div class="inventory-picker-list" id="inventory-picker-list">
         {% for item in inventory_items %}
-        <article class="inventory-picker-item" data-item-id="{{ item.pk }}" data-stock="{{ item.quantity_on_hand }}" data-category="{{ item.category }}" data-search="{{ item.part_number|lower }} {{ item.fb_part_number|lower }} {{ item.model_number|lower }} {{ item.name|lower }} {{ item.description|lower }} {{ item.category|lower }} {{ item.building_room|lower }} {{ item.rack|lower }} {{ item.section|lower }} {{ item.bin_location|lower }}">
+        <article class="inventory-picker-item" data-item-id="{{ item.pk }}" data-stock="{{ item.quantity_on_hand }}" data-category="{{ item.category }}" data-search="{{ item.part_number|lower }} {{ item.model_number|lower }} {{ item.name|lower }} {{ item.description|lower }} {{ item.category|lower }} {{ item.building_room|lower }} {{ item.rack|lower }} {{ item.section|lower }} {{ item.bin_location|lower }}">
           <div class="inventory-item-main">
-            <strong>{{ item.part_number }}{% if item.fb_part_number %} · FB {{ item.fb_part_number }}{% endif %}</strong>
+            <strong>{{ item.part_number }}</strong>
             <span>{{ item.name }}</span>
             <small>{{ item.category|default:"Uncategorized" }}{% if item.building_room %} · {{ item.building_room }}{% endif %}{% if item.storage_location %} · {{ item.storage_location }}{% endif %}</small>
           </div>
@@ -120,7 +120,7 @@
       </header>
       <div class="inventory-browser-controls">
         <label for="inventory-modal-search">Search all inventory</label>
-        <input type="search" id="inventory-modal-search" placeholder="Part #, FB Part #, description, category, or location" autocomplete="off">
+        <input type="search" id="inventory-modal-search" placeholder="Part #, description, category, or location" autocomplete="off">
         <div class="inventory-category-filters" role="group" aria-label="Inventory sections">
           <button type="button" class="category-filter active" data-category-filter="">All</button>
           {% for value, label in category_choices %}<button type="button" class="category-filter" data-category-filter="{{ value }}">{{ label }}</button>{% endfor %}
