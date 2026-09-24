@@ -1,0 +1,116 @@
+{% extends "inventory/base.html" %}
+{% load inventory_extras %}
+{% block title %}Guided Inventory Demo · RPL Warehouse{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% versioned_static 'inventory/css/demo.css' %}">{% endblock %}
+{% block content %}
+<section class="demo-isolation-banner" aria-label="Demo data notice">
+  <strong>Demo workspace</strong>
+  <span>Fictional training data</span>
+  <span>Isolated from live inventory</span>
+  <span>Reset anytime</span>
+</section>
+
+<header class="page-header demo-page-header">
+  <div>
+    <span class="demo-eyebrow">Guided training</span>
+    <h1>Inventory workflow demo</h1>
+    <div class="meta">Learn the core warehouse flow using six fictional items. About five minutes.</div>
+  </div>
+  <div class="actions">
+    <form method="post" action="{% url 'inventory_demo_action' %}">
+      {% csrf_token %}<input type="hidden" name="action" value="reset">
+      <button class="btn secondary" type="submit">Restart demo</button>
+    </form>
+    <a class="btn secondary" href="{% url 'dashboard' %}">Exit demo</a>
+  </div>
+</header>
+
+{% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+
+<section class="demo-stats" aria-label="Demo summary">
+  <article class="stat"><span>Fictional items</span><strong>6</strong></article>
+  <article class="stat"><span>Units on hand</span><strong>{{ total_quantity }}</strong></article>
+  <article class="stat"><span>Low stock</span><strong>{{ low_stock_count }}</strong></article>
+  <article class="stat"><span>Demo progress</span><strong>{% if complete %}Complete{% else %}{{ step }} of 5{% endif %}</strong></article>
+</section>
+
+<div class="demo-workspace">
+  <section class="card demo-inventory-card" aria-labelledby="demo-inventory-title">
+    <div class="demo-card-heading">
+      <div><h2 id="demo-inventory-title">Demo inventory</h2><p>These records exist only in your browser session.</p></div>
+      <span class="demo-safe-badge">Isolated data</span>
+    </div>
+    <div class="table-responsive">
+      <table class="demo-inventory-table">
+        <thead><tr><th>Part #</th><th>Item</th><th>Category</th><th>Qty</th><th>Bin</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
+        <tbody>
+        {% for item in items %}
+          <tr{% if item.is_target %} class="demo-target-row"{% endif %}>
+            <td data-label="Part #"><strong>{{ item.part_number }}</strong></td>
+            <td data-label="Item">{{ item.name }}</td>
+            <td data-label="Category">{{ item.category }}</td>
+            <td data-label="Qty"><strong>{{ item.quantity }}</strong> {{ item.unit }}</td>
+            <td data-label="Bin">{{ item.bin }}</td>
+            <td data-label="Status">{% if item.is_low %}<span class="badge demo-low-badge">Low stock</span>{% else %}<span class="badge demo-stock-badge">In stock</span>{% endif %}</td>
+            <td class="demo-row-action">
+              {% if item.is_target %}
+              <form method="post" action="{% url 'inventory_demo_action' %}">
+                {% csrf_token %}<input type="hidden" name="action" value="select_item"><input type="hidden" name="part_number" value="{{ item.part_number }}">
+                <button class="btn sm" type="submit">Select item</button>
+              </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="demo-reset-note">All fictional quantities and activity reset when the demo is restarted.</p>
+  </section>
+
+  <aside class="card demo-guide" aria-labelledby="demo-guide-title">
+    <div class="demo-guide-head">
+      <span>Guided demo</span>
+      <h2 id="demo-guide-title">Warehouse basics</h2>
+      <div class="demo-progress" role="progressbar" aria-label="Guided demo progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ progress_percent }}"><i class="progress-step-{{ progress_percent }}"></i></div>
+    </div>
+    <div class="demo-guide-body">
+      {% if complete %}
+        <span class="demo-step-label">Complete</span>
+        <h3>Demo complete</h3>
+        <p>You completed the inventory, receiving, request, pick, and audit workflow. No production records were changed.</p>
+        <div class="demo-complete-mark" aria-hidden="true">✓</div>
+        <form method="post" action="{% url 'inventory_demo_action' %}">
+          {% csrf_token %}<input type="hidden" name="action" value="reset">
+          <button class="btn w-100" type="submit">Run demo again</button>
+        </form>
+      {% else %}
+        <span class="demo-step-label">Step {{ step }} of 5</span>
+        <h3>{{ guide.title }}</h3>
+        <p>{{ guide.description }}</p>
+        <div class="demo-task"><strong>Your task</strong><span>{{ guide.task }}</span></div>
+        {% if guide.action %}
+        <form method="post" action="{% url 'inventory_demo_action' %}">
+          {% csrf_token %}<input type="hidden" name="action" value="{{ guide.action }}">
+          <button class="btn w-100" type="submit">{{ guide.button }}</button>
+        </form>
+        {% else %}
+        <p class="demo-action-hint">Use the highlighted inventory row to continue.</p>
+        {% endif %}
+      {% endif %}
+    </div>
+    <ol class="demo-tour-steps">
+      {% for number, item in guide_steps.items %}
+      <li{% if number == step and not complete %} class="active"{% elif number < step or complete %} class="done"{% endif %}><span>{{ number }}</span>{{ item.label }}</li>
+      {% endfor %}
+    </ol>
+  </aside>
+</div>
+
+{% if step == 5 or complete %}
+<section class="card demo-audit" aria-labelledby="demo-audit-title">
+  <div class="demo-card-heading"><div><h2 id="demo-audit-title">Fictional audit trail</h2><p>Session-only events produced by this guided demo.</p></div><span class="badge">Ticket {{ demo_ticket_status }}</span></div>
+  <div class="table-responsive"><table><thead><tr><th>Sequence</th><th>Type</th><th>Activity</th><th>Quantity</th></tr></thead><tbody>{% for event in events %}<tr><td>{{ forloop.revcounter }}</td><td><span class="badge">{{ event.kind }}</span></td><td>{{ event.description }}</td><td>{{ event.quantity }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endif %}
+{% endblock %}
