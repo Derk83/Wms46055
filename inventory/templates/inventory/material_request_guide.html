@@ -1,0 +1,55 @@
+{% extends "inventory/base.html" %}
+{% block title %}Material Request Guide · RPL Material Requests{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <h1>Material request guide</h1>
+    <div class="meta">How to request warehouse material and follow it through fulfillment.</div>
+  </div>
+  {% if perms.inventory.add_materialrequest and perms.inventory.add_materialrequestline and perms.inventory.view_inventoryitem %}
+  <div class="actions"><a class="btn btn-primary" href="{% url 'material_request_create' %}">Start a material request</a></div>
+  {% endif %}
+</section>
+
+<div class="grid">
+  <section class="card">
+    <h2>1. Enter request details</h2>
+    <p>Enter the requestor name and email, delivery location, and the required delivery date and time. Put any project or work-order reference in <strong>Notes</strong> when it will help the warehouse identify the work.</p>
+    <p><strong>Urgent requests:</strong> select <em>Urgent request</em> only when the material needs immediate warehouse attention.</p>
+  </section>
+
+  <section class="card">
+    <h2>2. Choose from inventory</h2>
+    <p>Search by part number, description, category, or storage location. Select <strong>Add</strong>, enter the quantity needed, and include line notes for any item-specific instructions.</p>
+    <p>You can add several material lines to one request. Review every quantity before submitting.</p>
+  </section>
+
+  <section class="card">
+    <h2>3. Decide how to handle shortages</h2>
+    <p>If there is not enough stock, the available amount is reserved and you must choose what happens to the remainder:</p>
+    <ul>
+      <li><strong>Use available stock and cancel the rest</strong> — fulfill only what is currently available.</li>
+      <li><strong>Request the rest when available</strong> — create a backorder for the shortage.</li>
+      <li><strong>Ask Procurement to purchase the rest</strong> — route the shortage to Procurement.</li>
+    </ul>
+  </section>
+
+  <section class="card">
+    <h2>4. Submit and keep the request number</h2>
+    <p>Select <strong>Submit request</strong>. The confirmation and Request Board show the request number; include that number whenever you contact the warehouse.</p>
+    <p>If the page reports a problem, correct the highlighted field and submit again. Your in-progress form is saved in the same browser while you work.</p>
+  </section>
+
+  <section class="card">
+    <h2>5. Track your request</h2>
+    <p>Open <strong>Request Board</strong> to see current status and fulfillment updates. Open the request for item details and delivery information. If the system asks you to confirm readiness or delivery, follow the instructions shown on that request.</p>
+    {% if perms.inventory.view_materialrequest %}<p><a href="{% url 'material_request_board' %}">Open Request Board</a></p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2>Need equipment instead?</h2>
+    <p>Equipment is requested in the separate Equipment Requests app. Use it for tracked assets such as tools, devices, vehicles, or other returnable equipment.</p>
+    <p><a href="https://eqreq.rplwms.com/help/">Open the equipment request guide</a> <span class="meta">— a separate sign-in may be required.</span></p>
+  </section>
+</div>
+{% endblock %}

@@ -1,1 +1,49 @@
-{% extends 'equipment/requests/base.html' %}{% block title %}Help · RPL Equipment Requests{% endblock %}{% block content %}<div class="eqreq-heading"><div><p class="eyebrow">Support</p><h1>Help</h1><p>How equipment requests are reviewed and fulfilled.</p></div></div><section class="eqreq-card eqreq-prose"><h2>Submitting a request</h2><p>Describe the equipment, quantity, destination, and dates. You do not need to choose a specific asset.</p><h2>After submission</h2><p>You can edit a submitted request. Once review begins, contact the equipment team if details change. Status guidance appears on each request.</p><h2>Need assistance?</h2><p>Contact your equipment manager through your normal workplace support channel and include the request number.</p><a class="button" href="{% url 'eqreq_create' %}">New request</a></section>{% endblock %}
+{% extends 'equipment/requests/base.html' %}
+{% block title %}Equipment Request Guide · RPL Equipment Requests{% endblock %}
+{% block content %}
+<div class="eqreq-heading">
+  <div><p class="eyebrow">Requester guide</p><h1>Equipment request guide</h1><p>How to request equipment and track it through review and fulfillment.</p></div>
+  <a class="button" href="{% url 'eqreq_create' %}">Start an equipment request</a>
+</div>
+
+<div class="detail-grid">
+  <section class="eqreq-card eqreq-prose">
+    <h2>1. Enter request details</h2>
+    <p>Enter when the equipment is needed, the destination, purpose, project, and priority. If there is an end date, it must be on or after the start date.</p>
+    <p>Choose whether substitutes are acceptable and add requester notes for delivery, access, or operating requirements.</p>
+  </section>
+
+  <section class="eqreq-card eqreq-prose">
+    <h2>2. Choose equipment</h2>
+    <p>Add one line for each type of equipment. Choose a category, then optionally select a <strong>Preferred item</strong> when an available asset is shown.</p>
+    <p>If the equipment is not listed, describe it in <strong>Unlisted equipment</strong>. A preferred asset is optional—the equipment team can allocate a suitable item during review.</p>
+  </section>
+
+  <section class="eqreq-card eqreq-prose">
+    <h2>3. Submit your request</h2>
+    <p>Review quantities, dates, and destination, then select <strong>Submit request</strong>. Keep the request number from the confirmation page for questions or follow-up.</p>
+  </section>
+
+  <section class="eqreq-card eqreq-prose">
+    <h2>4. Track your request</h2>
+    <p>Open <strong>My requests</strong> to see every request and its current status. Each request explains what happens next. The normal approval path is Submitted, Under review, Approved, Ready, and Fulfilled; a request may instead be Declined or Cancelled.</p>
+    <p><a href="{% url 'eqreq_dashboard' %}">Open My requests</a></p>
+  </section>
+
+  <section class="eqreq-card eqreq-prose">
+    <h2>5. Edit or cancel</h2>
+    <p>You can edit a request while its status is <strong>Submitted</strong>. You can cancel it while it is <strong>Submitted</strong> or <strong>Under review</strong>. After review progresses, contact the equipment team and include the request number if something changes.</p>
+  </section>
+
+  <section class="eqreq-card eqreq-prose">
+    <h2>Need warehouse material instead?</h2>
+    <p>Consumable and warehouse-stock material is requested in the separate Material Requests app.</p>
+    <p><a href="https://requests.rplwms.com/guide/">Open the material request guide</a> — a separate sign-in may be required.</p>
+  </section>
+</div>
+
+<section class="eqreq-card eqreq-prose">
+  <h2>Need assistance?</h2>
+  <p>Contact your equipment manager through your normal workplace support channel and include the request number.</p>
+</section>
+{% endblock %}

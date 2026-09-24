@@ -17,7 +17,7 @@
   {% if user.is_authenticated %}<nav aria-label="Requester navigation">
     <a href="{% url 'eqreq_dashboard' %}"{% if request.resolver_match.url_name == 'eqreq_dashboard' or request.resolver_match.url_name == 'eqreq_detail' or request.resolver_match.url_name == 'eqreq_edit' %} aria-current="page"{% endif %}>My requests</a>
     <a href="{% url 'eqreq_create' %}"{% if request.resolver_match.url_name == 'eqreq_create' %} aria-current="page"{% endif %}>New request</a>
-    <a href="{% url 'eqreq_help' %}"{% if request.resolver_match.url_name == 'eqreq_help' %} aria-current="page"{% endif %}>Help</a>
+    <a href="{% url 'eqreq_help' %}"{% if request.resolver_match.url_name == 'eqreq_help' %} aria-current="page"{% endif %}>Request guide</a>
     <a href="{% url 'eqreq_account' %}"{% if request.resolver_match.url_name == 'eqreq_account' %} aria-current="page"{% endif %}>Account</a>
     <button type="button" class="eqreq-theme-toggle" data-eqreq-theme-toggle><span aria-hidden="true">◐</span><span class="sr-only">Change theme</span></button>
   </nav>{% endif %}

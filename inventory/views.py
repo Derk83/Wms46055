@@ -96,6 +96,20 @@ def request_portal_access_required(view_func):
     return wrapper
 
 
+@login_required
+@request_portal_access_required
+@all_perms_required(
+    "inventory.add_materialrequest",
+    "inventory.add_materialrequestline",
+    "inventory.view_inventoryitem",
+    "inventory.view_materialrequest",
+)
+@require_safe
+def material_request_guide(request):
+    """Show requester-facing instructions without exposing warehouse operations."""
+    return render(request, "inventory/material_request_guide.html")
+
+
 def portal_inventory_access_required(view_func):
     """Keep WMS inventory behavior unchanged while enforcing read access on the portal."""
     @wraps(view_func)
