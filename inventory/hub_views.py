@@ -20,3 +20,13 @@ def hub_home(request):
             "equipment_requests_url": settings.EQUIPMENT_REQUESTS_URL,
         },
     )
+
+
+@require_safe
+def demo_home(request):
+    """Public, data-free launcher for session-isolated WMS demonstrations."""
+    return render(
+        request,
+        "inventory/demo/landing.html",
+        {"inventory_demo_url": f"{settings.APP_URL.rstrip('/')}/demo/"},
+    )

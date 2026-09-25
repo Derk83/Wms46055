@@ -22,6 +22,7 @@ class HostURLConfMiddleware:
     request_host = "requests.rplwms.com"
     equipment_host = "equipment.rplwms.com"
     equipment_request_host = "eqreq.rplwms.com"
+    demo_host = "demo.rplwms.com"
     warehouse_hosts = frozenset({
         "bbx.rplwms.com",
         "wms.bonksystems.com",
@@ -37,6 +38,7 @@ class HostURLConfMiddleware:
         request.is_request_portal = host == self.request_host
         request.is_equipment_portal = host == self.equipment_host
         request.is_equipment_request_portal = host == self.equipment_request_host
+        request.is_demo_host = host == self.demo_host
         request.is_wms_host = host in self.warehouse_hosts
         if request.is_hub_host:
             request.urlconf = "config.hub_urls"
@@ -46,6 +48,8 @@ class HostURLConfMiddleware:
             request.urlconf = "equipment.urls"
         elif request.is_equipment_request_portal:
             request.urlconf = "equipment.request_urls"
+        elif request.is_demo_host:
+            request.urlconf = "config.demo_urls"
         return self.get_response(request)
 
 

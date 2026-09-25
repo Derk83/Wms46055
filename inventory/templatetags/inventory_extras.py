@@ -2,6 +2,7 @@ import hashlib
 from functools import lru_cache
 
 from django import template
+from django.conf import settings
 from django.contrib.staticfiles import finders
 from django.templatetags.static import static
 
@@ -27,6 +28,12 @@ def versioned_static(path):
     url = static(path)
     digest = _static_content_digest(path)
     return f"{url}?v={digest}" if digest else url
+
+
+@register.simple_tag
+def demo_url():
+    """Return the configured canonical demo launcher URL."""
+    return settings.DEMO_URL
 
 
 _MANAGER_REPORT_GROUPS = frozenset({
