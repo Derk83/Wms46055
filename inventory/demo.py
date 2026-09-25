@@ -166,7 +166,6 @@ def _state(request):
     state = request.session.get(SESSION_KEY)
     if not _valid_state(state):
         state = _initial_state()
-        request.session[SESSION_KEY] = state
     return deepcopy(state)
 
 
@@ -180,10 +179,7 @@ def _require_warehouse(request):
         raise Http404
 
 
-@login_required
-@require_GET
-def inventory_demo(request):
-    _require_warehouse(request)
+def _inventory_demo_response(request):
     state = _state(request)
     items = []
     for source in DEMO_ITEMS:
@@ -210,14 +206,28 @@ def inventory_demo(request):
 
 
 @login_required
-@require_POST
-def inventory_demo_action(request):
+@require_GET
+def inventory_demo(request):
     _require_warehouse(request)
+    request.is_training_page = True
+    return _inventory_demo_response(request)
+
+
+@require_GET
+def public_inventory_demo(request):
+    if not getattr(request, "is_demo_host", False):
+        raise Http404
+    request.is_training_page = True
+    return _inventory_demo_response(request)
+
+
+@require_POST
+def _inventory_demo_action_response(request, redirect_name):
     action = request.POST.get("action", "").strip()
     if action == "reset":
         _save(request, _initial_state())
         messages.success(request, "The fictional demo inventory was reset.")
-        return redirect("inventory_demo")
+        return redirect(redirect_name)
 
     state = _state(request)
     expected = {
@@ -288,4 +298,20 @@ def inventory_demo_action(request):
         messages.success(request, "Demo complete. No production records were changed.")
 
     _save(request, state)
-    return redirect("inventory_demo")
+    return redirect(redirect_name)
+
+
+@login_required
+@require_POST
+def inventory_demo_action(request):
+    _require_warehouse(request)
+    request.is_training_page = True
+    return _inventory_demo_action_response(request, "inventory_demo")
+
+
+@require_POST
+def public_inventory_demo_action(request):
+    if not getattr(request, "is_demo_host", False):
+        raise Http404
+    request.is_training_page = True
+    return _inventory_demo_action_response(request, "inventory_demo")

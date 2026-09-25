@@ -1,122 +1,73 @@
-{% load inventory_extras %}
+{% load static inventory_extras %}
 <!doctype html>
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="theme-color" content="#ffffff">
   <title>RPL WMS Training Center</title>
-  <link rel="icon" href="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" type="image/svg+xml">
+  <script nonce="{{ request.csp_nonce }}">try{const t=localStorage.getItem('rpl-hub-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light')}catch(e){}</script>
+  <link rel="icon" type="image/svg+xml" href="{% static 'inventory/branding/warehouse-mark.svg' %}">
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/hub.css' %}">
-  <link rel="stylesheet" href="{% versioned_static 'inventory/css/demo-hub.css' %}">
-  <script src="{% versioned_static 'inventory/js/hub.js' %}" defer></script>
+  <style nonce="{{ request.csp_nonce }}">
+    .hub-topbar .hub-brand img{width:58px;height:58px;filter:none}html[data-theme=dark] .hub-topbar .hub-brand img{filter:none}.training-hero{margin-bottom:1.1rem}.training-hero h1{max-width:760px}.training-safe{display:flex;gap:.65rem;align-items:flex-start;margin-top:1rem;padding:.9rem 1rem;border:1px solid color-mix(in srgb,var(--hub-red) 45%,var(--hub-line));border-radius:14px;background:color-mix(in srgb,var(--hub-red) 9%,var(--hub-surface));color:var(--hub-muted)}.training-safe strong{display:block;color:var(--hub-ink);margin-bottom:.12rem}.training-safe-mark{display:grid;place-items:center;flex:0 0 1.7rem;height:1.7rem;border-radius:999px;background:var(--hub-red);color:#fff;font-weight:900}
+    .training-directory{display:grid;gap:1.2rem}.training-section{border:1px solid var(--hub-line);border-radius:20px;background:var(--hub-surface);padding:1.1rem;box-shadow:var(--hub-shadow)}.training-section-head{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;padding-bottom:.8rem;border-bottom:1px solid var(--hub-line);margin-bottom:1rem}.training-section-head h2{margin:0;font-size:1.25rem}.training-section-head p{margin:.25rem 0 0;color:var(--hub-muted)}.training-section-badge{white-space:nowrap;border-radius:999px;padding:.3rem .62rem;background:var(--hub-surface-2);color:var(--hub-muted);font-size:.78rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase}.hub-app-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.training-section .hub-app{display:grid;grid-template-columns:42px minmax(0,1fr) 20px;align-items:start;gap:.8rem;min-height:0;padding:1rem}.hub-app-icon{width:42px;height:42px;border-radius:11px;background:var(--hub-surface-2);border:1px solid var(--hub-line)}.hub-app-copy h3{margin:.05rem 0 .35rem;font-size:1rem}.hub-app-copy>p{margin:0;color:var(--hub-muted);line-height:1.42}.hub-app-arrow{align-self:center;color:var(--hub-red);font-weight:900}
+    .training-subgroups{display:grid;gap:1rem}.training-subgroup{border:1px solid var(--hub-line);border-radius:15px;background:var(--hub-surface-2);padding:.9rem}.training-subgroup-head{margin-bottom:.75rem}.training-subgroup-head h3{margin:0;font-size:1rem}.training-subgroup-head p{margin:.2rem 0 0;color:var(--hub-muted);font-size:.9rem}.training-subgroup .hub-app-grid{margin:0}.training-subgroup .hub-app{background:var(--hub-surface)}
+    .hub-app-copy p{max-width:64ch}.hub-app-meta{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.58rem}.hub-app-meta span{font-size:.76rem;font-weight:800;color:var(--hub-muted);background:var(--hub-surface-2);border:1px solid var(--hub-line);border-radius:999px;padding:.2rem .45rem}.hub-app-no-login{color:var(--hub-red)!important}.training-card-icon{display:grid;place-items:center;font-weight:900;font-size:.82rem;letter-spacing:.03em}
+    @media(max-width:720px){.training-section{padding:.85rem;border-radius:16px}.training-section-head{align-items:flex-start}.training-section-badge{display:none}.training-subgroup{padding:.72rem}.training-safe{font-size:.9rem}.hub-app-grid{grid-template-columns:1fr}.training-section .hub-app{grid-template-columns:38px minmax(0,1fr) 18px}.hub-app-icon{width:38px;height:38px}}
+  </style>
 </head>
-<body>
+<body class="hub-body">
   <div class="hub-shell">
     <header class="hub-topbar">
-      <a class="hub-brand" href="https://rplwms.com/" aria-label="RPL WMS application launcher">
-        <img src="{% versioned_static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">
-        <span class="hub-brand-divider" aria-hidden="true"></span>
-        <strong>RPL WMS Training</strong>
-      </a>
-      <button class="hub-theme" type="button" data-hub-theme-toggle aria-label="Dark theme" aria-pressed="false">
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19"><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42m0-12.72-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
+      <a class="hub-brand" href="https://rplwms.com/" aria-label="RPL WMS application home"><img src="{% static 'inventory/branding/warehouse-mark.svg' %}" alt=""></a>
+      <span class="hub-brand-divider" aria-hidden="true"></span>
+      <strong>Training Center</strong>
+      <button class="hub-theme" type="button" data-hub-theme-toggle aria-label="Switch color theme" title="Switch color theme"><span aria-hidden="true">◐</span></button>
     </header>
 
     <main class="hub-main">
-      <section class="hub-hero" aria-labelledby="training-hub-title">
-        <p class="hub-eyebrow">Training center</p>
-        <h1 id="training-hub-title">Demos, guides, and module training</h1>
-        <p>Learn each WMS workflow from one place. The interactive demo uses fictional session-isolated data; guides and courses remain protected by their application sign-in and permissions.</p>
+      <section class="hub-hero training-hero">
+        <p class="hub-eyebrow">Public training center</p>
+        <h1>Demos, guides, and module training</h1>
+        <p>Complete hands-on fictional scenarios in order. Progress stays in this browser session and never writes to the live Warehouse, Equipment, or Request systems.</p>
+        <div class="training-safe"><span class="training-safe-mark" aria-hidden="true">✓</span><div><strong>No sign-in required</strong><span>Every card below opens on demo.rplwms.com. Live applications remain separate and permission protected.</span></div></div>
       </section>
 
-      <section class="training-section" aria-labelledby="guided-demo-title">
-        <div class="hub-apps-heading">
-          <h2 id="guided-demo-title">Guided demo</h2>
-          <p>Practice the connected Warehouse workflow without changing production records.</p>
-        </div>
-        <div class="hub-apps training-grid training-grid-single">
-          <a class="hub-app" href="{{ inventory_demo_url }}">
-            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" alt=""></span>
-            <h3>Guided Inventory Demo</h3>
-            <p>Practice receiving fictional stock, creating a material request, fulfilling its pick ticket, and reviewing the audit trail.</p>
-            <ul><li>6 fictional items</li><li>5 guided steps</li><li>No production writes</li></ul>
-            <span class="hub-open"><span>Open Inventory Demo</span><span aria-hidden="true">→</span></span>
-          </a>
-        </div>
-      </section>
+      <div class="training-directory">
+        <section class="training-section" aria-labelledby="practice-heading">
+          <header class="training-section-head"><div><h2 id="practice-heading">Practice demos</h2><p>Interactive fictional workspaces for learning by doing.</p></div><span class="training-section-badge">Interactive</span></header>
+          <div class="hub-app-grid">
+            <a class="hub-app" href="{{ inventory_demo_url }}"><span class="hub-app-icon training-card-icon">DEMO</span><span class="hub-app-copy"><strong>Guided Inventory Demo</strong><p>Receive stock, create a request, fulfill a pick, and review a fictional audit trail with fictional session-isolated data.</p><span class="hub-app-meta"><span>5 tasks</span><span class="hub-app-no-login">No sign-in</span></span></span><span class="hub-app-arrow" aria-hidden="true">→</span></a>
+          </div>
+        </section>
 
-      <section class="training-section" aria-labelledby="requester-guides-title">
-        <div class="hub-apps-heading">
-          <h2 id="requester-guides-title">Requester guides</h2>
-          <p>Step-by-step instructions for submitting and tracking material or equipment needs.</p>
-        </div>
-        <div class="hub-apps training-grid training-grid-two">
-          <a class="hub-app" href="{{ material_guide_url }}">
-            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/requests-mark.svg' %}" alt=""></span>
-            <h3>Request Material</h3>
-            <p>Choose available inventory, enter delivery details, resolve shortages, and track request progress.</p>
-            <ul><li>Material Requests</li><li>Requester sign-in</li><li>Live guide</li></ul>
-            <span class="hub-open"><span>Open Material Guide</span><span aria-hidden="true">→</span></span>
-          </a>
-          <a class="hub-app" href="{{ equipment_guide_url }}">
-            <span class="hub-app-mark"><img src="{% versioned_static 'equipment/eqreq/eqreq-mark.svg' %}" alt=""></span>
-            <h3>Request Equipment</h3>
-            <p>Request serialized equipment, choose a preferred item, and follow approval and fulfillment status.</p>
-            <ul><li>Equipment Requests</li><li>Requester sign-in</li><li>Live guide</li></ul>
-            <span class="hub-open"><span>Open Equipment Guide</span><span aria-hidden="true">→</span></span>
-          </a>
-        </div>
-      </section>
+        <section class="training-section" aria-labelledby="requester-heading">
+          <header class="training-section-head"><div><h2 id="requester-heading">Requester workflows</h2><p>Step-by-step practice for submitting and tracking requests.</p></div><span class="training-section-badge">Requester guides</span></header>
+          <div class="hub-app-grid">
+            <a class="hub-app" href="{{ material_guide_url }}"><span class="hub-app-icon training-card-icon">MAT</span><span class="hub-app-copy"><strong>Material Request Guide</strong><p>Choose stock, handle shortages, submit a request, and track fulfillment.</p><span class="hub-app-meta"><span>5 tasks</span><span class="hub-app-no-login">No sign-in</span></span></span><span class="hub-app-arrow" aria-hidden="true">→</span></a>
+            <a class="hub-app" href="{{ equipment_guide_url }}"><span class="hub-app-icon training-card-icon">EQ</span><span class="hub-app-copy"><strong>Equipment Request Guide</strong><p>Describe equipment needs, understand allocation, and track the request lifecycle.</p><span class="hub-app-meta"><span>5 tasks</span><span class="hub-app-no-login">No sign-in</span></span></span><span class="hub-app-arrow" aria-hidden="true">→</span></a>
+          </div>
+        </section>
 
-      <section class="training-section" aria-labelledby="warehouse-training-title">
-        <div class="hub-apps-heading">
-          <h2 id="warehouse-training-title">Warehouse module training</h2>
-          <p>Read-only courses for inventory, fulfillment, shortages, counts, audit, and access management.</p>
-        </div>
-        <div class="hub-apps training-grid">
-          {% for course in warehouse_courses %}
-          <a class="hub-app" href="{{ course.url }}">
-            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" alt=""></span>
-            <h3>{{ course.title }}</h3>
-            <p>{{ course.summary }}</p>
-            <ul><li>{{ course.duration }}</li><li>{{ course.audience }}</li><li>Permission protected</li></ul>
-            <span class="hub-open"><span>Open Training</span><span aria-hidden="true">→</span></span>
-          </a>
-          {% endfor %}
-        </div>
-      </section>
+        <section class="training-section" aria-labelledby="warehouse-heading">
+          <header class="training-section-head"><div><h2 id="warehouse-heading">Warehouse module training</h2><p>Core operations first, followed by controls and administration.</p></div><span class="training-section-badge">8 modules</span></header>
+          <div class="training-subgroups">
+            {% for group in warehouse_course_groups %}<section class="training-subgroup"><header class="training-subgroup-head"><h3>{{ group.title }}</h3><p>{{ group.description }}</p></header><div class="hub-app-grid">{% for course in group.courses %}<a class="hub-app" href="{{ course.url }}"><span class="hub-app-icon training-card-icon">W{{ forloop.counter }}</span><span class="hub-app-copy"><strong>{{ course.title }}</strong><p>{{ course.summary }}</p><span class="hub-app-meta"><span>{{ course.duration }}</span><span>{{ course.steps|length }} tasks</span><span class="hub-app-no-login">No sign-in</span></span></span><span class="hub-app-arrow" aria-hidden="true">→</span></a>{% endfor %}</div></section>{% endfor %}
+          </div>
+        </section>
 
-      <section class="training-section" aria-labelledby="equipment-training-title">
-        <div class="hub-apps-heading">
-          <h2 id="equipment-training-title">Equipment operations training</h2>
-          <p>Protected courses for serialized assets, custody, reservations, maintenance, requests, and imports.</p>
-        </div>
-        <div class="hub-apps training-grid">
-          {% for course in equipment_courses %}
-          <a class="hub-app" href="{{ course.url }}">
-            <span class="hub-app-mark"><img src="{% versioned_static 'equipment/branding/equipment-mark.svg' %}" alt=""></span>
-            <h3>{{ course.title }}</h3>
-            <p>{{ course.summary }}</p>
-            <ul><li>{{ course.duration }}</li><li>{{ course.audience }}</li><li>Permission protected</li></ul>
-            <span class="hub-open"><span>Open Training</span><span aria-hidden="true">→</span></span>
-          </a>
-          {% endfor %}
-        </div>
-      </section>
-
-      <div class="hub-note">
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M12 3 5 6v5c0 4.8 2.9 8.2 7 10 4.1-1.8 7-5.2 7-10V6l-7-3Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span><strong>Sign-in and permissions are still enforced.</strong> Requester, Warehouse, Equipment Manager, and manager-only boundaries remain separate. Training pages do not expose live records or perform workflow actions.</span>
+        <section class="training-section" aria-labelledby="equipment-heading">
+          <header class="training-section-head"><div><h2 id="equipment-heading">Equipment module training</h2><p>Asset lifecycle work separated from planning and administrative workflows.</p></div><span class="training-section-badge">6 modules</span></header>
+          <div class="training-subgroups">
+            {% for group in equipment_course_groups %}<section class="training-subgroup"><header class="training-subgroup-head"><h3>{{ group.title }}</h3><p>{{ group.description }}</p></header><div class="hub-app-grid">{% for course in group.courses %}<a class="hub-app" href="{{ course.url }}"><span class="hub-app-icon training-card-icon">E{{ forloop.counter }}</span><span class="hub-app-copy"><strong>{{ course.title }}</strong><p>{{ course.summary }}</p><span class="hub-app-meta"><span>{{ course.duration }}</span><span>{{ course.steps|length }} tasks</span><span class="hub-app-no-login">No sign-in</span></span></span><span class="hub-app-arrow" aria-hidden="true">→</span></a>{% endfor %}</div></section>{% endfor %}
+          </div>
+        </section>
       </div>
     </main>
 
-    <footer class="hub-footer">
-      <span>RPL Warehouse Management System</span>
-      <a href="https://rplwms.com/">Back to applications</a>
-    </footer>
+    <footer class="hub-footer"><span>RPL WMS training system</span><a href="https://rplwms.com/">Back to applications</a></footer>
   </div>
+  <script nonce="{{ request.csp_nonce }}">(()=>{const b=document.querySelector('[data-hub-theme-toggle]');if(!b)return;b.addEventListener('click',()=>{const n=document.documentElement.dataset.theme==='dark'?'light':'dark';document.documentElement.dataset.theme=n;try{localStorage.setItem('rpl-hub-theme',n)}catch(e){}})})();</script>
 </body>
 </html>

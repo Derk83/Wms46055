@@ -6,7 +6,7 @@
 <div class="training-page">
   <section class="page-header training-page-header">
     <div>
-      <p class="meta">Warehouse training</p>
+      <p class="meta">{{ training_family_label|default:"Warehouse training" }}</p>
       <h1>{{ training.title }}</h1>
       <p>{{ training.summary }}</p>
       <div class="training-meta" aria-label="Course details"><span><strong>Audience:</strong> {{ training.audience }}</span><span><strong>Estimated time:</strong> {{ training.duration }}</span><span><strong>Format:</strong> Required step-by-step tasks</span></div>
@@ -15,7 +15,11 @@
 
   <section class="training-notice" aria-label="Training safety notice">
     <span aria-hidden="true">✓</span>
+    {% if public_training %}
+    <div><strong>No sign-in required · Safe public simulation</strong><span>Complete this fictional scenario entirely on the training site. Do not enter fictional training data in a live app. Progress stays in this browser session and does not write to inventory, equipment, requests, tickets, or audit records.</span></div>
+    {% else %}
     <div><strong>Session-based training progress</strong><span>The scenario is fictional, but each task must be completed in order. Use only assigned work or authorized training records in the live workspace. This module stores progress in your browser session and does not write to inventory, requests, tickets, or audit records.</span></div>
+    {% endif %}
   </section>
 
   <div class="training-layout">

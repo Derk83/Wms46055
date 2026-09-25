@@ -22,11 +22,12 @@ class DemoLandingHostTests(TestCase):
         self.assertEqual(
             hrefs[:3],
             [
-                "https://bbx.rplwms.com/demo/",
-                "https://requests.rplwms.com/guide/",
-                "https://eqreq.rplwms.com/help/",
+                "https://demo.rplwms.com/inventory-demo/",
+                "https://demo.rplwms.com/guides/material-requests/",
+                "https://demo.rplwms.com/guides/equipment-requests/",
             ],
         )
+        self.assertContains(response, "No sign-in required")
 
     def test_demo_landing_supports_head_but_rejects_post(self):
         response = self.client.head("/", HTTP_HOST=self.host, secure=True)

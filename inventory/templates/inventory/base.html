@@ -15,7 +15,7 @@
   <script nonce="{{ request.csp_nonce }}">try{const t=localStorage.getItem('bbx-theme');document.documentElement.dataset.theme=t||((matchMedia('(prefers-color-scheme: light)').matches)?'light':'dark')}catch(e){}</script>
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/app.css' %}">
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/notification-center.css' %}">
-  <link rel="manifest" href="/manifest.webmanifest">
+  {% if not request.is_training_page %}<link rel="manifest" href="/manifest.webmanifest">{% endif %}
   {% if request.is_request_portal %}
   <link rel="icon" type="image/svg+xml" href="{% static 'inventory/branding/requests-mark.svg' %}">
   <link rel="apple-touch-icon" href="{% static 'inventory/icons/requests-apple-touch-icon.png' %}">
@@ -85,7 +85,7 @@
   </nav>
   <a class="brand mobile-header-brand" href="{% url 'dashboard' %}" aria-label="RPL Warehouse home">{% include "inventory/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>WAREHOUSE</small></span></a>
   {% else %}
-  <a class="brand" href="{% url 'dashboard' %}" aria-label="{% if request.is_request_portal %}RPL Material Requests{% else %}RPL Warehouse{% endif %} home">{% include "inventory/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>{% if request.is_request_portal %}MATERIAL REQUESTS{% else %}WAREHOUSE{% endif %}</small></span></a>
+  <a class="brand" href="{% url 'dashboard' %}" aria-label="{% if request.is_request_portal %}RPL Material Requests{% elif request.is_demo_host %}RPL WMS Training{% else %}RPL Warehouse{% endif %} home">{% include "inventory/includes/app_mark.html" %}<span class="app-brand-copy"><strong>RPL</strong><small>{% if request.is_request_portal %}MATERIAL REQUESTS{% elif request.is_demo_host %}WMS TRAINING{% else %}WAREHOUSE{% endif %}</small></span></a>
   {% endif %}
   {% if user.is_authenticated %}
   <button class="nav-toggle" type="button" aria-label="Open navigation menu" aria-controls="site-nav" aria-expanded="false" data-mobile-nav-toggle><span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span><span data-mobile-nav-label>Menu</span></button>
@@ -156,7 +156,7 @@
 <main>{% block content %}{% endblock %}</main>
 <div id="toast-region" class="toast-region no-print" aria-live="polite" aria-atomic="true"></div>
 <script src="{% versioned_static 'inventory/js/app.js' %}" defer></script>
-<script src="{% versioned_static 'inventory/js/pwa.js' %}" defer></script>
+{% if not request.is_training_page %}<script src="{% versioned_static 'inventory/js/pwa.js' %}" defer></script>{% endif %}
 {% if not request.is_training_page and user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or not request.is_training_page and request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% versioned_static 'inventory/js/push.js' %}" defer></script>{% endif %}
 {% block content_tail %}{% endblock %}
 </body></html>

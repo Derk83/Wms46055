@@ -33,7 +33,7 @@
 
         {% if task.status == "current" %}
           <div class="training-task-panel">
-            <p><strong>Perform this task:</strong> Use assigned work or explicitly authorized training records. Never create fictional production data just to finish training.</p>
+            {% if public_training %}<p><strong>Perform this training task:</strong> Work through the fictional scenario and record what you decided or verified. Do not enter fictional training data in a live app.</p>{% else %}<p><strong>Perform this task:</strong> Use assigned work or explicitly authorized training records. Never create fictional production data just to finish training.</p>{% endif %}
             {% if can_open_workspace and task.workspace_path %}<a class="btn secondary training-workspace-link" href="{{ task.workspace_path }}" target="_blank" rel="noopener noreferrer">Open task workspace</a>{% endif %}
             <form method="post" action="{{ progress_url }}" class="training-completion-form">
               {% csrf_token %}

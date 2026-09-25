@@ -1,7 +1,7 @@
 """Session-only progress for sequential training tasks.
 
 This module deliberately does not import operational models. Course progress is stored
-in the authenticated browser session and completion notes are validated but never kept.
+in the browser session and completion notes are validated but never kept.
 """
 
 from copy import deepcopy
@@ -35,8 +35,6 @@ def _load_state(request):
         )
     ):
         state = _fresh_state()
-        request.session[SESSION_KEY] = state
-        request.session.modified = True
     return deepcopy(state)
 
 
@@ -46,9 +44,6 @@ def completed_task_count(request, namespace, slug, total_tasks):
     key = f"{namespace}:{slug}"
     completed = state["courses"].get(key, 0)
     if completed > total_tasks:
-        state["courses"][key] = 0
-        request.session[SESSION_KEY] = state
-        request.session.modified = True
         return 0
     return completed
 

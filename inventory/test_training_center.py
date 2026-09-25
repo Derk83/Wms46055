@@ -36,8 +36,8 @@ def test_public_training_center_lists_every_demo_guide_and_protected_course_with
     body = html.unescape(response.content.decode())
     for title in (
         "Guided Inventory Demo",
-        "Request Material",
-        "Request Equipment",
+        "Material Request Guide",
+        "Equipment Request Guide",
         "Inventory, Locations & Scanning",
         "Receiving",
         "Pick Tickets & QA",
@@ -57,25 +57,25 @@ def test_public_training_center_lists_every_demo_guide_and_protected_course_with
 
     hrefs = set(re.findall(r'<a class="hub-app" href="([^"]+)">', body))
     assert {
-        "https://bbx.rplwms.com/demo/",
-        "https://requests.rplwms.com/guide/",
-        "https://eqreq.rplwms.com/help/",
-        "https://bbx.rplwms.com/training/inventory-locations-scanning/",
-        "https://bbx.rplwms.com/training/receiving/",
-        "https://bbx.rplwms.com/training/pick-tickets-qa/",
-        "https://bbx.rplwms.com/training/material-request-processing/",
-        "https://bbx.rplwms.com/training/shortages-procurement/",
-        "https://bbx.rplwms.com/training/cycle-counts/",
-        "https://bbx.rplwms.com/training/transactions-reports/",
-        "https://bbx.rplwms.com/training/users-permissions/",
-        "https://equipment.rplwms.com/training/asset-register/",
-        "https://equipment.rplwms.com/training/custody-returns/",
-        "https://equipment.rplwms.com/training/reservations/",
-        "https://equipment.rplwms.com/training/maintenance-rentals/",
-        "https://equipment.rplwms.com/training/request-queue/",
-        "https://equipment.rplwms.com/training/imports-reporting/",
+        "https://demo.rplwms.com/inventory-demo/",
+        "https://demo.rplwms.com/guides/material-requests/",
+        "https://demo.rplwms.com/guides/equipment-requests/",
+        "https://demo.rplwms.com/training/warehouse/inventory-locations-scanning/",
+        "https://demo.rplwms.com/training/warehouse/receiving/",
+        "https://demo.rplwms.com/training/warehouse/pick-tickets-qa/",
+        "https://demo.rplwms.com/training/warehouse/material-request-processing/",
+        "https://demo.rplwms.com/training/warehouse/shortages-procurement/",
+        "https://demo.rplwms.com/training/warehouse/cycle-counts/",
+        "https://demo.rplwms.com/training/warehouse/transactions-reports/",
+        "https://demo.rplwms.com/training/warehouse/users-permissions/",
+        "https://demo.rplwms.com/training/equipment/asset-register/",
+        "https://demo.rplwms.com/training/equipment/custody-returns/",
+        "https://demo.rplwms.com/training/equipment/reservations/",
+        "https://demo.rplwms.com/training/equipment/maintenance-rentals/",
+        "https://demo.rplwms.com/training/equipment/request-queue/",
+        "https://demo.rplwms.com/training/equipment/imports-reporting/",
     } == hrefs
-    assert "Sign-in and permissions are still enforced" in body
+    assert "No sign-in required" in body
 
 
 @pytest.mark.parametrize(("slug", "permission", "expected_text"), [

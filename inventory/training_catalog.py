@@ -393,6 +393,19 @@ EQUIPMENT_TRAINING = {
 MATERIAL_REQUEST_GUIDE = {
     "title": "Material request guide",
     "summary": "Create and track a material request through five required requester tasks.",
+    "audience": "Material requesters",
+    "duration": "8 minutes",
+    "scenario": "A fictional requester needs stocked warehouse material for scheduled work and must choose a disposition for any shortage.",
+    "objectives": (
+        "Enter complete delivery and work-reference details.",
+        "Choose inventory quantities and handle shortages explicitly.",
+        "Retain the request number and track fulfillment status.",
+    ),
+    "key_points": (
+        "Available stock—not requested quantity—is the reservation limit.",
+        "Every shortage requires cancel, backorder, or Procurement routing.",
+        "The request number connects submission, picking, receiving, and fulfillment history.",
+    ),
     "steps": (
         (
             "Enter request details",
@@ -418,6 +431,47 @@ MATERIAL_REQUEST_GUIDE = {
             "Track your request",
             "Open Request Board, find the request number, review its status and fulfillment updates, and open the detail page. Follow any readiness or delivery confirmation shown on the request. Edit or cancel only while the displayed workflow permits it.",
             "/material-requests/",
+        ),
+    ),
+}
+
+
+EQUIPMENT_REQUEST_GUIDE = {
+    "title": "Equipment request guide",
+    "summary": "Create and track an equipment request through five required requester tasks.",
+    "audience": "Equipment requesters",
+    "duration": "8 minutes",
+    "scenario": "A fictional requester needs equipment for scheduled work and must provide enough detail for safe review and allocation.",
+    "objectives": (
+        "Enter complete dates, destination, purpose, and project details.",
+        "Request categories or preferred available assets without treating preference as allocation.",
+        "Track the request number through review and fulfillment.",
+    ),
+    "key_points": (
+        "A preferred asset is optional and is not an allocation guarantee.",
+        "Requester access stays separate from Equipment Manager operational access.",
+        "Submitted requests can be edited; Submitted or Under review requests can be cancelled.",
+    ),
+    "steps": (
+        (
+            "Enter request details",
+            "For the fictional request, identify the needed date, destination, purpose, project, and priority. Add an end date only when it is on or after the start date, then note any delivery, access, or operating requirements.",
+        ),
+        (
+            "Choose equipment",
+            "Add one line for each equipment type and quantity. Select a category and, when appropriate, record a preferred available item. If the equipment is not listed, describe it clearly as unlisted equipment.",
+        ),
+        (
+            "Review allocation expectations",
+            "Confirm that a preferred item is a request rather than a guaranteed assignment. The equipment team must validate availability, lifecycle state, holds, and custody before allocating a serialized asset.",
+        ),
+        (
+            "Submit and keep the request number",
+            "Review dates, quantities, destination, and notes, then simulate submitting the request. Record the fictional request number so every follow-up can identify the same request.",
+        ),
+        (
+            "Track, edit, or cancel",
+            "Review the normal Submitted, Under review, Approved, Ready, and Fulfilled path. Identify when editing or cancellation is still allowed and when the requester must contact the equipment team with the request number.",
         ),
     ),
 }
