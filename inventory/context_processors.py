@@ -4,7 +4,8 @@ from .models import PickTicket
 def pending_pick_assignment(request):
     """Expose the oldest unacknowledged warehouse assignment for the blocking prompt."""
     if (
-        not getattr(request, "user", None)
+        getattr(request, "is_training_page", False)
+        or not getattr(request, "user", None)
         or not request.user.is_authenticated
         or not getattr(request, "is_wms_host", False)
     ):

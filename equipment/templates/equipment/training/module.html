@@ -1,0 +1,37 @@
+{% extends "equipment/base.html" %}
+{% load inventory_extras %}
+{% block title %}{{ training.title }} · RPL Equipment Training{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% versioned_static 'inventory/css/training.css' %}">{% endblock %}
+{% block content %}
+<div class="training-page">
+  <section class="page-header training-page-header">
+    <div>
+      <p class="equipment-eyebrow">Equipment training</p>
+      <h1>{{ training.title }}</h1>
+      <p class="meta">{{ training.summary }}</p>
+      <div class="training-meta" aria-label="Course details"><span><strong>Audience:</strong> {{ training.audience }}</span><span><strong>Estimated time:</strong> {{ training.duration }}</span><span><strong>Format:</strong> Read-only guided training</span></div>
+    </div>
+  </section>
+
+  <section class="training-notice" aria-label="Training safety notice">
+    <span aria-hidden="true">✓</span>
+    <div><strong>Training content only</strong><span>This page uses a fictional scenario and does not read or change live equipment, custody, maintenance, requests, or audit records.</span></div>
+  </section>
+
+  <div class="training-layout">
+    <section aria-labelledby="course-steps-title">
+      <div class="training-scenario"><strong>Fictional scenario</strong><span>{{ training.scenario }}</span></div>
+      <h2 id="course-steps-title">Guided workflow</h2>
+      <ol class="training-steps">
+        {% for title, body in training.steps %}<li class="training-step"><div><h3>{{ title }}</h3><p>{{ body }}</p></div></li>{% endfor %}
+      </ol>
+    </section>
+
+    <aside class="training-aside" aria-label="Course reference">
+      <section class="card"><h2>Learning objectives</h2><ul>{% for objective in training.objectives %}<li>{{ objective }}</li>{% endfor %}</ul></section>
+      <section class="card"><h2>Remember</h2><ul>{% for point in training.key_points %}<li>{{ point }}</li>{% endfor %}</ul></section>
+      <section class="card training-actions">{% if can_open_workspace %}<a class="btn btn-primary" href="{{ training.workspace_path }}">Open the live workspace</a>{% endif %}<a class="btn secondary" href="{% demo_url %}">Back to Training Center</a><p class="training-readonly">Opening the workspace does not perform an action. Your existing permissions continue to apply.</p></section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

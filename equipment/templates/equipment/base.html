@@ -10,6 +10,7 @@
   <link rel="icon" type="image/svg+xml" href="{% static 'equipment/branding/equipment-mark.svg' %}">
   <link rel="apple-touch-icon" href="{% static 'equipment/icons/equipment-apple-touch-icon.png' %}">
   <script src="{% versioned_static 'equipment/js/equipment.js' %}" defer></script>
+  {% block extra_head %}{% endblock %}
 </head>
 <body{% if user.is_authenticated %} class="equipment-app"{% endif %}>
 {% if user.is_authenticated %}

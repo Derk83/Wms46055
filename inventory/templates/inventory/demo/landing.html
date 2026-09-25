@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#ffffff">
-  <title>RPL WMS Demos</title>
+  <title>RPL WMS Training Center</title>
   <link rel="icon" href="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/hub.css' %}">
   <link rel="stylesheet" href="{% versioned_static 'inventory/css/demo-hub.css' %}">
@@ -18,7 +18,7 @@
       <a class="hub-brand" href="https://rplwms.com/" aria-label="RPL WMS application launcher">
         <img src="{% versioned_static 'inventory/img/blackbox-logo.png' %}" alt="Black Box">
         <span class="hub-brand-divider" aria-hidden="true"></span>
-        <strong>RPL WMS Demos</strong>
+        <strong>RPL WMS Training</strong>
       </a>
       <button class="hub-theme" type="button" data-hub-theme-toggle aria-label="Dark theme" aria-pressed="false">
         <svg aria-hidden="true" viewBox="0 0 24 24" width="19" height="19"><path d="M12 3v2m0 14v2M3 12h2m14 0h2M5.64 5.64l1.42 1.42m9.88 9.88 1.42 1.42m0-12.72-1.42 1.42M7.06 16.94l-1.42 1.42M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -26,30 +26,90 @@
     </header>
 
     <main class="hub-main">
-      <section class="hub-hero" aria-labelledby="demo-hub-title">
+      <section class="hub-hero" aria-labelledby="training-hub-title">
         <p class="hub-eyebrow">Training center</p>
-        <h1 id="demo-hub-title">Guided demos</h1>
-        <p>Explore WMS workflows safely with fictional, session-isolated data. Demo activity never changes live inventory or operational records.</p>
+        <h1 id="training-hub-title">Demos, guides, and module training</h1>
+        <p>Learn each WMS workflow from one place. The interactive demo uses fictional session-isolated data; guides and courses remain protected by their application sign-in and permissions.</p>
       </section>
 
-      <div class="hub-apps-heading">
-        <h2>Available demos</h2>
-        <p>Select a guided walkthrough.</p>
-      </div>
+      <section class="training-section" aria-labelledby="guided-demo-title">
+        <div class="hub-apps-heading">
+          <h2 id="guided-demo-title">Guided demo</h2>
+          <p>Practice the connected Warehouse workflow without changing production records.</p>
+        </div>
+        <div class="hub-apps training-grid training-grid-single">
+          <a class="hub-app" href="{{ inventory_demo_url }}">
+            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" alt=""></span>
+            <h3>Guided Inventory Demo</h3>
+            <p>Practice receiving fictional stock, creating a material request, fulfilling its pick ticket, and reviewing the audit trail.</p>
+            <ul><li>6 fictional items</li><li>5 guided steps</li><li>No production writes</li></ul>
+            <span class="hub-open"><span>Open Inventory Demo</span><span aria-hidden="true">→</span></span>
+          </a>
+        </div>
+      </section>
 
-      <section class="hub-apps demo-hub-apps" aria-label="RPL WMS guided demos">
-        <a class="hub-app" href="{{ inventory_demo_url }}">
-          <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" alt=""></span>
-          <h3>Guided Inventory Demo</h3>
-          <p>Practice receiving fictional stock, creating a material request, fulfilling its pick ticket, and reviewing the audit trail.</p>
-          <ul><li>6 fictional items</li><li>5 guided steps</li><li>No production writes</li></ul>
-          <span class="hub-open"><span>Open Inventory Demo</span><span aria-hidden="true">→</span></span>
-        </a>
+      <section class="training-section" aria-labelledby="requester-guides-title">
+        <div class="hub-apps-heading">
+          <h2 id="requester-guides-title">Requester guides</h2>
+          <p>Step-by-step instructions for submitting and tracking material or equipment needs.</p>
+        </div>
+        <div class="hub-apps training-grid training-grid-two">
+          <a class="hub-app" href="{{ material_guide_url }}">
+            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/requests-mark.svg' %}" alt=""></span>
+            <h3>Request Material</h3>
+            <p>Choose available inventory, enter delivery details, resolve shortages, and track request progress.</p>
+            <ul><li>Material Requests</li><li>Requester sign-in</li><li>Live guide</li></ul>
+            <span class="hub-open"><span>Open Material Guide</span><span aria-hidden="true">→</span></span>
+          </a>
+          <a class="hub-app" href="{{ equipment_guide_url }}">
+            <span class="hub-app-mark"><img src="{% versioned_static 'equipment/eqreq/eqreq-mark.svg' %}" alt=""></span>
+            <h3>Request Equipment</h3>
+            <p>Request serialized equipment, choose a preferred item, and follow approval and fulfillment status.</p>
+            <ul><li>Equipment Requests</li><li>Requester sign-in</li><li>Live guide</li></ul>
+            <span class="hub-open"><span>Open Equipment Guide</span><span aria-hidden="true">→</span></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="training-section" aria-labelledby="warehouse-training-title">
+        <div class="hub-apps-heading">
+          <h2 id="warehouse-training-title">Warehouse module training</h2>
+          <p>Read-only courses for inventory, fulfillment, shortages, counts, audit, and access management.</p>
+        </div>
+        <div class="hub-apps training-grid">
+          {% for course in warehouse_courses %}
+          <a class="hub-app" href="{{ course.url }}">
+            <span class="hub-app-mark"><img src="{% versioned_static 'inventory/branding/warehouse-mark.svg' %}" alt=""></span>
+            <h3>{{ course.title }}</h3>
+            <p>{{ course.summary }}</p>
+            <ul><li>{{ course.duration }}</li><li>{{ course.audience }}</li><li>Permission protected</li></ul>
+            <span class="hub-open"><span>Open Training</span><span aria-hidden="true">→</span></span>
+          </a>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="training-section" aria-labelledby="equipment-training-title">
+        <div class="hub-apps-heading">
+          <h2 id="equipment-training-title">Equipment operations training</h2>
+          <p>Protected courses for serialized assets, custody, reservations, maintenance, requests, and imports.</p>
+        </div>
+        <div class="hub-apps training-grid">
+          {% for course in equipment_courses %}
+          <a class="hub-app" href="{{ course.url }}">
+            <span class="hub-app-mark"><img src="{% versioned_static 'equipment/branding/equipment-mark.svg' %}" alt=""></span>
+            <h3>{{ course.title }}</h3>
+            <p>{{ course.summary }}</p>
+            <ul><li>{{ course.duration }}</li><li>{{ course.audience }}</li><li>Permission protected</li></ul>
+            <span class="hub-open"><span>Open Training</span><span aria-hidden="true">→</span></span>
+          </a>
+          {% endfor %}
+        </div>
       </section>
 
       <div class="hub-note">
         <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18"><path d="M12 3 5 6v5c0 4.8 2.9 8.2 7 10 4.1-1.8 7-5.2 7-10V6l-7-3Z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m9 12 2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span><strong>Demos stay isolated.</strong> The selected demo may require your Warehouse sign-in, but its fictional workflow remains separate from production inventory.</span>
+        <span><strong>Sign-in and permissions are still enforced.</strong> Requester, Warehouse, Equipment Manager, and manager-only boundaries remain separate. Training pages do not expose live records or perform workflow actions.</span>
       </div>
     </main>
 

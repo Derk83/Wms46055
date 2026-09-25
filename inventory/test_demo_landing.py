@@ -8,17 +8,25 @@ from inventory.templatetags.inventory_extras import demo_url
 class DemoLandingHostTests(TestCase):
     host = "demo.rplwms.com"
 
-    def test_demo_host_serves_public_landing_page_with_all_live_demos(self):
+    def test_demo_host_serves_public_training_center(self):
         with self.assertNumQueries(0):
             response = self.client.get("/", HTTP_HOST=self.host, secure=True)
 
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "inventory/demo/landing.html")
-        self.assertContains(response, "Guided demos")
+        self.assertContains(response, "Demos, guides, and module training")
         self.assertContains(response, "Guided Inventory Demo")
-        self.assertContains(response, "fictional, session-isolated data")
+        self.assertContains(response, "fictional session-isolated data")
         hrefs = re.findall(r'<a class="hub-app" href="([^"]+)">', response.content.decode())
-        self.assertEqual(hrefs, ["https://bbx.rplwms.com/demo/"])
+        self.assertEqual(len(hrefs), 17)
+        self.assertEqual(
+            hrefs[:3],
+            [
+                "https://bbx.rplwms.com/demo/",
+                "https://requests.rplwms.com/guide/",
+                "https://eqreq.rplwms.com/help/",
+            ],
+        )
 
     def test_demo_landing_supports_head_but_rejects_post(self):
         response = self.client.head("/", HTTP_HOST=self.host, secure=True)

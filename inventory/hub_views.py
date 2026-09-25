@@ -3,6 +3,8 @@ from django.http import HttpResponsePermanentRedirect
 from django.shortcuts import render
 from django.views.decorators.http import require_safe
 
+from .training_catalog import EQUIPMENT_TRAINING, WAREHOUSE_TRAINING
+
 
 @require_safe
 def hub_home(request):
@@ -24,9 +26,25 @@ def hub_home(request):
 
 @require_safe
 def demo_home(request):
-    """Public, data-free launcher for session-isolated WMS demonstrations."""
+    """Public, data-free catalog for demos, requester guides, and protected training."""
+    warehouse_url = settings.APP_URL.rstrip("/")
+    equipment_url = settings.EQUIPMENT_URL.rstrip("/")
+    warehouse_courses = [
+        {**course, "slug": slug, "url": f"{warehouse_url}/training/{slug}/"}
+        for slug, course in WAREHOUSE_TRAINING.items()
+    ]
+    equipment_courses = [
+        {**course, "slug": slug, "url": f"{equipment_url}/training/{slug}/"}
+        for slug, course in EQUIPMENT_TRAINING.items()
+    ]
     return render(
         request,
         "inventory/demo/landing.html",
-        {"inventory_demo_url": f"{settings.APP_URL.rstrip('/')}/demo/"},
+        {
+            "inventory_demo_url": f"{warehouse_url}/demo/",
+            "material_guide_url": f"{settings.REQUESTS_URL.rstrip('/')}/guide/",
+            "equipment_guide_url": f"{settings.EQUIPMENT_REQUESTS_URL.rstrip('/')}/help/",
+            "warehouse_courses": warehouse_courses,
+            "equipment_courses": equipment_courses,
+        },
     )

@@ -25,7 +25,7 @@
   {% endif %}
   {% block extra_head %}{% endblock %}
 </head>
-<body{% if user.is_authenticated %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
+<body{% if user.is_authenticated and not request.is_training_page %} data-notification-user="{{ user.pk }}"{% if request.is_wms_host and perms.inventory.view_all_materialrequests %} data-events-url="{% url 'material_request_events' %}"{% endif %}{% if request.is_wms_host and perms.inventory.view_all_materialrequests or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-config-url="{% url 'push_config' %}" data-push-subscribe-url="{% url 'push_subscribe' %}" data-push-unsubscribe-url="{% url 'push_unsubscribe' %}"{% endif %}{% endif %}>
 <header class="site-header{% if request.is_request_portal %} site-header--portal{% else %} site-header--wms{% endif %}">
   {% if user.is_authenticated and not request.is_request_portal %}
   <div class="desktop-header-top">
@@ -40,7 +40,7 @@
     </form>
     <div class="header-controls">
       <button class="icon-button pwa-install-button" type="button" data-pwa-install hidden aria-label="Install this app" title="Install app"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 20h14"/></svg></button>
-      <div class="notification-center" data-notification-center>
+      {% if not request.is_training_page %}<div class="notification-center" data-notification-center>
         <button class="icon-button notification-toggle" type="button" data-notification-toggle aria-expanded="false" aria-controls="notification-panel" aria-label="Notifications">
           <svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           <span class="notification-count" data-notification-count hidden>0</span>
@@ -50,7 +50,7 @@
           <ul class="notification-list" data-notification-list>{% for message in messages %}<li class="notification-item {{ message.tags }}" data-initial-notification data-popup-message="{{ message }}"><span>{{ message }}</span><time>Now</time></li>{% empty %}<li class="notification-empty" data-notification-empty>No notifications yet.</li>{% endfor %}</ul>
           {% if perms.inventory.view_materialrequest %}<footer><button class="btn secondary sm push-toggle-button" type="button" data-push-toggle hidden aria-pressed="false">Enable device alerts</button></footer>{% endif %}
         </section>
-      </div>
+      </div>{% endif %}
       <button id="theme-toggle" class="icon-button" type="button" data-theme-toggle aria-label="Switch to light theme" aria-pressed="false" title="Change color theme"><svg class="header-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 15.1A8.5 8.5 0 0 1 8.9 3.3 9 9 0 1 0 20.7 15.1Z"/></svg></button>
       <div class="account-menu">
         <button class="account-menu-toggle" type="button" data-account-toggle aria-expanded="false" aria-controls="account-menu-panel">
@@ -62,7 +62,7 @@
           <strong>{{ user.get_full_name|default:user.username }}</strong>
           {% if perms.inventory.manage_users %}<a href="{% url 'user_management' %}">Users &amp; access</a>{% endif %}
           <a href="{% url 'change_password' %}">Change password</a>
-          <form method="post" action="{% url 'logout' %}"{% if perms.inventory.view_materialrequest %} data-push-logout{% endif %}>{% csrf_token %}<button type="submit">Logout</button></form>
+          <form method="post" action="{% url 'logout' %}"{% if not request.is_training_page and perms.inventory.view_materialrequest %} data-push-logout{% endif %}>{% csrf_token %}<button type="submit">Logout</button></form>
         </div>
       </div>
     </div>
@@ -109,7 +109,7 @@
       <button class="mobile-nav-utility" type="button" data-theme-toggle data-mobile-theme-toggle aria-pressed="false"><span aria-hidden="true">◐</span><span data-theme-label>Light theme</span></button>
     </div>
     {% endif %}
-    <div class="mobile-nav-account"><span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span><form method="post" action="{% url 'logout' %}"{% if request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form></div>
+    <div class="mobile-nav-account"><span>Signed in as <strong>{{ user.get_full_name|default:user.username }}</strong></span><form method="post" action="{% url 'logout' %}"{% if not request.is_training_page and request.is_wms_host and perms.inventory.view_materialrequest or not request.is_training_page and request.is_request_portal and perms.inventory.access_material_request_portal %} data-push-logout{% endif %}>{% csrf_token %}<button class="btn secondary" type="submit">Logout</button></form></div>
   </nav>
   <button type="button" class="nav-backdrop" aria-label="Close navigation menu" tabindex="-1" data-mobile-nav-backdrop></button>
   {% if request.is_request_portal %}
@@ -157,6 +157,6 @@
 <div id="toast-region" class="toast-region no-print" aria-live="polite" aria-atomic="true"></div>
 <script src="{% versioned_static 'inventory/js/app.js' %}" defer></script>
 <script src="{% versioned_static 'inventory/js/pwa.js' %}" defer></script>
-{% if user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% versioned_static 'inventory/js/push.js' %}" defer></script>{% endif %}
+{% if not request.is_training_page and user.is_authenticated and request.is_wms_host and perms.inventory.view_materialrequest or not request.is_training_page and request.is_request_portal and perms.inventory.access_material_request_portal %}<script src="{% versioned_static 'inventory/js/push.js' %}" defer></script>{% endif %}
 {% block content_tail %}{% endblock %}
 </body></html>

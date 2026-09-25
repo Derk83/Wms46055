@@ -3,7 +3,7 @@ from django.urls import path
 
 from inventory.auth_forms import WarehouseAuthenticationForm
 
-from . import request_views, views
+from . import request_views, training_views, views
 
 urlpatterns = [
     path("manifest.webmanifest", views.pwa_manifest, name="equipment_pwa_manifest"),
@@ -20,6 +20,7 @@ urlpatterns = [
     ),
     path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
     path("", views.dashboard, name="equipment_dashboard"),
+    path("training/<slug:slug>/", training_views.equipment_training, name="equipment_training"),
     path("requests/", request_views.manager_queue, name="equipment_request_queue"),
     path("requests/<uuid:pk>/", request_views.manager_detail, name="equipment_request_detail"),
     path("requests/<uuid:pk>/delete/", request_views.manager_delete, name="equipment_request_delete"),
