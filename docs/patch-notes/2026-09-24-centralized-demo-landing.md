@@ -33,12 +33,15 @@ Added a dedicated, public, read-only demo launcher at `https://demo.rplwms.com/`
 - Added Nginx Proxy Manager host routing to the existing WMS backend.
 - Issued and attached a dedicated Let's Encrypt certificate using Cloudflare DNS validation.
 - Enabled forced HTTPS, HTTP/2, and HSTS.
+- Restored the four stale RPL DNS records (`rplwms.com`, `bbx`, `eqreq`, and `equipment`) from the retired WAN address to the active edge address while preserving each record's existing Cloudflare proxy mode.
 
 ## Verification
 
 - Full release gate: **671 tests passed**, **61 subtests passed**, **2 skipped**.
 - Independent host-isolation and UI review passed after resolving all findings.
 - Public HTTPS landing page returned `200`.
+- The Guided Inventory Demo link reached the Warehouse login at `https://bbx.rplwms.com/demo/`.
+- All six public RPL hosts returned their expected `200` or authentication redirect status after DNS restoration.
 - Versioned demo stylesheet returned `200`.
 - Browser console contained no JavaScript errors or warnings.
 - Light and dark themes rendered without horizontal overflow.
