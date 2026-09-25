@@ -21,6 +21,11 @@ urlpatterns = [
     path("demo/", demo.inventory_demo, name="inventory_demo"),
     path("demo/action/", demo.inventory_demo_action, name="inventory_demo_action"),
     path("training/<slug:slug>/", training_views.warehouse_training, name="warehouse_training"),
+    path(
+        "training/<slug:slug>/progress/",
+        training_views.warehouse_training_progress,
+        name="warehouse_training_progress",
+    ),
     path("search/", views.global_search, name="global_search"),
     path("recently-viewed/", views.recently_viewed, name="recently_viewed"),
     path("inventory/", views.inventory_list, name="inventory_list"),

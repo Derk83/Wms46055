@@ -32,7 +32,7 @@ from django.db.models.deletion import ProtectedError, RestrictedError
 from django.db.models import Count, Q, Sum
 from django import forms
 from django.forms import formset_factory, inlineformset_factory
-from django.http import FileResponse, Http404, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -106,8 +106,50 @@ def request_portal_access_required(view_func):
 )
 @require_safe
 def material_request_guide(request):
-    """Show requester-facing instructions without exposing warehouse operations."""
-    return render(request, "inventory/material_request_guide.html")
+    """Show required requester tasks without exposing warehouse operations."""
+    from .training_catalog import MATERIAL_REQUEST_GUIDE
+    from .training_progress import completed_task_count, progress_context
+
+    request.is_training_page = True
+    completed = completed_task_count(
+        request,
+        "material-requester",
+        "request-material",
+        len(MATERIAL_REQUEST_GUIDE["steps"]),
+    )
+    context = {
+        "training": MATERIAL_REQUEST_GUIDE,
+        "can_open_workspace": True,
+        "progress_url": reverse("material_request_guide_progress"),
+    }
+    context.update(progress_context(MATERIAL_REQUEST_GUIDE["steps"], completed))
+    return render(request, "inventory/material_request_guide.html", context)
+
+
+@login_required
+@request_portal_access_required
+@all_perms_required(
+    "inventory.add_materialrequest",
+    "inventory.add_materialrequestline",
+    "inventory.view_inventoryitem",
+    "inventory.view_materialrequest",
+)
+@require_POST
+def material_request_guide_progress(request):
+    """Advance only the active requester task, or reset session progress."""
+    from .training_catalog import MATERIAL_REQUEST_GUIDE
+    from .training_progress import InvalidTrainingProgress, apply_progress_action
+
+    try:
+        apply_progress_action(
+            request,
+            "material-requester",
+            "request-material",
+            len(MATERIAL_REQUEST_GUIDE["steps"]),
+        )
+    except InvalidTrainingProgress as exc:
+        return HttpResponseBadRequest(str(exc))
+    return redirect("material_request_guide")
 
 
 def portal_inventory_access_required(view_func):

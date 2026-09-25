@@ -34,6 +34,11 @@ urlpatterns = [
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("guide/", views.material_request_guide, name="material_request_guide"),
+    path(
+        "guide/progress/",
+        views.material_request_guide_progress,
+        name="material_request_guide_progress",
+    ),
     path("inventory/", views.inventory_list, name="inventory_list"),
     path("inventory/<int:pk>/", views.item_detail, name="item_detail"),
     path("material-requests/", views.material_request_board, name="material_request_board"),

@@ -1,0 +1,60 @@
+<section class="training-progress-card" aria-labelledby="training-progress-title">
+  <div class="training-progress-copy">
+    {% if training_complete %}
+      <p class="training-task-kicker">Module complete</p>
+      <h2 id="training-progress-title">{{ total_tasks }} of {{ total_tasks }} tasks complete</h2>
+      <p>You completed every required task in order. You can reset this module whenever you need to practice it again.</p>
+    {% else %}
+      <p class="training-task-kicker">Task {{ current_task_number }} of {{ total_tasks }}</p>
+      <h2 id="training-progress-title">{{ completed_tasks }} of {{ total_tasks }} tasks complete</h2>
+      <p>Complete the active task and submit its required confirmation to unlock the next task.</p>
+    {% endif %}
+  </div>
+  <div class="training-progress-track" role="progressbar" aria-label="Module completion" aria-valuemin="0" aria-valuemax="{{ total_tasks }}" aria-valuenow="{{ completed_tasks }}">
+    <span style="width:{{ progress_percent }}%"></span>
+  </div>
+</section>
+
+<ol class="training-steps">
+  {% for task in training_tasks %}
+    <li class="training-step is-{{ task.status }}" data-task-status="{{ task.status }}">
+      <div class="training-step-number" aria-hidden="true">{% if task.status == "complete" %}✓{% else %}{{ task.number }}{% endif %}</div>
+      <div class="training-step-content">
+        <div class="training-step-heading">
+          <h3>{{ task.title }}</h3>
+          {% if task.status == "complete" %}<span class="training-status is-complete">Complete</span>{% elif task.status == "current" %}<span class="training-status is-current">Required now</span>{% else %}<span class="training-status is-locked">Locked</span>{% endif %}
+        </div>
+
+        {% if task.status == "locked" %}
+          <p>Complete task {{ current_task_number }} to unlock this task.</p>
+        {% else %}
+          <p>{{ task.body }}</p>
+        {% endif %}
+
+        {% if task.status == "current" %}
+          <div class="training-task-panel">
+            <p><strong>Perform this task:</strong> Use assigned work or explicitly authorized training records. Never create fictional production data just to finish training.</p>
+            {% if can_open_workspace and task.workspace_path %}<a class="btn secondary training-workspace-link" href="{{ task.workspace_path }}" target="_blank" rel="noopener noreferrer">Open task workspace</a>{% endif %}
+            <form method="post" action="{{ progress_url }}" class="training-completion-form">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="complete">
+              <input type="hidden" name="step" value="{{ task.number }}">
+              <label for="training-evidence-{{ task.number }}"><strong>Completion note</strong><span>Briefly state what you completed or verified. This note is validated but not retained.</span></label>
+              <textarea id="training-evidence-{{ task.number }}" name="evidence" rows="3" minlength="3" maxlength="500" required></textarea>
+              <label class="training-confirm"><input type="checkbox" name="confirm" value="yes" required> I completed this task and verified the result.</label>
+              <button class="btn btn-primary" type="submit">Complete task{% if task.number < total_tasks %} and unlock next{% endif %}</button>
+            </form>
+          </div>
+        {% endif %}
+      </div>
+    </li>
+  {% endfor %}
+</ol>
+
+{% if completed_tasks %}
+<form method="post" action="{{ progress_url }}" class="training-reset-form">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="reset">
+  <button class="btn secondary" type="submit">Reset module progress</button>
+</form>
+{% endif %}

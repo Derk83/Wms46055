@@ -79,14 +79,14 @@ def test_public_training_center_lists_every_demo_guide_and_protected_course_with
 
 
 @pytest.mark.parametrize(("slug", "permission", "expected_text"), [
-    ("inventory-locations-scanning", "inventory.view_inventoryitem", "Fictional scenario"),
-    ("receiving", "inventory.receive_stock", "Post the receipt"),
-    ("pick-tickets-qa", "inventory.view_pickticket", "picker and QA checker"),
-    ("material-request-processing", "inventory.view_materialrequest", "assignment acknowledgement"),
-    ("shortages-procurement", "inventory.view_materialbackorder", "Procurement requisition"),
-    ("cycle-counts", "inventory.perform_cycle_count", "blind count"),
-    ("transactions-reports", "inventory.view_inventorytransaction", "immutable transaction history"),
-    ("users-permissions", "inventory.manage_users", "least-privilege access"),
+    ("inventory-locations-scanning", "inventory.view_inventoryitem", "Find the item"),
+    ("receiving", "inventory.receive_stock", "Verify shipment identity"),
+    ("pick-tickets-qa", "inventory.view_pickticket", "Accept assigned work"),
+    ("material-request-processing", "inventory.view_materialrequest", "Review the request"),
+    ("shortages-procurement", "inventory.view_materialbackorder", "Identify the shortage"),
+    ("cycle-counts", "inventory.perform_cycle_count", "Prepare the count"),
+    ("transactions-reports", "inventory.view_inventorytransaction", "Filter the ledger"),
+    ("users-permissions", "inventory.manage_users", "Confirm the requested role"),
 ])
 def test_warehouse_training_modules_require_the_matching_permission(slug, permission, expected_text):
     path = f"/training/{slug}/"
@@ -103,17 +103,27 @@ def test_warehouse_training_modules_require_the_matching_permission(slug, permis
     response = allowed.get(path, HTTP_HOST=WAREHOUSE_HOST, secure=True)
     assert response.status_code == 200
     assert expected_text in response.content.decode()
-    assert "Open the live workspace" in response.content.decode()
+    assert "Open task workspace" in response.content.decode()
     assert allowed.post(path, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 405
+    progress = allowed.post(f"/training/{slug}/progress/", {
+        "action": "complete",
+        "step": "1",
+        "confirm": "yes",
+        "evidence": "Completed and verified the first required task.",
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True)
+    assert progress.status_code == 302
+    advanced = allowed.get(path, HTTP_HOST=WAREHOUSE_HOST, secure=True).content.decode()
+    assert "Task 2 of" in advanced
+    assert 'data-task-status="complete"' in advanced
 
 
 @pytest.mark.parametrize(("slug", "permission", "expected_text"), [
-    ("asset-register", "equipment.view_asset", "authoritative asset identity"),
-    ("custody-returns", "equipment.view_checkout", "custody history"),
-    ("reservations", "equipment.view_reservation", "approved future custody"),
-    ("maintenance-rentals", "equipment.view_maintenanceworkorder", "service and rental obligations"),
-    ("request-queue", "equipment.manage_equipment_requests", "Allocate specific assets"),
-    ("imports-reporting", "equipment.import_equipment", "staged import"),
+    ("asset-register", "equipment.view_asset", "Search before creating"),
+    ("custody-returns", "equipment.view_checkout", "Confirm availability"),
+    ("reservations", "equipment.view_reservation", "Review the requested window"),
+    ("maintenance-rentals", "equipment.view_maintenanceworkorder", "Review service and rental obligations"),
+    ("request-queue", "equipment.manage_equipment_requests", "Triage the request"),
+    ("imports-reporting", "equipment.import_equipment", "Upload to staged import"),
 ])
 def test_equipment_training_modules_require_portal_and_module_permissions(slug, permission, expected_text):
     path = f"/training/{slug}/"
@@ -136,8 +146,18 @@ def test_equipment_training_modules_require_portal_and_module_permissions(slug, 
     response = allowed.get(path, HTTP_HOST=EQUIPMENT_HOST, secure=True)
     assert response.status_code == 200
     assert expected_text in response.content.decode()
-    assert "Open the live workspace" in response.content.decode()
+    assert "Open task workspace" in response.content.decode()
     assert allowed.post(path, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 405
+    progress = allowed.post(f"/training/{slug}/progress/", {
+        "action": "complete",
+        "step": "1",
+        "confirm": "yes",
+        "evidence": "Completed and verified the first required task.",
+    }, HTTP_HOST=EQUIPMENT_HOST, secure=True)
+    assert progress.status_code == 302
+    advanced = allowed.get(path, HTTP_HOST=EQUIPMENT_HOST, secure=True).content.decode()
+    assert "Task 2 of" in advanced
+    assert 'data-task-status="complete"' in advanced
 
 
 def test_warehouse_training_suppresses_live_assignment_context():
@@ -238,3 +258,118 @@ def test_training_routes_are_isolated_to_their_own_application_hosts():
     assert Client().get(
         "/training/receiving/", HTTP_HOST=DEMO_HOST, secure=True
     ).status_code == 404
+
+
+def test_warehouse_tasks_unlock_only_after_current_task_is_completed():
+    client = Client()
+    client.force_login(user_with_permissions(
+        "warehouse-sequential", "inventory.view_inventoryitem"
+    ))
+    course = "/training/inventory-locations-scanning/"
+    progress = "/training/inventory-locations-scanning/progress/"
+
+    initial = client.get(course, HTTP_HOST=WAREHOUSE_HOST, secure=True)
+    body = initial.content.decode()
+    assert initial.status_code == 200
+    assert "Task 1 of 4" in body
+    assert "Find the item" in body
+    assert "Complete task 1 to unlock" in body
+    assert 'data-task-status="current"' in body
+    assert 'data-task-status="locked"' in body
+
+    assert client.post(progress, {
+        "action": "complete",
+        "step": "2",
+        "confirm": "yes",
+        "evidence": "Tried to skip",
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 400
+    assert client.post(progress, {
+        "action": "complete",
+        "step": "1",
+        "confirm": "yes",
+        "evidence": "",
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 400
+
+    completed = client.post(progress, {
+        "action": "complete",
+        "step": "1",
+        "confirm": "yes",
+        "evidence": "Confirmed the fictional item identity and description.",
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True)
+    assert completed.status_code == 302
+    assert completed.url == course
+
+    next_page = client.get(course, HTTP_HOST=WAREHOUSE_HOST, secure=True)
+    next_body = next_page.content.decode()
+    assert "Task 2 of 4" in next_body
+    assert "Read the location" in next_body
+    assert 'data-task-status="complete"' in next_body
+
+    reset = client.post(progress, {"action": "reset"}, HTTP_HOST=WAREHOUSE_HOST, secure=True)
+    assert reset.status_code == 302
+    assert "Task 1 of 4" in client.get(
+        course, HTTP_HOST=WAREHOUSE_HOST, secure=True
+    ).content.decode()
+
+
+def test_equipment_tasks_are_sequential_and_session_isolated():
+    user = user_with_permissions(
+        "equipment-sequential",
+        "equipment.access_equipment_portal",
+        "equipment.view_asset",
+    )
+    first = Client()
+    second = Client()
+    first.force_login(user)
+    second.force_login(user)
+    course = "/training/asset-register/"
+    progress = "/training/asset-register/progress/"
+
+    assert first.post(progress, {
+        "action": "complete",
+        "step": "1",
+        "confirm": "yes",
+        "evidence": "Searched tag, serial, name, and category.",
+    }, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 302
+
+    assert "Task 2 of 4" in first.get(
+        course, HTTP_HOST=EQUIPMENT_HOST, secure=True
+    ).content.decode()
+    assert "Task 1 of 4" in second.get(
+        course, HTTP_HOST=EQUIPMENT_HOST, secure=True
+    ).content.decode()
+
+
+def test_training_progress_requires_post_csrf_permission_and_correct_host():
+    progress = "/training/inventory-locations-scanning/progress/"
+    allowed = user_with_permissions("training-csrf", "inventory.view_inventoryitem")
+    csrf_client = Client(enforce_csrf_checks=True)
+    csrf_client.force_login(allowed)
+
+    assert csrf_client.get(progress, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 405
+    assert csrf_client.post(progress, {
+        "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 403
+
+    denied = Client()
+    denied.force_login(get_user_model().objects.create_user(username="progress-denied"))
+    assert denied.post(progress, {
+        "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"
+    }, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 403
+    host_client = Client()
+    host_client.force_login(user_with_permissions(
+        "training-host-isolation",
+        "inventory.view_inventoryitem",
+        "equipment.access_equipment_portal",
+    ))
+    assert host_client.post(progress, {
+        "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"
+    }, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 404
+
+
+def test_every_course_has_multiple_required_tasks():
+    from inventory.training_catalog import EQUIPMENT_TRAINING, WAREHOUSE_TRAINING
+
+    for course in (*WAREHOUSE_TRAINING.values(), *EQUIPMENT_TRAINING.values()):
+        assert len(course["steps"]) >= 4
+        assert all(title.strip() and body.strip() for title, body in course["steps"])

@@ -388,3 +388,36 @@ EQUIPMENT_TRAINING = {
         ),
     },
 }
+
+
+MATERIAL_REQUEST_GUIDE = {
+    "title": "Material request guide",
+    "summary": "Create and track a material request through five required requester tasks.",
+    "steps": (
+        (
+            "Enter request details",
+            "Open a new request and enter the Requestor name, Requestor email, Delivery location, Required delivery date, and Required delivery time. Put a project or work-order reference in Notes when it helps the warehouse identify the work. Select Urgent request only when immediate attention is required.",
+            "/material-requests/new/",
+        ),
+        (
+            "Choose from inventory",
+            "Search by part number, description, category, or storage location. Select Add, enter the quantity needed, and include line notes for item-specific instructions. Add every required line and review each quantity before continuing.",
+            "/inventory/",
+        ),
+        (
+            "Decide how to handle shortages",
+            "For every short line, choose one required disposition: Use available stock and cancel the rest, Request the rest when available, or Ask Procurement to purchase the rest. Confirm that the available quantity—not more—will be reserved.",
+            "/material-requests/new/",
+        ),
+        (
+            "Submit and keep the request number",
+            "Review the complete request, select Submit request, and record the request number from the confirmation. If validation fails, correct the highlighted field and confirm whether the request committed before submitting again.",
+            "/material-requests/new/",
+        ),
+        (
+            "Track your request",
+            "Open Request Board, find the request number, review its status and fulfillment updates, and open the detail page. Follow any readiness or delivery confirmation shown on the request. Edit or cancel only while the displayed workflow permits it.",
+            "/material-requests/",
+        ),
+    ),
+}

@@ -21,6 +21,11 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(next_page="login"), name="logout"),
     path("", views.dashboard, name="equipment_dashboard"),
     path("training/<slug:slug>/", training_views.equipment_training, name="equipment_training"),
+    path(
+        "training/<slug:slug>/progress/",
+        training_views.equipment_training_progress,
+        name="equipment_training_progress",
+    ),
     path("requests/", request_views.manager_queue, name="equipment_request_queue"),
     path("requests/<uuid:pk>/", request_views.manager_detail, name="equipment_request_detail"),
     path("requests/<uuid:pk>/delete/", request_views.manager_delete, name="equipment_request_delete"),

@@ -46,11 +46,10 @@ def test_material_request_guide_requires_requester_access_and_explains_complete_
     for expected in (
         "Material request guide",
         "Choose from inventory",
-        "Use available stock and cancel the rest",
-        "Request the rest when available",
-        "Ask Procurement to purchase the rest",
+        "Decide how to handle shortages",
+        "Submit and keep the request number",
         "Track your request",
-        "project or work-order reference in <strong>Notes</strong>",
+        "project or work-order reference",
         "https://eqreq.rplwms.com/help/",
     ):
         assert expected in body
@@ -61,6 +60,73 @@ def test_material_request_guide_requires_requester_access_and_explains_complete_
 
 def test_material_guide_is_not_exposed_on_warehouse_host():
     assert Client().get("/guide/", HTTP_HOST="bbx.rplwms.com").status_code == 404
+
+
+def test_material_request_guide_tasks_must_be_completed_in_order():
+    client = Client()
+    client.force_login(user_with_permissions(
+        "material-guide-progress",
+        "inventory",
+        "access_material_request_portal",
+        "add_materialrequest",
+        "add_materialrequestline",
+        "view_inventoryitem",
+        "view_materialrequest",
+    ))
+    guide = "/guide/"
+    progress = "/guide/progress/"
+
+    initial = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True)
+    initial_body = initial.content.decode()
+    assert initial.status_code == 200
+    assert "Task 1 of 5" in initial_body
+    assert "Enter request details" in initial_body
+    assert "Complete task 1 to unlock" in initial_body
+
+    assert client.post(progress, {
+        "action": "complete",
+        "step": "2",
+        "confirm": "yes",
+        "evidence": "Skipped",
+    }, HTTP_HOST=MATERIAL_HOST, secure=True).status_code == 400
+
+    for step in range(1, 6):
+        page = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True).content.decode()
+        if step == 3:
+            assert "Use available stock and cancel the rest" in page
+            assert "Request the rest when available" in page
+            assert "Ask Procurement to purchase the rest" in page
+        response = client.post(progress, {
+            "action": "complete",
+            "step": str(step),
+            "confirm": "yes",
+            "evidence": f"Completed material request task {step}.",
+        }, HTTP_HOST=MATERIAL_HOST, secure=True)
+        assert response.status_code == 302
+        assert response.url == guide
+
+    finished = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True)
+    assert "Module complete" in finished.content.decode()
+    assert "5 of 5 tasks complete" in finished.content.decode()
+
+
+def test_material_request_progress_is_post_only_permission_gated_and_host_isolated():
+    progress = "/guide/progress/"
+    allowed = Client(enforce_csrf_checks=True)
+    allowed.force_login(user_with_permissions(
+        "material-guide-csrf",
+        "inventory",
+        "access_material_request_portal",
+        "add_materialrequest",
+        "add_materialrequestline",
+        "view_inventoryitem",
+        "view_materialrequest",
+    ))
+    assert allowed.get(progress, HTTP_HOST=MATERIAL_HOST, secure=True).status_code == 405
+    assert allowed.post(progress, {
+        "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"
+    }, HTTP_HOST=MATERIAL_HOST, secure=True).status_code == 403
+    assert Client().post(progress, HTTP_HOST="bbx.rplwms.com", secure=True).status_code == 404
 
 
 def test_equipment_request_guide_requires_access_and_explains_complete_flow():
