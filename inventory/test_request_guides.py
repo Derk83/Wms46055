@@ -51,7 +51,7 @@ def test_material_request_guide_requires_requester_access_and_explains_complete_
         "Decide how to handle shortages",
         "Submit and keep the request number",
         "Track your request",
-        "project or work-order reference",
+        "fictional work reference",
         "https://eqreq.rplwms.com/help/",
     ):
         assert expected in body

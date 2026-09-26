@@ -409,7 +409,7 @@ MATERIAL_REQUEST_GUIDE = {
     "steps": (
         (
             "Enter request details",
-            "Open a new request and enter the Requestor name, Requestor email, Delivery location, Required delivery date, and Required delivery time. Put a project or work-order reference in Notes when it helps the warehouse identify the work. Select Urgent request only when immediate attention is required.",
+            "In this fictional practice form, choose a training requester, delivery destination, required date and time, urgency, and a fictional work reference. In the live request form, provide your authorized contact details; never submit this practice data there.",
             "/material-requests/new/",
         ),
         (
@@ -424,12 +424,12 @@ MATERIAL_REQUEST_GUIDE = {
         ),
         (
             "Submit and keep the request number",
-            "Review the complete request, select Submit request, and record the request number from the confirmation. If validation fails, correct the highlighted field and confirm whether the request committed before submitting again.",
+            "Review this fictional draft and enter its work reference to simulate submission. Record the fictional confirmation number shown afterward. A live request is not created here.",
             "/material-requests/new/",
         ),
         (
             "Track your request",
-            "Open Request Board, find the request number, review its status and fulfillment updates, and open the detail page. Follow any readiness or delivery confirmation shown on the request. Edit or cancel only while the displayed workflow permits it.",
+            "Enter the fictional confirmation number to find this practice request. In the live application, use Request Board to review status and fulfillment updates for an authorized real request.",
             "/material-requests/",
         ),
     ),
@@ -455,7 +455,7 @@ EQUIPMENT_REQUEST_GUIDE = {
     "steps": (
         (
             "Enter request details",
-            "For the fictional request, identify the needed date, destination, purpose, project, and priority. Add an end date only when it is on or after the start date, then note any delivery, access, or operating requirements.",
+            "For this fictional request, enter a work reference, needed date, destination, purpose, and priority. The live requester form has additional details; do not submit fictional data to it.",
         ),
         (
             "Choose equipment",
@@ -467,7 +467,7 @@ EQUIPMENT_REQUEST_GUIDE = {
         ),
         (
             "Submit and keep the request number",
-            "Review dates, quantities, destination, and notes, then simulate submitting the request. Record the fictional request number so every follow-up can identify the same request.",
+            "Review this fictional draft, enter its work reference to simulate submission, and record the fictional request number for the next task. No operational request is created.",
         ),
         (
             "Track, edit, or cancel",
