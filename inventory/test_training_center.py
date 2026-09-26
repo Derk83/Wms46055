@@ -7,6 +7,13 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import Client
 
+from inventory.training_exercises import exercise_for
+
+
+def exercise_answers(slug, step, draft=None):
+    fields = exercise_for(slug, step, draft)["fields"]
+    return {field["name"]: str(field["answer"]) for field in fields}
+
 
 pytestmark = pytest.mark.django_db
 
@@ -106,10 +113,7 @@ def test_warehouse_training_modules_require_the_matching_permission(slug, permis
     assert "Open task workspace" in response.content.decode()
     assert allowed.post(path, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 405
     progress = allowed.post(f"/training/{slug}/progress/", {
-        "action": "complete",
-        "step": "1",
-        "confirm": "yes",
-        "evidence": "Completed and verified the first required task.",
+        "action": "complete", "step": "1", **exercise_answers(slug, 1),
     }, HTTP_HOST=WAREHOUSE_HOST, secure=True)
     assert progress.status_code == 302
     advanced = allowed.get(path, HTTP_HOST=WAREHOUSE_HOST, secure=True).content.decode()
@@ -149,10 +153,7 @@ def test_equipment_training_modules_require_portal_and_module_permissions(slug, 
     assert "Open task workspace" in response.content.decode()
     assert allowed.post(path, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 405
     progress = allowed.post(f"/training/{slug}/progress/", {
-        "action": "complete",
-        "step": "1",
-        "confirm": "yes",
-        "evidence": "Completed and verified the first required task.",
+        "action": "complete", "step": "1", **exercise_answers(slug, 1),
     }, HTTP_HOST=EQUIPMENT_HOST, secure=True)
     assert progress.status_code == 302
     advanced = allowed.get(path, HTTP_HOST=EQUIPMENT_HOST, secure=True).content.decode()
@@ -291,10 +292,7 @@ def test_warehouse_tasks_unlock_only_after_current_task_is_completed():
     }, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 400
 
     completed = client.post(progress, {
-        "action": "complete",
-        "step": "1",
-        "confirm": "yes",
-        "evidence": "Confirmed the fictional item identity and description.",
+        "action": "complete", "step": "1", **exercise_answers("inventory-locations-scanning", 1),
     }, HTTP_HOST=WAREHOUSE_HOST, secure=True)
     assert completed.status_code == 302
     assert completed.url == course
@@ -326,10 +324,7 @@ def test_equipment_tasks_are_sequential_and_session_isolated():
     progress = "/training/asset-register/progress/"
 
     assert first.post(progress, {
-        "action": "complete",
-        "step": "1",
-        "confirm": "yes",
-        "evidence": "Searched tag, serial, name, and category.",
+        "action": "complete", "step": "1", **exercise_answers("asset-register", 1),
     }, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 302
 
     assert "Task 2 of 4" in first.get(
@@ -365,6 +360,72 @@ def test_training_progress_requires_post_csrf_permission_and_correct_host():
     assert host_client.post(progress, {
         "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"
     }, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 404
+
+
+def test_legacy_confirmation_and_generic_note_cannot_advance():
+    client = Client()
+    response = client.post("/training/warehouse/receiving/progress/", {
+        "action": "complete", "step": "1", "confirm": "yes", "evidence": "Done and verified",
+    }, HTTP_HOST=DEMO_HOST, secure=True)
+    assert response.status_code == 400
+    assert "Task 1 of 4" in client.get(
+        "/training/warehouse/receiving/", HTTP_HOST=DEMO_HOST, secure=True
+    ).content.decode()
+
+
+@pytest.mark.parametrize(("family", "catalog"), [
+    ("warehouse", "WAREHOUSE_TRAINING"), ("equipment", "EQUIPMENT_TRAINING"),
+])
+def test_every_public_course_step_requires_correct_scenario_decisions(family, catalog):
+    from inventory import training_catalog
+    from inventory.training_progress import SESSION_KEY
+
+    client = Client()
+    other = Client()
+    courses = getattr(training_catalog, catalog)
+    for slug, course in courses.items():
+        path = f"/training/{family}/{slug}/"
+        progress = path + "progress/"
+        for step in range(1, len(course["steps"]) + 1):
+            page = client.get(path, HTTP_HOST=DEMO_HOST, secure=True)
+            assert page.status_code == 200
+            assert f"Task {step} of" in page.content.decode()
+            fields = exercise_for(slug, step)["fields"]
+            assert fields
+            assert all(f'name="{field["name"]}"' in page.content.decode() for field in fields)
+            assert 'name="confirm"' not in page.content.decode()
+            assert 'name="evidence"' not in page.content.decode()
+            good = exercise_answers(slug, step)
+            invalid = good.copy()
+            invalid[fields[0]["name"]] = "wrong" if fields[0]["kind"] == "choice" else "999"
+            assert client.post(progress, {"action": "complete", "step": str(step), **invalid},
+                               HTTP_HOST=DEMO_HOST, secure=True).status_code == 400
+            assert client.post(progress, {"action": "complete", "step": str(step + 1), **good},
+                               HTTP_HOST=DEMO_HOST, secure=True).status_code == 400
+            assert client.post(progress, {"action": "complete", "step": str(step), **good},
+                               HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
+        assert "Module complete" in client.get(path, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
+        assert "Task 1 of" in other.get(path, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
+        assert not client.session[SESSION_KEY].get("drafts")
+        assert client.post(progress, {"action": "reset"}, HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
+        assert "Task 1 of" in client.get(path, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
+
+
+def test_public_progress_rejects_csrf_wrong_host_and_malformed_session():
+    from inventory.training_progress import SESSION_KEY
+    path = "/training/warehouse/receiving/progress/"
+    client = Client(enforce_csrf_checks=True)
+    good = {"action": "complete", "step": "1", **exercise_answers("receiving", 1)}
+    assert client.post(path, good, HTTP_HOST=DEMO_HOST, secure=True).status_code == 403
+    assert client.post(path, good, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 404
+    normal = Client()
+    session = normal.session
+    session[SESSION_KEY] = {"version": 2, "courses": {"public-warehouse:receiving": True}, "drafts": {}}
+    session.save()
+    assert normal.get("/training/warehouse/receiving/", HTTP_HOST=DEMO_HOST, secure=True).status_code == 200
+    assert normal.post(path, {**good, "personal_note": "private text"}, HTTP_HOST=DEMO_HOST, secure=True).status_code == 400
+    assert normal.post(path, good, HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
+    assert "personal_note" not in str(normal.session[SESSION_KEY])
 
 
 def test_every_course_has_multiple_required_tasks():

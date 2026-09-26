@@ -1,4 +1,6 @@
 import pytest
+from datetime import date, timedelta
+from inventory.training_progress import SESSION_KEY
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import Client
@@ -90,18 +92,24 @@ def test_material_request_guide_tasks_must_be_completed_in_order():
         "evidence": "Skipped",
     }, HTTP_HOST=MATERIAL_HOST, secure=True).status_code == 400
 
+    from datetime import date, timedelta
+    draft_steps = (
+        {"reference": "JOB-204", "destination": "Dock 2", "needed": (date.today() + timedelta(days=7)).isoformat(), "requester": "Training Operator", "delivery_time": "09:00", "urgency": "routine"},
+        {"item": "RPL-DEMO-104", "quantity": "9"},
+        {"allocated": "6", "disposition": "backorder"},
+        {"review_reference": "JOB-204"},
+    )
     for step in range(1, 6):
         page = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True).content.decode()
         if step == 3:
             assert "Use available stock and cancel the rest" in page
             assert "Request the rest when available" in page
             assert "Ask Procurement to purchase the rest" in page
-        response = client.post(progress, {
-            "action": "complete",
-            "step": str(step),
-            "confirm": "yes",
-            "evidence": f"Completed material request task {step}.",
-        }, HTTP_HOST=MATERIAL_HOST, secure=True)
+        data = draft_steps[step - 1] if step < 5 else {
+            "tracking_number": client.session[SESSION_KEY]["drafts"]["material-requester:material-requests"]["number"]
+        }
+        response = client.post(progress, {"action": "complete", "step": str(step), **data},
+                               HTTP_HOST=MATERIAL_HOST, secure=True)
         assert response.status_code == 302
         assert response.url == guide
 
@@ -160,6 +168,55 @@ def test_equipment_request_guide_requires_access_and_explains_complete_flow():
     assert f'href="{url}"' in body
     assert 'aria-current="page"' in body
     assert allowed_client.post(url, HTTP_HOST=EQUIPMENT_HOST).status_code == 405
+
+
+@pytest.mark.parametrize(("slug", "item", "available", "disposition", "prefix"), [
+    ("material-requests", "RPL-DEMO-104", 6, "backorder", "MR-"),
+    ("equipment-requests", "laptop", 1, "waitlist", "ER-"),
+])
+def test_fictional_request_form_is_validated_tracked_and_session_isolated(slug, item, available, disposition, prefix, django_assert_num_queries):
+    client, other = Client(), Client()
+    path = f"/guides/{slug}/"
+    progress = path + "progress/"
+    with django_assert_num_queries(0):
+        initial = client.get(path, HTTP_HOST="demo.rplwms.com", secure=True)
+    assert initial.status_code == 200
+    assert SESSION_KEY not in client.session
+    assert 'name="reference"' in initial.content.decode()
+    assert client.post(progress, {"action": "complete", "step": "1", "confirm": "yes", "evidence": "Done"}, HTTP_HOST="demo.rplwms.com", secure=True).status_code == 400
+
+    def submit(step, data, expected=302):
+        return client.post(progress, {"action": "complete", "step": str(step), **data}, HTTP_HOST="demo.rplwms.com", secure=True).status_code == expected
+
+    first = {"reference": "JOB-204", "destination": "Dock 2", "needed": (date.today() + timedelta(days=7)).isoformat()}
+    if slug == "equipment-requests":
+        first.update(purpose="scheduled work", priority="routine")
+    else:
+        first.update(requester="Training Operator", delivery_time="09:00", urgency="routine")
+    submit(1, {**first, "reference": "Jane Smith"}, 400)
+    submit(2, {"item": item, "quantity": "9"}, 400)
+    submit(1, first)
+    assert set(client.session[SESSION_KEY]["drafts"][f"public-{slug}:{slug}"]) == set(first)
+    assert "Jane Smith" not in str(client.session.items())
+    submit(2, {"item": item, "quantity": "0"}, 400)
+    submit(2, {"item": item, "quantity": "9"})
+    assert f"{item} × 9" in client.get(path, HTTP_HOST="demo.rplwms.com", secure=True).content.decode()
+    submit(3, {"allocated": "9", "disposition": disposition}, 400)
+    submit(3, {"allocated": str(available), "disposition": "none"}, 400)
+    submit(3, {"allocated": str(available), "disposition": disposition})
+    submit(4, {"review_reference": "JOB-205"}, 400)
+    submit(4, {"review_reference": "JOB-204"})
+    draft = client.session[SESSION_KEY]["drafts"][f"public-{slug}:{slug}"]
+    number = draft["number"]
+    assert number.startswith(prefix)
+    assert number in client.get(path, HTTP_HOST="demo.rplwms.com", secure=True).content.decode()
+    assert number not in other.get(path, HTTP_HOST="demo.rplwms.com", secure=True).content.decode()
+    submit(5, {"tracking_number": "MR-000000000000"}, 400)
+    submit(5, {"tracking_number": number})
+    assert "Module complete" in client.get(path, HTTP_HOST="demo.rplwms.com", secure=True).content.decode(), client.session[SESSION_KEY]
+    assert client.post(progress, {"action": "reset"}, HTTP_HOST="demo.rplwms.com", secure=True).status_code == 302
+    assert client.session[SESSION_KEY]["drafts"] == {}
+    assert number not in client.get(path, HTTP_HOST="demo.rplwms.com", secure=True).content.decode()
 
 
 @pytest.mark.parametrize("host", [

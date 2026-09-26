@@ -5,6 +5,10 @@ import pytest
 from django.apps import apps
 from django.contrib.sessions.models import Session
 from django.test import Client
+from datetime import date
+
+from inventory.training_exercises import exercise_for
+
 
 
 pytestmark = pytest.mark.django_db
@@ -90,13 +94,26 @@ def test_public_course_routes_exist_only_on_demo_host(path):
 def test_every_public_course_advances_anonymously_from_task_one(path):
     client = Client()
     progress = f"{path}progress/"
-
-    response = client.post(progress, {
+    slug = path.rstrip("/").split("/")[-1]
+    fields = exercise_for(slug, 1)["fields"]
+    answers = {}
+    for field in fields:
+        if field["kind"] == "choice":
+            answers[field["name"]] = field.get("answer", field["options"][0])
+        elif field["kind"] == "number":
+            answers[field["name"]] = str(field["answer"])
+        elif field["kind"] == "date":
+            answers[field["name"]] = date.today().isoformat()
+        elif field["kind"] == "reference":
+            answers[field["name"]] = "JOB-204"
+    assert client.post(progress, {
         "action": "complete",
         "step": "1",
         "confirm": "yes",
         "evidence": "Completed the first fictional task.",
-    }, HTTP_HOST=DEMO_HOST, secure=True)
+    }, HTTP_HOST=DEMO_HOST, secure=True).status_code == 400
+    response = client.post(progress, {"action": "complete", "step": "1", **answers},
+                           HTTP_HOST=DEMO_HOST, secure=True)
 
     assert response.status_code == 302
     body = client.get(path, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
@@ -116,12 +133,8 @@ def test_anonymous_progress_is_sequential_private_to_session_and_does_not_write_
         "confirm": "yes",
         "evidence": "Tried to skip a task.",
     }, HTTP_HOST=DEMO_HOST, secure=True).status_code == 400
-    assert first.post(progress, {
-        "action": "complete",
-        "step": "1",
-        "confirm": "yes",
-        "evidence": "Verified the fictional shipment identity.",
-    }, HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
+    assert first.post(progress, {"action": "complete", "step": "1", "answer_1": "7"},
+                      HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
 
     first_body = first.get(course, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
     second_body = second.get(course, HTTP_HOST=DEMO_HOST, secure=True).content.decode()
@@ -129,7 +142,7 @@ def test_anonymous_progress_is_sequential_private_to_session_and_does_not_write_
     assert "Task 1 of" in second_body
     assert before == domain_counts()
     state = first.session.get("rpl_sequential_training_v1")
-    assert "Verified the fictional shipment identity" not in repr(state)
+    assert "personal_note" not in repr(state)
 
 
 def test_anonymous_progress_requires_csrf_and_post():
@@ -162,10 +175,10 @@ def test_fictional_inventory_demo_is_public_and_completes_without_domain_writes(
     assert "Fictional training data" in initial.content.decode()
     for payload in (
         {"action": "select_item", "part_number": "DEMO-1002"},
-        {"action": "receive_stock"},
-        {"action": "create_request"},
-        {"action": "fulfill_pick"},
-        {"action": "complete_demo"},
+        {"action": "receive_stock", "part_number": "DEMO-1002", "quantity": "12", "bin": "A-01-02"},
+        {"action": "create_request", "requester": "Training requester", "delivery_location": "Training dock", "part_number": "DEMO-2001", "quantity": "3"},
+        {"action": "fulfill_pick", "actual_quantity": "3", "picker": "Training picker", "qa": "Training QA"},
+        {"action": "complete_demo", "event_refs": ["RECEIVE", "REQUEST", "PICK"]},
     ):
         response = client.post(action, payload, HTTP_HOST=DEMO_HOST, secure=True)
         assert response.status_code == 302
@@ -183,3 +196,42 @@ def test_public_training_unknown_family_and_slug_are_404():
     assert client.get(
         "/training/warehouse/not-a-course/", HTTP_HOST=DEMO_HOST, secure=True
     ).status_code == 404
+
+
+def test_practice_choices_do_not_consistently_put_correct_answer_first():
+    from inventory.training_catalog import WAREHOUSE_TRAINING, EQUIPMENT_TRAINING
+    placements = []
+    for slug, course in {**WAREHOUSE_TRAINING, **EQUIPMENT_TRAINING}.items():
+        for step in range(1, len(course["steps"]) + 1):
+            for field in exercise_for(slug, step)["fields"]:
+                if field["kind"] == "choice":
+                    placements.append(field["options"].index(field["answer"]))
+    assert 0 in placements and any(index > 0 for index in placements)
+
+
+@pytest.mark.parametrize("corruption", [
+    {"version": 2, "courses": {}, "drafts": {"public-material-requests:material-requests": {}}},
+    {"version": 2, "courses": {"public-material-requests:material-requests": 1},
+     "drafts": {"public-material-requests:material-requests": {
+         "reference": "JOB-204", "destination": "Dock 2", "needed": "2026-02-30",
+         "requester": "Training Operator", "delivery_time": "09:00", "urgency": "routine"}}},
+])
+def test_invalid_fictional_drafts_reset_safely(corruption):
+    client = Client()
+    session = client.session
+    session["rpl_sequential_training_v1"] = corruption
+    session.save()
+    response = client.get("/guides/material-requests/", HTTP_HOST=DEMO_HOST, secure=True)
+    assert response.status_code == 200
+    assert "Task 1 of 5" in response.content.decode()
+
+
+def test_compact_guide_date_is_rejected_without_advancing():
+    client = Client()
+    response = client.post("/guides/material-requests/progress/", {
+        "action": "complete", "step": "1", "reference": "JOB-204", "destination": "Dock 2",
+        "needed": "20271010", "requester": "Training Operator", "delivery_time": "09:00",
+        "urgency": "routine",
+    }, HTTP_HOST=DEMO_HOST, secure=True)
+    assert response.status_code == 400
+    assert "Task 1 of 5" in client.get("/guides/material-requests/", HTTP_HOST=DEMO_HOST, secure=True).content.decode()

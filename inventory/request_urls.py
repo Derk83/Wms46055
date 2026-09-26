@@ -2,6 +2,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import path
 
 from . import views
+from . import request_guide_views
 from . import onboarding_views
 from .auth_forms import WarehouseAuthenticationForm
 
@@ -33,10 +34,10 @@ urlpatterns = [
         name="login",
     ),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("guide/", views.material_request_guide, name="material_request_guide"),
+    path("guide/", request_guide_views.material_request_guide, name="material_request_guide"),
     path(
         "guide/progress/",
-        views.material_request_guide_progress,
+        request_guide_views.material_request_guide_progress,
         name="material_request_guide_progress",
     ),
     path("inventory/", views.inventory_list, name="inventory_list"),

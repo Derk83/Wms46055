@@ -7,7 +7,7 @@
     {% else %}
       <p class="training-task-kicker">Task {{ current_task_number }} of {{ total_tasks }}</p>
       <h2 id="training-progress-title">{{ completed_tasks }} of {{ total_tasks }} tasks complete</h2>
-      <p>Complete the active task and submit its required confirmation to unlock the next task.</p>
+      <p>Work through the fictional scenario and enter your decisions to unlock the next task.</p>
     {% endif %}
   </div>
   <div class="training-progress-track" role="progressbar" aria-label="Module completion" aria-valuemin="0" aria-valuemax="{{ total_tasks }}" aria-valuenow="{{ completed_tasks }}">
@@ -33,16 +33,27 @@
 
         {% if task.status == "current" %}
           <div class="training-task-panel">
-            {% if public_training %}<p><strong>Perform this training task:</strong> Work through the fictional scenario and record what you decided or verified. Do not enter fictional training data in a live app.</p>{% else %}<p><strong>Perform this task:</strong> Use assigned work or explicitly authorized training records. Never create fictional production data just to finish training.</p>{% endif %}
+            <p><strong>Fictional practice only:</strong> Work in this panel; do not enter these details in a live application.</p>
+            {% if fictional_draft %}<div class="training-draft"><strong>Practice draft:</strong> {{ fictional_draft.reference }} · {{ fictional_draft.destination }} · {{ fictional_draft.needed }}{% if fictional_draft.item %} · {{ fictional_draft.item }} × {{ fictional_draft.quantity }}{% endif %}{% if fictional_draft.disposition %} · {{ fictional_draft.allocated }} available · {{ fictional_draft.disposition }}{% endif %}</div>{% endif %}
+            {% if fictional_number %}<p class="training-draft"><strong>Your fictional request number:</strong> {{ fictional_number }} (use it to track the request in the next task)</p>{% endif %}
             {% if can_open_workspace and task.workspace_path %}<a class="btn secondary training-workspace-link" href="{{ task.workspace_path }}" target="_blank" rel="noopener noreferrer">Open task workspace</a>{% endif %}
             <form method="post" action="{{ progress_url }}" class="training-completion-form">
               {% csrf_token %}
               <input type="hidden" name="action" value="complete">
               <input type="hidden" name="step" value="{{ task.number }}">
-              <label for="training-evidence-{{ task.number }}"><strong>Completion note</strong><span>Briefly state what you completed or verified. This note is validated but not retained.</span></label>
-              <textarea id="training-evidence-{{ task.number }}" name="evidence" rows="3" minlength="3" maxlength="500" required></textarea>
-              <label class="training-confirm"><input type="checkbox" name="confirm" value="yes" required> I completed this task and verified the result.</label>
-              <button class="btn btn-primary" type="submit">Complete task{% if task.number < total_tasks %} and unlock next{% endif %}</button>
+              <p class="training-exercise-prompt">{{ task.exercise.prompt }}</p>
+              {% for field in task.exercise.fields %}
+                <label for="training-{{ task.number }}-{{ field.name }}"><strong>{{ field.label }}</strong></label>
+                {% if field.kind == "choice" %}
+                  <select id="training-{{ task.number }}-{{ field.name }}" name="{{ field.name }}" required>
+                    <option value="">Select an answer</option>
+                    {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+                  </select>
+                {% else %}
+                  <input id="training-{{ task.number }}-{{ field.name }}" name="{{ field.name }}" type="{% if field.kind == 'date' %}date{% elif field.kind == 'integer' or field.kind == 'number' %}number{% else %}text{% endif %}" {% if field.kind == 'integer' or field.kind == 'number' %}min="0" max="999" step="1"{% endif %} maxlength="40" required>
+                {% endif %}
+              {% endfor %}
+              <button class="btn btn-primary" type="submit">Check practice task{% if task.number < total_tasks %} and unlock next{% endif %}</button>
             </form>
           </div>
         {% endif %}

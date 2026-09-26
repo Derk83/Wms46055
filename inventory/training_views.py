@@ -46,7 +46,7 @@ def warehouse_training(request, slug):
         "can_open_workspace": can_open_workspace,
         "progress_url": reverse("warehouse_training_progress", kwargs={"slug": slug}),
     }
-    context.update(progress_context(module["steps"], completed, module["workspace_path"]))
+    context.update(progress_context(module["steps"], completed, module["workspace_path"], slug=slug))
     return render(request, "inventory/training/module.html", context)
 
 

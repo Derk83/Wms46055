@@ -19,6 +19,7 @@ from .training_progress import (
     InvalidTrainingProgress,
     apply_progress_action,
     completed_task_count,
+    course_draft,
     progress_context,
 )
 
@@ -47,7 +48,7 @@ def _render_course(request, label, namespace, slug, training, progress_url):
         "public_training": True,
         "can_open_workspace": False,
         "progress_url": progress_url,
-        **progress_context(training["steps"], completed),
+        **progress_context(training["steps"], completed, slug=slug, draft=course_draft(request, namespace, slug)),
     }
     return render(request, "inventory/training/module.html", context)
 

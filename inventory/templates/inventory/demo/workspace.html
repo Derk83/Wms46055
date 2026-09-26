@@ -37,7 +37,7 @@
 <div class="demo-workspace">
   <section class="card demo-inventory-card" aria-labelledby="demo-inventory-title">
     <div class="demo-card-heading">
-      <div><h2 id="demo-inventory-title">Demo inventory</h2><p>These records exist only in your browser session.</p></div>
+      <div><h2 id="demo-inventory-title">Demo inventory</h2><p>These fictional records are tied to this browser session on the training server, separate from live inventory.</p></div>
       <span class="demo-safe-badge">Isolated data</span>
     </div>
     <div class="table-responsive">
@@ -66,6 +66,14 @@
       </table>
     </div>
     <p class="demo-reset-note">All fictional quantities and activity reset when the demo is restarted.</p>
+    {% if receipt or demo_request or pick %}
+    <div class="demo-session-summary" aria-label="Recorded demo activity">
+      <strong>Recorded training activity</strong>
+      {% if receipt %}<p>Received {{ receipt.quantity }} boxes of {{ receipt.part_number }} into {{ receipt.bin }}.</p>{% endif %}
+      {% if demo_request %}<p>DEMO-MR-001: {{ demo_request.requester }} requested {{ demo_request.quantity }} packs of {{ demo_request.part_number }} for {{ demo_request.delivery_location }}. DEMO-PT-001 status: {{ demo_ticket_status }}.</p>{% endif %}
+      {% if pick %}<p>Picked {{ pick.actual_quantity }} of {{ demo_request.quantity }} packs · Picker: {{ pick.picker }} · QA: {{ pick.qa }}{% if pick.variance_reason %} · Variance: {{ pick.variance_reason }}{% endif %}.</p>{% endif %}
+    </div>
+    {% endif %}
   </section>
 
   <aside class="card demo-guide" aria-labelledby="demo-guide-title">
@@ -90,8 +98,29 @@
         <p>{{ guide.description }}</p>
         <div class="demo-task"><strong>Your task</strong><span>{{ guide.task }}</span></div>
         {% if guide.action %}
-        <form method="post" action="{% url 'inventory_demo_action' %}">
+        <form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form">
           {% csrf_token %}<input type="hidden" name="action" value="{{ guide.action }}">
+          {% if step == 2 %}
+          <label>Inbound item<select name="part_number" required><option value="">Select item</option><option value="DEMO-1002">DEMO-1002 · Nitrile Work Gloves</option></select></label>
+          <label>Received boxes<input name="quantity" type="number" min="1" required placeholder="Enter quantity"></label>
+          <label>Destination bin<input name="bin" required placeholder="Enter bin from inventory"></label>
+          {% elif step == 3 %}
+          <label>Fictional requester<input name="requester" maxlength="120" required placeholder="e.g. Training requester"></label>
+          <label>Fictional delivery location<input name="delivery_location" maxlength="120" required placeholder="e.g. Training dock"></label>
+          <label>Requested item<select name="part_number" required><option value="">Select item</option><option value="DEMO-2001">DEMO-2001 · Cable Labels ({{ items.2.quantity }} packs available)</option></select></label>
+          <label>Requested packs<input name="quantity" type="number" min="1" max="{{ items.2.quantity }}" required placeholder="Enter quantity"></label>
+          {% elif step == 4 %}
+          <p>DEMO-PT-001 · {{ demo_request.part_number }} · {{ demo_request.quantity }} packs reserved for {{ demo_request.requester }} at {{ demo_request.delivery_location }}.</p>
+          <label>Actual packs picked<input name="actual_quantity" type="number" min="0" max="{{ demo_request.quantity }}" required placeholder="Enter actual quantity"></label>
+          <label>Fictional picker<input name="picker" maxlength="120" required placeholder="e.g. Demo picker"></label>
+          <label>Fictional QA verifier (different person)<input name="qa" maxlength="120" required placeholder="e.g. Demo QA"></label>
+          <label>Variance reason (required if actual differs)<input name="variance_reason" maxlength="120" placeholder="Explain any discrepancy"></label>
+          {% elif step == 5 %}
+          <p>Confirm each actual event reference in the audit trail below:</p>
+          {% for event in events %}{% if event.kind == 'RECEIVE' or event.kind == 'REQUEST' or event.kind == 'PICK' %}
+          <label class="demo-event-check"><input type="checkbox" name="event_refs" value="{{ event.kind }}"> {{ event.kind }} · {{ event.description }}</label>
+          {% endif %}{% endfor %}
+          {% endif %}
           <button class="btn w-100" type="submit">{{ guide.button }}</button>
         </form>
         {% else %}
