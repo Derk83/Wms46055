@@ -1,4 +1,5 @@
 import pytest
+from html.parser import HTMLParser
 from django.contrib.auth import get_user_model
 from django.test import Client
 from django.urls import reverse
@@ -286,3 +287,105 @@ def test_demo_action_rejects_missing_csrf_token():
     )
 
     assert response.status_code == 403
+
+
+class DemoMarkup(HTMLParser):
+    """Track forms and tabs and their structural ancestors."""
+
+    def __init__(self, html):
+        super().__init__()
+        self.stack = []
+        self.forms = []
+        self.tabs = []
+        self.feed(html)
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "form":
+            self.forms.append(tuple(self.stack))
+        if "demo-tab" in (attrs.get("class") or "").split():
+            self.tabs.append((tag, attrs))
+        if tag not in {"input", "link", "meta", "br", "img", "hr"}:
+            self.stack.append((tag, attrs))
+
+    @property
+    def panel_forms(self):
+        return [ancestors for ancestors in self.forms if any(attrs.get("id") == "demo-panel" for _, attrs in ancestors)]
+
+    def handle_endtag(self, tag):
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                break
+
+
+def _tab_get(client, tab):
+    return client.get(reverse("inventory_demo"), {"tab": tab}, HTTP_HOST="bbx.rplwms.com")
+
+
+@pytest.mark.parametrize("step,tab,action", [
+    (1, "inventory", "select_item"), (2, "receiving", "receive_stock"),
+    (3, "requests", "create_request"), (4, "pick-tickets", "fulfill_pick"),
+    (5, "audit", "complete_demo"),
+])
+def test_action_form_is_inside_matching_main_tab_never_in_guide(client, step, tab, action):
+    _login(client)
+    if step > 1:
+        _advance(client, step)
+    response = _tab_get(client, tab)
+    markup = DemoMarkup(response.content.decode())
+    assert response.context["active_tab"]["slug"] == tab
+    assert f'name="action" value="{action}"' in response.content.decode()
+    assert len(markup.panel_forms) == 1
+    assert all(not any(node == "aside" for node, _ in ancestors) for ancestors in markup.forms)
+    assert any(any(attrs.get("id") == "demo-panel" for _, attrs in ancestors) for ancestors in markup.forms)
+    assert 'aria-label="Fictional training workflow"' in response.content.decode()
+
+
+def test_locked_tabs_do_not_expose_forms_or_allow_get_bypass(client):
+    _login(client)
+    for tab in ("receiving", "requests", "pick-tickets", "audit", "not-a-tab"):
+        response = _tab_get(client, tab)
+        markup = DemoMarkup(response.content.decode())
+        assert response.context["active_step"] == 1
+        assert len(markup.panel_forms) == 1
+        assert not any(t.get("href", "").endswith(f"tab={tab}#demo-panel") for _, t in markup.tabs)
+        assert 'name="requester"' not in response.content.decode()
+        assert 'name="event_refs"' not in response.content.decode()
+    assert len([t for tag, t in markup.tabs if tag == "span" and t.get("aria-disabled") == "true"]) == 4
+    assert _post(client, "complete_demo", event_refs=["RECEIVE", "REQUEST", "PICK"]).status_code == 400
+    assert _get(client).context["step"] == 1
+
+
+def test_completed_tabs_are_read_only_and_navigation_is_accessible(client):
+    _login(client)
+    _advance(client, 5)
+    for tab in ("inventory", "receiving", "requests", "pick-tickets"):
+        response = _tab_get(client, tab)
+        markup = DemoMarkup(response.content.decode())
+        assert response.context["tab_read_only"] is True
+        assert len(markup.panel_forms) == 0  # no completed action may be replayed
+        assert any(t.get("aria-current") == "page" and f"tab={tab}#demo-panel" in t.get("href", "") for _, t in markup.tabs)
+        assert 'id="demo-panel"' in response.content.decode()
+    assert _post(client, "fulfill_pick", **PICK).status_code == 400
+    assert _post(client, "complete_demo", **AUDIT).status_code == 302
+    for tab in ("inventory", "audit"):
+        response = _tab_get(client, tab)
+        assert response.context["tab_read_only"] is True
+        assert len(DemoMarkup(response.content.decode()).panel_forms) == 0
+    assert _post(client, "complete_demo", **AUDIT).status_code == 400
+
+
+def test_public_demo_tabs_keep_public_host_routes_and_locked_state(client):
+    url = "/inventory-demo/"
+    host = "demo.rplwms.com"
+    response = client.get(url, {"tab": "audit"}, HTTP_HOST=host)
+    assert response.context["active_step"] == 1
+    assert 'href="/inventory-demo/?tab=inventory#demo-panel"' in response.content.decode()
+    assert 'action="/inventory-demo/action/"' in response.content.decode()
+    assert 'name="event_refs"' not in response.content.decode()
+    assert client.post("/inventory-demo/action/", {"action": "select_item", "part_number": "DEMO-1002"}, HTTP_HOST=host).status_code == 302
+    response = client.get(url, {"tab": "audit"}, HTTP_HOST=host)
+    assert response.context["active_step"] == 2
+    assert 'name="bin"' in response.content.decode()
+    assert 'name="event_refs"' not in response.content.decode()

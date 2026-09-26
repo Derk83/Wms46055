@@ -114,7 +114,7 @@ def apply_progress_action(request, namespace, slug, total_tasks):
     return completed + 1
 
 
-def progress_context(steps, completed, default_workspace_path=None, slug=None, draft=None):
+def progress_context(steps, completed, default_workspace_path=None, slug=None, draft=None, selected_tab=None):
     if slug is None:
         from .training_catalog import MATERIAL_REQUEST_GUIDE
         if steps is MATERIAL_REQUEST_GUIDE["steps"]:
@@ -131,9 +131,16 @@ def progress_context(steps, completed, default_workspace_path=None, slug=None, d
             "exercise": exercise_for(slug, index, draft) if status == "current" else None,
         })
     is_complete = completed == total
+    # Navigation may revisit a finished exercise, never unlock a future one.
+    current_tab = total if is_complete else completed + 1
+    if selected_tab is not None and len(selected_tab) <= 3 and selected_tab.isascii() and selected_tab.isdecimal():
+        requested_tab = int(selected_tab)
+        if 1 <= requested_tab <= completed:
+            current_tab = requested_tab
     return {
         "training_tasks": tasks, "completed_tasks": completed, "total_tasks": total,
         "current_task_number": None if is_complete else completed + 1,
+        "selected_training_tab": current_tab,
         "progress_percent": (completed * 100 // total) if total else 100,
         "training_complete": is_complete,
         "fictional_number": draft.get("number") if draft else None,

@@ -72,6 +72,14 @@ DEMO_ITEMS = (
     },
 )
 
+DEMO_TABS = (
+    (1, "inventory", "Inventory"),
+    (2, "receiving", "Receiving"),
+    (3, "requests", "Requests"),
+    (4, "pick-tickets", "Pick Tickets"),
+    (5, "audit", "Audit"),
+)
+
 GUIDE_STEPS = {
     1: {
         "label": "Explore inventory",
@@ -224,8 +232,21 @@ def _inventory_demo_response(request):
         item["is_target"] = item["part_number"] == "DEMO-1002" and state["step"] == 1
         items.append(item)
 
-    step = min(max(int(state["step"]), 1), 5)
+    step = state["step"]
+    # The URL selects only a tab already reached in this session. It never
+    # changes the workflow step or unlocks an action.
+    requested_tab = request.GET.get("tab", "")
+    active_step = next((number for number, slug, _ in DEMO_TABS if slug == requested_tab and number <= step), step)
+    tabs = [
+        {"number": number, "slug": slug, "label": label, "locked": number > step, "active": number == active_step}
+        for number, slug, label in DEMO_TABS
+    ]
     context = {
+        "tabs": tabs,
+        "active_step": active_step,
+        "active_tab": tabs[active_step - 1],
+        "current_tab": tabs[step - 1],
+        "tab_read_only": active_step < step or state["complete"],
         "items": items,
         "step": step,
         "complete": bool(state["complete"]),

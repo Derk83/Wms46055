@@ -15,12 +15,13 @@
 
   <section class="training-notice" aria-label="Training safety notice">
     <span aria-hidden="true">✓</span>
-    <div><strong>Session-based training progress</strong><span>The scenario is fictional, but each task must be completed in order. Use only assigned work or authorized training records in the live workspace. This module stores progress in your browser session and does not write to equipment, custody, maintenance, requests, or audit records.</span></div>
+    <div><strong>Session-based fictional practice</strong><span>Complete each task in the fictional workspace below, not in a live application. Progress is stored in your browser session on the training server and does not write to equipment, custody, maintenance, requests, or audit records.</span></div>
   </section>
 
   <div class="training-layout">
     <section aria-labelledby="course-steps-title">
       <div class="training-scenario"><strong>Fictional scenario</strong><span>{{ training.scenario }}</span></div>
+      {% include "inventory/training/workspace.html" %}
       <h2 id="course-steps-title">Required tasks</h2>
       {% include "inventory/training/task_list.html" %}
     </section>

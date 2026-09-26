@@ -25,6 +25,7 @@
   <div class="training-layout">
     <section aria-labelledby="course-steps-title">
       <div class="training-scenario"><strong>Fictional scenario</strong><span>{{ training.scenario }}</span></div>
+      {% include "inventory/training/workspace.html" %}
       <h2 id="course-steps-title">Required tasks</h2>
       {% include "inventory/training/task_list.html" %}
     </section>

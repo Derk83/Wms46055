@@ -31,7 +31,7 @@ def material_request_guide(request):
         **progress_context(
             MATERIAL_REQUEST_GUIDE["steps"],
             completed_task_count(request, namespace, slug, len(MATERIAL_REQUEST_GUIDE["steps"])),
-            slug=slug, draft=course_draft(request, namespace, slug),
+            slug=slug, draft=course_draft(request, namespace, slug), selected_tab=request.GET.get("tab"),
         ),
     })
 

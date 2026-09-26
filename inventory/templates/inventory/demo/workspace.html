@@ -4,142 +4,87 @@
 {% block extra_head %}<link rel="stylesheet" href="{% versioned_static 'inventory/css/demo.css' %}">{% endblock %}
 {% block content %}
 <section class="demo-isolation-banner" aria-label="Demo data notice">
-  <strong>Demo workspace</strong>
-  <span>Fictional training data</span>
-  <span>Isolated from live inventory</span>
-  <span>Reset anytime</span>
+  <strong>Demo workspace</strong><span>Fictional training data</span><span>Isolated from live inventory</span><span>Reset anytime</span>
 </section>
-
 <header class="page-header demo-page-header">
-  <div>
-    <span class="demo-eyebrow">Guided training</span>
-    <h1>Inventory workflow demo</h1>
-    <div class="meta">Learn the core warehouse flow using six fictional items. About five minutes.</div>
-  </div>
+  <div><span class="demo-eyebrow">Guided training</span><h1>Inventory workflow demo</h1><div class="meta">Learn the core warehouse flow using six fictional items. About five minutes.</div></div>
   <div class="actions">
-    <form method="post" action="{% url 'inventory_demo_action' %}">
-      {% csrf_token %}<input type="hidden" name="action" value="reset">
-      <button class="btn secondary" type="submit">Restart demo</button>
-    </form>
+    <form method="post" action="{% url 'inventory_demo_action' %}">{% csrf_token %}<input type="hidden" name="action" value="reset"><button class="btn secondary" type="submit">Restart demo</button></form>
     <a class="btn secondary" href="{% url 'dashboard' %}">Exit demo</a>
   </div>
 </header>
-
 {% if messages %}<ul class="messages" aria-live="polite">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
-
 <section class="demo-stats" aria-label="Demo summary">
   <article class="stat"><span>Fictional items</span><strong>6</strong></article>
   <article class="stat"><span>Units on hand</span><strong>{{ total_quantity }}</strong></article>
   <article class="stat"><span>Low stock</span><strong>{{ low_stock_count }}</strong></article>
   <article class="stat"><span>Demo progress</span><strong>{% if complete %}Complete{% else %}{{ step }} of 5{% endif %}</strong></article>
 </section>
-
+<nav class="demo-tabs" aria-label="Fictional training workflow">
+  {% for tab in tabs %}
+    {% if tab.locked %}<span class="demo-tab locked" aria-disabled="true">{{ tab.label }} <span class="sr-only">locked</span></span>
+    {% else %}<a class="demo-tab{% if tab.active %} active{% endif %}" href="{% url 'inventory_demo' %}?tab={{ tab.slug }}#demo-panel"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}{% if tab.number < step or complete %} <span class="sr-only">completed</span>{% endif %}</a>{% endif %}
+  {% endfor %}
+</nav>
 <div class="demo-workspace">
-  <section class="card demo-inventory-card" aria-labelledby="demo-inventory-title">
+  <section id="demo-panel" class="card demo-inventory-card" aria-labelledby="demo-panel-title" tabindex="-1">
     <div class="demo-card-heading">
-      <div><h2 id="demo-inventory-title">Demo inventory</h2><p>These fictional records are tied to this browser session on the training server, separate from live inventory.</p></div>
+      <div><span class="demo-eyebrow">Fictional {{ active_tab.label }} tab</span><h2 id="demo-panel-title">{% if active_step == 1 %}Demo inventory{% elif active_step == 2 %}Receive stock{% elif active_step == 3 %}Create material request{% elif active_step == 4 %}Pick ticket DEMO-PT-001{% else %}Fictional audit trail{% endif %}</h2><p>{% if tab_read_only %}Completed training step · read-only.{% else %}Work here to complete this training step. These records are separate from live inventory.{% endif %}</p></div>
       <span class="demo-safe-badge">Isolated data</span>
     </div>
-    <div class="table-responsive">
-      <table class="demo-inventory-table">
+    {% if active_step == 1 %}
+      <div class="table-responsive"><table class="demo-inventory-table">
         <thead><tr><th>Part #</th><th>Item</th><th>Category</th><th>Qty</th><th>Bin</th><th>Status</th><th><span class="sr-only">Action</span></th></tr></thead>
-        <tbody>
-        {% for item in items %}
-          <tr{% if item.is_target %} class="demo-target-row"{% endif %}>
-            <td data-label="Part #"><strong>{{ item.part_number }}</strong></td>
-            <td data-label="Item">{{ item.name }}</td>
-            <td data-label="Category">{{ item.category }}</td>
-            <td data-label="Qty"><strong>{{ item.quantity }}</strong> {{ item.unit }}</td>
-            <td data-label="Bin">{{ item.bin }}</td>
-            <td data-label="Status">{% if item.is_low %}<span class="badge demo-low-badge">Low stock</span>{% else %}<span class="badge demo-stock-badge">In stock</span>{% endif %}</td>
-            <td class="demo-row-action">
-              {% if item.is_target %}
-              <form method="post" action="{% url 'inventory_demo_action' %}">
-                {% csrf_token %}<input type="hidden" name="action" value="select_item"><input type="hidden" name="part_number" value="{{ item.part_number }}">
-                <button class="btn sm" type="submit">Select item</button>
-              </form>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <p class="demo-reset-note">All fictional quantities and activity reset when the demo is restarted.</p>
-    {% if receipt or demo_request or pick %}
-    <div class="demo-session-summary" aria-label="Recorded demo activity">
-      <strong>Recorded training activity</strong>
-      {% if receipt %}<p>Received {{ receipt.quantity }} boxes of {{ receipt.part_number }} into {{ receipt.bin }}.</p>{% endif %}
-      {% if demo_request %}<p>DEMO-MR-001: {{ demo_request.requester }} requested {{ demo_request.quantity }} packs of {{ demo_request.part_number }} for {{ demo_request.delivery_location }}. DEMO-PT-001 status: {{ demo_ticket_status }}.</p>{% endif %}
-      {% if pick %}<p>Picked {{ pick.actual_quantity }} of {{ demo_request.quantity }} packs · Picker: {{ pick.picker }} · QA: {{ pick.qa }}{% if pick.variance_reason %} · Variance: {{ pick.variance_reason }}{% endif %}.</p>{% endif %}
-    </div>
+        <tbody>{% for item in items %}<tr{% if item.is_target and not tab_read_only %} class="demo-target-row"{% endif %}>
+          <td data-label="Part #"><strong>{{ item.part_number }}</strong></td><td data-label="Item">{{ item.name }}</td><td data-label="Category">{{ item.category }}</td><td data-label="Qty"><strong>{{ item.quantity }}</strong> {{ item.unit }}</td><td data-label="Bin">{{ item.bin }}</td><td data-label="Status">{% if item.is_low %}<span class="badge demo-low-badge">Low stock</span>{% else %}<span class="badge demo-stock-badge">In stock</span>{% endif %}</td>
+          <td class="demo-row-action">{% if item.is_target and not tab_read_only %}<form method="post" action="{% url 'inventory_demo_action' %}">{% csrf_token %}<input type="hidden" name="action" value="select_item"><input type="hidden" name="part_number" value="{{ item.part_number }}"><button class="btn sm" type="submit">Select item</button></form>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+      <p class="demo-reset-note">All fictional quantities and activity reset when the demo is restarted.</p>
+    {% elif active_step == 2 %}
+      <div class="demo-panel-body">
+        <p class="demo-context">Inbound shipment: <strong>DEMO-1002 · Nitrile Work Gloves</strong> · bin A-01-02 · {% if receipt %}{{ items.1.quantity }} boxes on hand after receipt{% else %}{{ items.1.quantity }} boxes on hand before receipt{% endif %}.</p>
+        {% if tab_read_only %}<p class="demo-record">Received {{ receipt.quantity }} boxes of {{ receipt.part_number }} into {{ receipt.bin }}.</p>
+        {% else %}<form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form">{% csrf_token %}<input type="hidden" name="action" value="receive_stock">
+          <div class="demo-fields"><label>Inbound item<select name="part_number" required><option value="">Select item</option><option value="DEMO-1002">DEMO-1002 · Nitrile Work Gloves</option></select></label><label>Received boxes<input name="quantity" type="number" min="1" required placeholder="Enter quantity"></label><label>Destination bin<input name="bin" required placeholder="Enter bin from inventory"></label></div>
+          <button class="btn" type="submit">Receive 12 boxes</button>
+        </form>{% endif %}
+      </div>
+    {% elif active_step == 3 %}
+      <div class="demo-panel-body">
+        <p class="demo-context">Available to request: <strong>DEMO-2001 · Cable Labels</strong> · {{ items.2.quantity }} packs · bin B-02-04.</p>
+        {% if tab_read_only %}<p class="demo-record">DEMO-MR-001: {{ demo_request.requester }} requested {{ demo_request.quantity }} packs of {{ demo_request.part_number }} for {{ demo_request.delivery_location }}.</p>
+        {% else %}<form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form">{% csrf_token %}<input type="hidden" name="action" value="create_request">
+          <div class="demo-fields"><label>Fictional requester<input name="requester" maxlength="120" required placeholder="e.g. Training requester"></label><label>Fictional delivery location<input name="delivery_location" maxlength="120" required placeholder="e.g. Training dock"></label><label>Requested item<select name="part_number" required><option value="">Select item</option><option value="DEMO-2001">DEMO-2001 · Cable Labels ({{ items.2.quantity }} packs available)</option></select></label><label>Requested packs<input name="quantity" type="number" min="1" max="{{ items.2.quantity }}" required placeholder="Enter quantity"></label></div>
+          <button class="btn" type="submit">Create demo request</button>
+        </form>{% endif %}
+      </div>
+    {% elif active_step == 4 %}
+      <div class="demo-panel-body">
+        <p class="demo-context">DEMO-PT-001 · {{ demo_request.part_number }} · {{ demo_request.quantity }} packs reserved for {{ demo_request.requester }} at {{ demo_request.delivery_location }}. Status: {{ demo_ticket_status }}.</p>
+        {% if tab_read_only %}<p class="demo-record">Picked {{ pick.actual_quantity }} of {{ demo_request.quantity }} packs · Picker: {{ pick.picker }} · QA: {{ pick.qa }}{% if pick.variance_reason %} · Variance: {{ pick.variance_reason }}{% endif %}.</p>
+        {% else %}<form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form">{% csrf_token %}<input type="hidden" name="action" value="fulfill_pick">
+          <div class="demo-fields"><label>Actual packs picked<input name="actual_quantity" type="number" min="0" max="{{ demo_request.quantity }}" required placeholder="Enter actual quantity"></label><label>Fictional picker<input name="picker" maxlength="120" required placeholder="e.g. Demo picker"></label><label>Fictional QA verifier (different person)<input name="qa" maxlength="120" required placeholder="e.g. Demo QA"></label><label>Variance reason (required if actual differs)<input name="variance_reason" maxlength="120" placeholder="Explain any discrepancy"></label></div>
+          <button class="btn" type="submit">Fulfill demo ticket</button>
+        </form>{% endif %}
+      </div>
+    {% else %}
+      <div class="demo-panel-body"><p class="demo-context">Session-only events produced by this guided demo. Ticket {{ demo_ticket_status }}.</p>
+        <div class="table-responsive"><table><thead><tr><th>Sequence</th><th>Type</th><th>Activity</th><th>Quantity</th></tr></thead><tbody>{% for event in events %}<tr><td>{{ forloop.revcounter }}</td><td><span class="badge">{{ event.kind }}</span></td><td>{{ event.description }}</td><td>{{ event.quantity }}</td></tr>{% endfor %}</tbody></table></div>
+        {% if complete %}<p class="demo-record">Audit reviewed. Demo complete. No production records were changed.</p>
+        {% else %}<form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form demo-audit-form">{% csrf_token %}<input type="hidden" name="action" value="complete_demo"><fieldset><legend>Confirm each actual event reference above</legend>
+          {% for event in events %}{% if event.kind == 'RECEIVE' or event.kind == 'REQUEST' or event.kind == 'PICK' %}<label class="demo-event-check"><input type="checkbox" name="event_refs" value="{{ event.kind }}"> {{ event.kind }} · {{ event.description }}</label>{% endif %}{% endfor %}
+          </fieldset><button class="btn" type="submit">Complete demo</button></form>{% endif %}
+      </div>
     {% endif %}
   </section>
-
   <aside class="card demo-guide" aria-labelledby="demo-guide-title">
-    <div class="demo-guide-head">
-      <span>Guided demo</span>
-      <h2 id="demo-guide-title">Warehouse basics</h2>
-      <div class="demo-progress" role="progressbar" aria-label="Guided demo progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ progress_percent }}"><i class="progress-step-{{ progress_percent }}"></i></div>
-    </div>
+    <div class="demo-guide-head"><span>Guided demo</span><h2 id="demo-guide-title">Warehouse basics</h2><div class="demo-progress" role="progressbar" aria-label="Guided demo progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ progress_percent }}"><i class="progress-step-{{ progress_percent }}"></i></div></div>
     <div class="demo-guide-body">
-      {% if complete %}
-        <span class="demo-step-label">Complete</span>
-        <h3>Demo complete</h3>
-        <p>You completed the inventory, receiving, request, pick, and audit workflow. No production records were changed.</p>
-        <div class="demo-complete-mark" aria-hidden="true">✓</div>
-        <form method="post" action="{% url 'inventory_demo_action' %}">
-          {% csrf_token %}<input type="hidden" name="action" value="reset">
-          <button class="btn w-100" type="submit">Run demo again</button>
-        </form>
-      {% else %}
-        <span class="demo-step-label">Step {{ step }} of 5</span>
-        <h3>{{ guide.title }}</h3>
-        <p>{{ guide.description }}</p>
-        <div class="demo-task"><strong>Your task</strong><span>{{ guide.task }}</span></div>
-        {% if guide.action %}
-        <form method="post" action="{% url 'inventory_demo_action' %}" class="demo-step-form">
-          {% csrf_token %}<input type="hidden" name="action" value="{{ guide.action }}">
-          {% if step == 2 %}
-          <label>Inbound item<select name="part_number" required><option value="">Select item</option><option value="DEMO-1002">DEMO-1002 · Nitrile Work Gloves</option></select></label>
-          <label>Received boxes<input name="quantity" type="number" min="1" required placeholder="Enter quantity"></label>
-          <label>Destination bin<input name="bin" required placeholder="Enter bin from inventory"></label>
-          {% elif step == 3 %}
-          <label>Fictional requester<input name="requester" maxlength="120" required placeholder="e.g. Training requester"></label>
-          <label>Fictional delivery location<input name="delivery_location" maxlength="120" required placeholder="e.g. Training dock"></label>
-          <label>Requested item<select name="part_number" required><option value="">Select item</option><option value="DEMO-2001">DEMO-2001 · Cable Labels ({{ items.2.quantity }} packs available)</option></select></label>
-          <label>Requested packs<input name="quantity" type="number" min="1" max="{{ items.2.quantity }}" required placeholder="Enter quantity"></label>
-          {% elif step == 4 %}
-          <p>DEMO-PT-001 · {{ demo_request.part_number }} · {{ demo_request.quantity }} packs reserved for {{ demo_request.requester }} at {{ demo_request.delivery_location }}.</p>
-          <label>Actual packs picked<input name="actual_quantity" type="number" min="0" max="{{ demo_request.quantity }}" required placeholder="Enter actual quantity"></label>
-          <label>Fictional picker<input name="picker" maxlength="120" required placeholder="e.g. Demo picker"></label>
-          <label>Fictional QA verifier (different person)<input name="qa" maxlength="120" required placeholder="e.g. Demo QA"></label>
-          <label>Variance reason (required if actual differs)<input name="variance_reason" maxlength="120" placeholder="Explain any discrepancy"></label>
-          {% elif step == 5 %}
-          <p>Confirm each actual event reference in the audit trail below:</p>
-          {% for event in events %}{% if event.kind == 'RECEIVE' or event.kind == 'REQUEST' or event.kind == 'PICK' %}
-          <label class="demo-event-check"><input type="checkbox" name="event_refs" value="{{ event.kind }}"> {{ event.kind }} · {{ event.description }}</label>
-          {% endif %}{% endfor %}
-          {% endif %}
-          <button class="btn w-100" type="submit">{{ guide.button }}</button>
-        </form>
-        {% else %}
-        <p class="demo-action-hint">Use the highlighted inventory row to continue.</p>
-        {% endif %}
-      {% endif %}
+      {% if complete %}<span class="demo-step-label">Complete</span><h3>Demo complete</h3><p>You completed the inventory, receiving, request, pick, and audit workflow. No production records were changed.</p><div class="demo-complete-mark" aria-hidden="true">✓</div>
+      {% else %}<span class="demo-step-label">Step {{ step }} of 5</span><h3>{{ guide.title }}</h3><p>{{ guide.description }}</p><div class="demo-task"><strong>Your task</strong><span>{{ guide.task }}</span></div>{% if tab_read_only %}<p class="demo-action-hint">This tab is read-only. <a href="{% url 'inventory_demo' %}?tab={{ current_tab.slug }}#demo-panel">Continue in {{ current_tab.label }}</a>.</p>{% else %}<p class="demo-action-hint">Complete this task in the {{ current_tab.label }} tab.</p>{% endif %}{% endif %}
     </div>
-    <ol class="demo-tour-steps">
-      {% for number, item in guide_steps.items %}
-      <li{% if number == step and not complete %} class="active"{% elif number < step or complete %} class="done"{% endif %}><span>{{ number }}</span>{{ item.label }}</li>
-      {% endfor %}
-    </ol>
+    <ol class="demo-tour-steps">{% for number, item in guide_steps.items %}<li{% if number == step and not complete %} class="active"{% elif number < step or complete %} class="done"{% endif %}><span>{{ number }}</span>{{ item.label }}</li>{% endfor %}</ol>
   </aside>
 </div>
-
-{% if step == 5 or complete %}
-<section class="card demo-audit" aria-labelledby="demo-audit-title">
-  <div class="demo-card-heading"><div><h2 id="demo-audit-title">Fictional audit trail</h2><p>Session-only events produced by this guided demo.</p></div><span class="badge">Ticket {{ demo_ticket_status }}</span></div>
-  <div class="table-responsive"><table><thead><tr><th>Sequence</th><th>Type</th><th>Activity</th><th>Quantity</th></tr></thead><tbody>{% for event in events %}<tr><td>{{ forloop.revcounter }}</td><td><span class="badge">{{ event.kind }}</span></td><td>{{ event.description }}</td><td>{{ event.quantity }}</td></tr>{% endfor %}</tbody></table></div>
-</section>
-{% endif %}
 {% endblock %}

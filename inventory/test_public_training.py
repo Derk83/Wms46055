@@ -120,6 +120,47 @@ def test_every_public_course_advances_anonymously_from_task_one(path):
     assert "Task 2 of" in body
 
 
+@pytest.mark.parametrize("path", [path for path, _ in PUBLIC_COURSES])
+def test_fictional_tabs_separate_instructions_from_exercise_and_lock_future_steps(path):
+    page = Client().get(path, HTTP_HOST=DEMO_HOST, secure=True)
+    body = page.content.decode()
+    tasks = page.context["training_tasks"]
+    instructions = body.split('<ol class="training-steps">', 1)[1].split('</ol>', 1)[0]
+    assert '<form' not in instructions
+    assert 'training-exercise-prompt' not in instructions
+    assert len(re.findall(r'data-tab-status="locked"', body)) == len(tasks) - 1
+    assert 'href="?tab=1#training-workspace"' in body
+    assert 'aria-current="page"' in body
+    assert 'data-panel-status="locked"' not in body
+    assert body.count('class="training-completion-form"') == 1
+    assert 'action="' + page.context["progress_url"] + '"' in body
+    for task in tasks:
+        assert f'{task["number"]}. {task["title"]}' in html.unescape(body)
+    assert tasks[0]["exercise"]["prompt"] in html.unescape(body)
+    assert "Open task workspace" not in body
+
+
+def test_public_course_tabs_show_only_selected_available_panel():
+    client = Client()
+    path = "/training/warehouse/receiving/"
+    progress = path + "progress/"
+    for selected in ("2", "999999999999999999999999", "bogus"):
+        page = client.get(path + "?tab=" + selected, HTTP_HOST=DEMO_HOST, secure=True)
+        assert page.context["selected_training_tab"] == 1
+        assert page.content.decode().count('class="training-completion-form"') == 1
+    assert client.post(progress, {"action": "complete", "step": "1", "answer_1": "7"},
+                       HTTP_HOST=DEMO_HOST, secure=True).status_code == 302
+    old = client.get(path + "?tab=1", HTTP_HOST=DEMO_HOST, secure=True)
+    assert old.context["selected_training_tab"] == 1
+    assert old.content.decode().count('data-panel-status="complete"') == 1
+    assert 'class="training-completion-form"' not in old.content.decode()
+    current = client.get(path + "?tab=2", HTTP_HOST=DEMO_HOST, secure=True)
+    assert current.context["selected_training_tab"] == 2
+    assert current.content.decode().count('data-panel-status="current"') == 1
+    assert current.content.decode().count('class="training-completion-form"') == 1
+    assert client.get(path + "?tab=4", HTTP_HOST=DEMO_HOST, secure=True).context["selected_training_tab"] == 2
+
+
 def test_anonymous_progress_is_sequential_private_to_session_and_does_not_write_domain_models():
     first = Client()
     second = Client()

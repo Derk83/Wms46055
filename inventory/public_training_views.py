@@ -48,7 +48,7 @@ def _render_course(request, label, namespace, slug, training, progress_url):
         "public_training": True,
         "can_open_workspace": False,
         "progress_url": progress_url,
-        **progress_context(training["steps"], completed, slug=slug, draft=course_draft(request, namespace, slug)),
+        **progress_context(training["steps"], completed, slug=slug, draft=course_draft(request, namespace, slug), selected_tab=request.GET.get("tab")),
     }
     return render(request, "inventory/training/module.html", context)
 

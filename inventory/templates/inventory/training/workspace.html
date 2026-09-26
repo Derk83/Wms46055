@@ -1,0 +1,52 @@
+<section id="training-workspace" class="training-workspace" aria-labelledby="training-workspace-title">
+  <div class="training-workspace-intro">
+    <p class="training-task-kicker">Fictional practice workspace</p>
+    <h2 id="training-workspace-title">Practice the workflow</h2>
+    <p>These tabs are a simulation, not operational screens. Only the current task accepts answers; completed tabs are read-only.</p>
+  </div>
+  <nav class="training-workspace-tabs" aria-label="Fictional workflow steps">
+    {% for task in training_tasks %}
+      {% if task.status == "locked" %}
+        <span class="training-workspace-tab is-locked" aria-disabled="true" data-tab-status="locked">{{ task.number }}. {{ task.title }} <small>Locked</small></span>
+      {% else %}
+        <a class="training-workspace-tab is-{{ task.status }}{% if task.number == selected_training_tab %} is-selected{% endif %}" href="?tab={{ task.number }}#training-workspace" data-tab-status="{{ task.status }}" aria-label="Task {{ task.number }}: {{ task.title }} ({{ task.status }})"{% if task.number == selected_training_tab %} aria-current="page"{% endif %}>{{ task.number }}. {{ task.title }} <small>{% if task.status == "current" %}Current{% else %}Complete{% endif %}</small></a>
+      {% endif %}
+    {% endfor %}
+  </nav>
+  {% for task in training_tasks %}
+    {% if task.number == selected_training_tab %}
+    <section id="training-workspace-step-{{ task.number }}" class="training-workspace-panel is-{{ task.status }}" aria-labelledby="training-workspace-heading-{{ task.number }}" data-panel-status="{{ task.status }}" tabindex="-1">
+      <p class="training-task-kicker">Task {{ task.number }} of {{ total_tasks }} · {% if task.status == "current" %}Current practice{% else %}Completed · read-only{% endif %}</p>
+      <h3 id="training-workspace-heading-{{ task.number }}">{{ task.title }}</h3>
+      <p>{{ task.body }}</p>
+      {% if task.status == "current" %}
+        <div class="training-task-panel">
+          <p><strong>Fictional practice only:</strong> Make your decision here; do not enter these details in a live application.</p>
+          {% if fictional_draft %}<div class="training-draft"><strong>Practice draft:</strong> {{ fictional_draft.reference }} · {{ fictional_draft.destination }} · {{ fictional_draft.needed }}{% if fictional_draft.item %} · {{ fictional_draft.item }} × {{ fictional_draft.quantity }}{% endif %}{% if fictional_draft.disposition %} · {{ fictional_draft.allocated }} available · {{ fictional_draft.disposition }}{% endif %}</div>{% endif %}
+          {% if fictional_number %}<p class="training-draft"><strong>Your fictional request number:</strong> {{ fictional_number }} (use it to track the request in this task)</p>{% endif %}
+          <form method="post" action="{{ progress_url }}" class="training-completion-form">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="complete">
+            <input type="hidden" name="step" value="{{ task.number }}">
+            <p class="training-exercise-prompt">{{ task.exercise.prompt }}</p>
+            {% for field in task.exercise.fields %}
+              <label for="training-{{ task.number }}-{{ field.name }}"><strong>{{ field.label }}</strong></label>
+              {% if field.kind == "choice" %}
+                <select id="training-{{ task.number }}-{{ field.name }}" name="{{ field.name }}" required>
+                  <option value="">Select an answer</option>
+                  {% for option in field.options %}<option value="{{ option }}">{{ option }}</option>{% endfor %}
+                </select>
+              {% else %}
+                <input id="training-{{ task.number }}-{{ field.name }}" name="{{ field.name }}" type="{% if field.kind == 'date' %}date{% elif field.kind == 'integer' or field.kind == 'number' %}number{% else %}text{% endif %}" {% if field.kind == 'integer' or field.kind == 'number' %}min="0" max="999" step="1"{% endif %} maxlength="40" required>
+              {% endif %}
+            {% endfor %}
+            <button class="btn btn-primary" type="submit">Check practice task{% if task.number < total_tasks %} and unlock next{% endif %}</button>
+          </form>
+        </div>
+      {% else %}
+        <p class="training-readonly">This step is complete. Reset the module to practice it again.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+  {% endfor %}
+</section>

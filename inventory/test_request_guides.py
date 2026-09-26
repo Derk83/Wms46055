@@ -84,6 +84,13 @@ def test_material_request_guide_tasks_must_be_completed_in_order():
     assert "Task 1 of 5" in initial_body
     assert "Enter request details" in initial_body
     assert "Complete task 1 to unlock" in initial_body
+    assert 'aria-label="Fictional workflow steps"' in initial_body
+    assert 'data-tab-status="locked"' in initial_body
+    assert 'data-panel-status="locked"' not in initial_body
+    assert 'aria-current="page"' in initial_body
+    assert '<form' not in initial_body.split('<ol class="training-steps">', 1)[1].split('</ol>', 1)[0]
+    assert initial_body.count('class="training-completion-form"') == 1
+    assert "Open task workspace" not in initial_body
 
     assert client.post(progress, {
         "action": "complete",
@@ -101,6 +108,12 @@ def test_material_request_guide_tasks_must_be_completed_in_order():
     )
     for step in range(1, 6):
         page = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True).content.decode()
+        if step > 1:
+            assert page.count('data-panel-status="complete"') == 0
+            assert page.count('data-tab-status="complete"') == step - 1
+            assert page.count('class="training-completion-form"') == 1
+            assert 'href="?tab=' + str(step) + '#training-workspace"' in page
+            assert 'data-panel-status="locked"' not in page
         if step == 3:
             assert "Use available stock and cancel the rest" in page
             assert "Request the rest when available" in page
@@ -116,6 +129,9 @@ def test_material_request_guide_tasks_must_be_completed_in_order():
     finished = client.get(guide, HTTP_HOST=MATERIAL_HOST, secure=True)
     assert "Module complete" in finished.content.decode()
     assert "5 of 5 tasks complete" in finished.content.decode()
+    assert 'class="training-completion-form"' not in finished.content.decode()
+    assert 'data-tab-status="locked"' not in finished.content.decode()
+    assert finished.content.decode().count('data-panel-status="complete"') == 1
 
 
 def test_material_request_progress_is_post_only_permission_gated_and_host_isolated():

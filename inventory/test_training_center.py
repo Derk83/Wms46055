@@ -110,7 +110,8 @@ def test_warehouse_training_modules_require_the_matching_permission(slug, permis
     response = allowed.get(path, HTTP_HOST=WAREHOUSE_HOST, secure=True)
     assert response.status_code == 200
     assert expected_text in response.content.decode()
-    assert "Open task workspace" in response.content.decode()
+    assert 'aria-label="Fictional workflow steps"' in response.content.decode()
+    assert "Open task workspace" not in response.content.decode()
     assert allowed.post(path, HTTP_HOST=WAREHOUSE_HOST, secure=True).status_code == 405
     progress = allowed.post(f"/training/{slug}/progress/", {
         "action": "complete", "step": "1", **exercise_answers(slug, 1),
@@ -150,7 +151,8 @@ def test_equipment_training_modules_require_portal_and_module_permissions(slug, 
     response = allowed.get(path, HTTP_HOST=EQUIPMENT_HOST, secure=True)
     assert response.status_code == 200
     assert expected_text in response.content.decode()
-    assert "Open task workspace" in response.content.decode()
+    assert 'aria-label="Fictional workflow steps"' in response.content.decode()
+    assert "Open task workspace" not in response.content.decode()
     assert allowed.post(path, HTTP_HOST=EQUIPMENT_HOST, secure=True).status_code == 405
     progress = allowed.post(f"/training/{slug}/progress/", {
         "action": "complete", "step": "1", **exercise_answers(slug, 1),
@@ -392,7 +394,14 @@ def test_every_public_course_step_requires_correct_scenario_decisions(family, ca
             assert f"Task {step} of" in page.content.decode()
             fields = exercise_for(slug, step)["fields"]
             assert fields
-            assert all(f'name="{field["name"]}"' in page.content.decode() for field in fields)
+            markup = page.content.decode()
+            assert markup.count('class="training-completion-form"') == 1
+            assert markup.count('data-panel-status="complete"') == 0
+            assert markup.count('data-tab-status="locked"') == len(course["steps"]) - step
+            assert f'id="training-workspace-step-{step}"' in markup
+            assert 'data-panel-status="locked"' not in markup
+            assert '<form' not in markup.split('<ol class="training-steps">', 1)[1].split('</ol>', 1)[0]
+            assert all(f'name="{field["name"]}"' in markup for field in fields)
             assert 'name="confirm"' not in page.content.decode()
             assert 'name="evidence"' not in page.content.decode()
             good = exercise_answers(slug, step)
